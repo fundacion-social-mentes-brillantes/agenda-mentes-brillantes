@@ -28,19 +28,19 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-md" 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" 
+      <div
+        className="fixed inset-0 bg-slate-950/55 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
 
       {/* Modal Container */}
-      <div className={`relative bg-white dark:bg-slate-900 rounded-3xl w-full ${maxWidth} shadow-xl border border-slate-100 dark:border-slate-800/80 overflow-hidden transform transition-all duration-300 scale-100 max-h-[90vh] flex flex-col`}>
+      <div className={`glass-panel relative rounded-3xl w-full ${maxWidth} overflow-hidden transform transition-all duration-300 scale-100 max-h-[90vh] flex flex-col`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-slate-50 dark:border-slate-800/40">
-          <h3 className="font-bold text-lg text-slate-900 dark:text-white truncate m-0">{title}</h3>
-          <button 
+        <div className="flex items-center justify-between p-5 border-b border-app-soft">
+          <h3 className="font-bold text-lg text-app-strong truncate m-0">{title}</h3>
+          <button
             onClick={onClose}
-            className="p-1.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+            className="p-1.5 rounded-xl bg-app-soft text-app-muted hover:text-app-strong transition-colors"
           >
             <X size={18} />
           </button>

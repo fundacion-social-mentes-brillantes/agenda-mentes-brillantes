@@ -9,6 +9,7 @@ Agenda web interna para sesiones coach, tareas, recordatorios y actividades de G
 - TypeScript
 - Tailwind CSS
 - Firebase
+- Firebase Storage para imagenes opcionales de eventos
 
 ## Instalacion
 
@@ -42,6 +43,14 @@ VITE_FIREBASE_MEASUREMENT_ID=
 
 En Vite, todas las variables que debe leer el navegador deben empezar por `VITE_`.
 
+## Funcionalidades principales
+
+- Inicio de sesion con Google y correo.
+- Agenda general para sesiones, reuniones, tareas, recordatorios, familia, fundacion, salud, pagos y eventos personales.
+- Temas visuales: `Noche Dorada` y `Pink Brillante`.
+- Recordatorios visuales dentro del dashboard.
+- Imagen opcional por evento usando Firebase Storage.
+
 ## Build de produccion
 
 ```bash
@@ -60,3 +69,9 @@ El resultado se genera en `dist`.
 - Output directory: `dist`
 
 El archivo `vercel.json` incluye la reescritura necesaria para que la app Vite funcione como SPA.
+
+## Firebase Storage
+
+Para subir imagenes a eventos, Firebase Storage debe estar activado en el proyecto `calendario-5ae30`. Revisa `docs/firebase-storage-rules.md` para una regla sugerida de acceso autenticado.
+
+Las notificaciones push reales se implementaran en una fase posterior con Firebase Cloud Messaging, VAPID key y `firebase-messaging-sw.js`.

@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import type { CalendarEvent, EventStatus } from "../types/event";
+import { getEventMeta } from "../lib/eventMeta";
 
 export const eventsService = {
   // Subscribe to all events in real-time
@@ -26,9 +27,20 @@ export const eventsService = {
       (snapshot) => {
         const events: CalendarEvent[] = snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
+          const type = data.type || "other";
+          const meta = getEventMeta(type);
           return {
             id: docSnap.id,
             ...data,
+            type,
+            status: data.status || "scheduled",
+            priority: data.priority || "medium",
+            color: data.color || meta.color,
+            description: data.description || "",
+            participants: data.participants || data.clientName || "",
+            reminderMinutes: data.reminderMinutes ?? null,
+            imageUrl: data.imageUrl || null,
+            imagePath: data.imagePath || null,
             // Convert Firestore timestamps to standard dates for consistency in the UI
             startAt: data.startAt instanceof Timestamp ? data.startAt.toDate() : new Date(data.startAt),
             endAt: data.endAt instanceof Timestamp ? data.endAt.toDate() : new Date(data.endAt),

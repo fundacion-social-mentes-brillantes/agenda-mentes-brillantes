@@ -34,17 +34,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (userProfile) {
         setProfile(userProfile);
       } else {
-        // Fallback or automatic registration profile if missing
-        console.warn(`No profile found in Firestore for UID ${uid}. Creating default.`);
-        // Auto-create a basic profile to avoid errors
-        if (auth.currentUser && auth.currentUser.email) {
-          const name = auth.currentUser.displayName || auth.currentUser.email.split("@")[0];
-          await authService.register(auth.currentUser.email, "", name, "family");
-          const fresh = await authService.getUserProfile(uid);
+        if (auth.currentUser) {
+          const fresh = await authService.ensureUserProfile(auth.currentUser);
           setProfile(fresh);
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error fetching user profile:", err);
       setError("Error al cargar perfil de usuario");
     }
@@ -57,7 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    authService.handleGoogleRedirectResult().catch((err) => {
+      console.error("Error handling Google redirect:", err);
+      setError("No pudimos completar el ingreso con Google.");
+    });
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setError(null);
       setUser(firebaseUser);
       if (firebaseUser) {
         await fetchProfile(firebaseUser.uid);

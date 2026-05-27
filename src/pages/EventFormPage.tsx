@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from "react";
-import type { CalendarEvent, EventModality, EventStatus, EventType } from "../types/event";
-import type { UserProfile } from "../types/user";
+import React, { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, CalendarDays, Image as ImageIcon, Save, Trash2, Upload, X } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Spinner } from "../components/ui/Spinner";
-import { ArrowLeft, Save, X } from "lucide-react";
+import { EVENT_STATUS_OPTIONS, EVENT_TYPE_OPTIONS, PRIORITY_OPTIONS, REMINDER_OPTIONS, getEventMeta } from "../lib/eventMeta";
+import { storageService } from "../services/storageService";
+import type { CalendarEvent, EventModality, EventPriority, EventStatus, EventType } from "../types/event";
+import type { UserProfile } from "../types/user";
 
 interface EventFormPageProps {
   editingEvent: CalendarEvent | null;
   selectedDate: Date | null;
+  initialType?: EventType | null;
   profile: UserProfile | null;
   setActivePage: (page: string) => void;
   onCreateEvent: (eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">) => Promise<string>;
@@ -17,6 +20,7 @@ interface EventFormPageProps {
 export default function EventFormPage({
   editingEvent,
   selectedDate,
+  initialType,
   profile,
   setActivePage,
   onCreateEvent,
@@ -24,49 +28,40 @@ export default function EventFormPage({
 }: EventFormPageProps) {
   const isEdit = !!editingEvent;
 
-  // Form states
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [type, setType] = useState<EventType>("session");
+  const [type, setType] = useState<EventType>(initialType || "meeting");
   const [status, setStatus] = useState<EventStatus>("scheduled");
+  const [priority, setPriority] = useState<EventPriority>("medium");
   const [dateStr, setDateStr] = useState("");
   const [startTimeStr, setStartTimeStr] = useState("09:00");
   const [endTimeStr, setEndTimeStr] = useState("10:00");
   const [allDay, setAllDay] = useState(false);
-  const [color, setColor] = useState("#3b82f6");
-  const [clientName, setClientName] = useState("");
+  const [color, setColor] = useState(getEventMeta(initialType || "meeting").color);
   const [personInCharge, setPersonInCharge] = useState("");
+  const [participants, setParticipants] = useState("");
   const [modality, setModality] = useState<EventModality>("virtual");
   const [location, setLocation] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
-  const [reminderMinutes, setReminderMinutes] = useState<number>(15);
+  const [reminderMinutes, setReminderMinutes] = useState<number>(30);
   const [notes, setNotes] = useState("");
-
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
+  const [existingImagePath, setExistingImagePath] = useState<string | null>(null);
+  const [removeExistingImage, setRemoveExistingImage] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Type to Color helper
-  const getColorForType = (evtType: EventType): string => {
-    const colors = {
-      session: "#3b82f6",     // Blue
-      task: "#8b5cf6",        // Purple
-      reminder: "#d97706",    // Amber/Gold
-      family: "#10b981",      // Green
-      foundation: "#f472b6"   // Pink
+  const typeMeta = useMemo(() => getEventMeta(type), [type]);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
     };
-    return colors[evtType];
-  };
+  }, [imagePreview]);
 
-  // Update color automatically when type changes
   useEffect(() => {
-    if (!isEdit) {
-      setColor(getColorForType(type));
-    }
-  }, [type, isEdit]);
-
-  // Load editing event or defaults
-  useEffect(() => {
-    // Helper to format date as YYYY-MM-DD
     const formatDate = (date: Date) => {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -74,7 +69,6 @@ export default function EventFormPage({
       return `${year}-${month}-${day}`;
     };
 
-    // Helper to format time as HH:MM
     const formatTime = (date: Date) => {
       const hours = String(date.getHours()).padStart(2, "0");
       const minutes = String(date.getMinutes()).padStart(2, "0");
@@ -84,411 +78,348 @@ export default function EventFormPage({
     if (isEdit && editingEvent) {
       const start = new Date(editingEvent.startAt as Date);
       const end = new Date(editingEvent.endAt as Date);
-      
-      setTitle(editingEvent.title);
+      setTitle(editingEvent.title || "");
       setDescription(editingEvent.description || "");
-      setType(editingEvent.type);
-      setStatus(editingEvent.status);
+      setType(editingEvent.type || "other");
+      setStatus(editingEvent.status || "scheduled");
+      setPriority(editingEvent.priority || "medium");
       setDateStr(formatDate(start));
       setStartTimeStr(formatTime(start));
       setEndTimeStr(formatTime(end));
-      setAllDay(editingEvent.allDay);
-      setColor(editingEvent.color);
-      setClientName(editingEvent.clientName || "");
-      setPersonInCharge(editingEvent.personInCharge);
-      setModality(editingEvent.modality);
+      setAllDay(!!editingEvent.allDay);
+      setColor(editingEvent.color || getEventMeta(editingEvent.type).color);
+      setPersonInCharge(editingEvent.personInCharge || profile?.name || "");
+      setParticipants(editingEvent.participants || editingEvent.clientName || "");
+      setModality(editingEvent.modality || "virtual");
       setLocation(editingEvent.location || "");
       setMeetingLink(editingEvent.meetingLink || "");
-      setReminderMinutes(editingEvent.reminderMinutes || 15);
+      setReminderMinutes(editingEvent.reminderMinutes ?? 30);
       setNotes(editingEvent.notes || "");
-    } else {
-      // Default creation state
-      const baseDate = selectedDate ? new Date(selectedDate) : new Date();
-      setDateStr(formatDate(baseDate));
-      setStartTimeStr("09:00");
-      setEndTimeStr("10:00");
-      setPersonInCharge(profile?.name || "");
-      setTitle("");
-      setDescription("");
-      setType("session");
-      setStatus("scheduled");
-      setAllDay(false);
-      setClientName("");
-      setModality("virtual");
-      setLocation("");
-      setMeetingLink("");
-      setReminderMinutes(15);
-      setNotes("");
+      setExistingImageUrl(editingEvent.imageUrl || null);
+      setExistingImagePath(editingEvent.imagePath || null);
+      setImageFile(null);
+      setImagePreview(null);
+      setRemoveExistingImage(false);
+      return;
     }
-  }, [editingEvent, isEdit, selectedDate, profile]);
+
+    const baseDate = selectedDate ? new Date(selectedDate) : new Date();
+    const defaultType = initialType || "meeting";
+    setTitle("");
+    setDescription("");
+    setType(defaultType);
+    setStatus("scheduled");
+    setPriority("medium");
+    setDateStr(formatDate(baseDate));
+    setStartTimeStr("09:00");
+    setEndTimeStr("10:00");
+    setAllDay(false);
+    setColor(getEventMeta(defaultType).color);
+    setPersonInCharge(profile?.name || "");
+    setParticipants("");
+    setModality(defaultType === "meeting" || defaultType === "session" ? "virtual" : "otro");
+    setLocation("");
+    setMeetingLink("");
+    setReminderMinutes(defaultType === "reminder" ? 10 : 30);
+    setNotes("");
+    setExistingImageUrl(null);
+    setExistingImagePath(null);
+    setImageFile(null);
+    setImagePreview(null);
+    setRemoveExistingImage(false);
+  }, [editingEvent, initialType, isEdit, profile, selectedDate]);
+
+  const handleTypeChange = (nextType: EventType) => {
+    setType(nextType);
+    setColor(getEventMeta(nextType).color);
+  };
+
+  const handleImageChange = (file: File | null) => {
+    if (!file) return;
+    try {
+      storageService.validateImage(file);
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+      setRemoveExistingImage(false);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "La imagen no es valida.");
+    }
+  };
+
+  const clearImage = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImageFile(null);
+    setImagePreview(null);
+    if (existingImageUrl) setRemoveExistingImage(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    // Validate inputs
     if (!title.trim()) {
-      setError("El título es obligatorio");
+      setError("Escribe un titulo para el evento.");
       setLoading(false);
       return;
     }
 
     if (!personInCharge.trim()) {
-      setError("El responsable es obligatorio");
+      setError("Indica quien es responsable.");
       setLoading(false);
       return;
     }
 
     try {
-      // Parse dates
-      const startAt = new Date(`${dateStr}T${startTimeStr}`);
-      const endAt = new Date(`${dateStr}T${endTimeStr}`);
+      const startAt = allDay ? new Date(`${dateStr}T00:00`) : new Date(`${dateStr}T${startTimeStr}`);
+      const endAt = allDay ? new Date(`${dateStr}T23:59`) : new Date(`${dateStr}T${endTimeStr}`);
 
-      if (endAt <= startAt) {
-        throw new Error("La hora de finalización debe ser posterior a la de inicio.");
+      if (!allDay && endAt <= startAt) {
+        throw new Error("La hora final debe ser posterior a la hora de inicio.");
       }
 
       const eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt"> = {
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
         type,
         status,
+        priority,
         startAt,
         endAt,
         allDay,
         color,
-        clientName: type === "session" ? clientName : "",
-        personInCharge,
+        clientName: type === "session" ? participants.trim() : "",
+        participants: participants.trim(),
+        personInCharge: personInCharge.trim(),
         modality,
-        location,
-        meetingLink,
-        reminderMinutes: Number(reminderMinutes),
-        notes,
+        location: location.trim(),
+        meetingLink: meetingLink.trim(),
+        reminderMinutes: Number(reminderMinutes) || null,
+        notes: notes.trim(),
+        imageUrl: removeExistingImage ? null : existingImageUrl,
+        imagePath: removeExistingImage ? null : existingImagePath,
         createdBy: profile?.uid || "unknown"
       };
 
-      if (isEdit && editingEvent) {
-        await onUpdateEvent(editingEvent.id!, eventData);
-      } else {
-        await onCreateEvent(eventData);
+      const eventId = isEdit && editingEvent?.id ? editingEvent.id : await onCreateEvent(eventData);
+
+      if (isEdit && editingEvent?.id) {
+        await onUpdateEvent(editingEvent.id, eventData);
+      }
+
+      if (removeExistingImage && existingImagePath) {
+        await storageService.deleteEventImage(existingImagePath);
+      }
+
+      if (imageFile) {
+        const upload = await storageService.uploadEventImage(imageFile, eventId, profile?.uid || "unknown");
+        await onUpdateEvent(eventId, upload);
       }
 
       setActivePage("dashboard");
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || "Error al guardar el evento");
+      setError(err instanceof Error ? err.message : "No pudimos guardar el evento.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
+    <div className="mx-auto flex max-w-5xl flex-col gap-6">
       <div className="flex items-center gap-4">
-        <button
-          type="button"
-          onClick={() => setActivePage("dashboard")}
-          className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 transition-colors"
-        >
-          <ArrowLeft size={16} />
+        <button type="button" onClick={() => setActivePage("dashboard")} className="btn-secondary min-h-11 px-3" aria-label="Volver">
+          <ArrowLeft size={17} />
         </button>
         <div>
-          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white m-0">
-            {isEdit ? "Editar Evento" : "Nuevo Evento"}
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {isEdit ? "Modifica los detalles del evento existente." : "Registra una nueva actividad en el calendario de Mentes Brillantes."}
-          </p>
+          <p className="section-label mb-2">{isEdit ? "Editar" : "Crear"}</p>
+          <h2 className="m-0 text-3xl font-black tracking-tight text-app-strong">{isEdit ? "Editar evento" : "Nuevo evento"}</h2>
+          <p className="mt-2 text-sm text-app-muted">Agenda reuniones, tareas, sesiones, pagos, salud y recordatorios sin complicarte.</p>
         </div>
       </div>
 
-      {error && (
-        <div className="p-4 rounded-2xl bg-red-50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-900/30 text-red-600 dark:text-red-400 text-sm font-semibold">
-          {error}
+      {error && <div className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm font-bold text-red-500">{error}</div>}
+
+      <form onSubmit={handleSubmit} className="grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
+        <div className="space-y-5">
+          <FormSection title="Basico" icon={<CalendarDays size={18} />}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="md:col-span-2">
+                <span className="section-label mb-2 block">Titulo</span>
+                <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Reunion familiar, pago, tarea o sesion" required />
+              </label>
+
+              <label>
+                <span className="section-label mb-2 block">Tipo de evento</span>
+                <select className="input-field" value={type} onChange={(e) => handleTypeChange(e.target.value as EventType)}>
+                  {EVENT_TYPE_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="m-0 mt-2 text-xs text-app-faint">{typeMeta.description}</p>
+              </label>
+
+              <label>
+                <span className="section-label mb-2 block">Responsable</span>
+                <input className="input-field" value={personInCharge} onChange={(e) => setPersonInCharge(e.target.value)} placeholder="Nombre del responsable" required />
+              </label>
+
+              <label>
+                <span className="section-label mb-2 block">Fecha</span>
+                <input className="input-field" type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} required />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label>
+                  <span className="section-label mb-2 block">Inicio</span>
+                  <input className="input-field" type="time" value={startTimeStr} onChange={(e) => setStartTimeStr(e.target.value)} disabled={allDay} required />
+                </label>
+                <label>
+                  <span className="section-label mb-2 block">Final</span>
+                  <input className="input-field" type="time" value={endTimeStr} onChange={(e) => setEndTimeStr(e.target.value)} disabled={allDay} required />
+                </label>
+              </div>
+
+              <label className="flex items-center gap-3 rounded-2xl border border-app-soft bg-app-soft p-4 md:col-span-2">
+                <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} className="h-5 w-5 accent-amber-500" />
+                <span className="text-sm font-bold text-app-muted">Todo el dia</span>
+              </label>
+            </div>
+          </FormSection>
+
+          <FormSection title="Detalles">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label>
+                <span className="section-label mb-2 block">Participantes o persona relacionada</span>
+                <input className="input-field" value={participants} onChange={(e) => setParticipants(e.target.value)} placeholder="Familia, cliente, equipo o persona" />
+              </label>
+              <label>
+                <span className="section-label mb-2 block">Modalidad</span>
+                <select className="input-field" value={modality} onChange={(e) => setModality(e.target.value as EventModality)}>
+                  <option value="virtual">Virtual</option>
+                  <option value="presencial">Presencial</option>
+                  <option value="llamada">Llamada</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </label>
+              <label>
+                <span className="section-label mb-2 block">Ubicacion</span>
+                <input className="input-field" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Lugar o direccion" />
+              </label>
+              <label>
+                <span className="section-label mb-2 block">Enlace de reunion</span>
+                <input className="input-field" type="url" value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} placeholder="https://..." />
+              </label>
+              <label className="md:col-span-2">
+                <span className="section-label mb-2 block">Descripcion breve</span>
+                <textarea className="input-field min-h-24 resize-none" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Una linea clara para entender el evento." />
+              </label>
+              <label className="md:col-span-2">
+                <span className="section-label mb-2 block">Notas</span>
+                <textarea className="input-field min-h-28 resize-none" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Detalles, acuerdos, pendientes o contexto." />
+              </label>
+            </div>
+          </FormSection>
         </div>
-      )}
 
-      {/* Main Form */}
-      <Card className="max-w-3xl">
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          
-          {/* Title */}
-          <div className="col-span-2 flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Título del Evento *
-            </label>
-            <input
-              type="text"
-              placeholder="Ej. Sesión Coaching Juan Pérez"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all"
-              required
-            />
-          </div>
-
-          {/* Type */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Tipo de Evento
-            </label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as EventType)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all capitalize"
-            >
-              <option value="session">Sesión Coach</option>
-              <option value="task">Tarea Interna</option>
-              <option value="reminder">Recordatorio</option>
-              <option value="family">Actividad Familiar</option>
-              <option value="foundation">Actividad Fundación</option>
-            </select>
-          </div>
-
-          {/* Status */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Estado
-            </label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as EventStatus)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all capitalize"
-            >
-              <option value="scheduled">Programado</option>
-              <option value="confirmed">Confirmado</option>
-              <option value="completed">Completado</option>
-              <option value="cancelled">Cancelado</option>
-            </select>
-          </div>
-
-          {/* Client Name (Show only if Coach Session) */}
-          {type === "session" && (
-            <div className="col-span-2 md:col-span-1 flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Nombre del Cliente *
+        <aside className="space-y-5">
+          <FormSection title="Estado">
+            <div className="space-y-4">
+              <label>
+                <span className="section-label mb-2 block">Estado</span>
+                <select className="input-field" value={status} onChange={(e) => setStatus(e.target.value as EventStatus)}>
+                  {EVENT_STATUS_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <input
-                type="text"
-                placeholder="Ej. Juan Pérez"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all"
-                required={type === "session"}
-              />
-            </div>
-          )}
-
-          {/* Person In Charge (Coach or Family Member) */}
-          <div className={`col-span-2 ${type === "session" ? "md:col-span-1" : ""} flex flex-col gap-1.5`}>
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Responsable / Coach *
-            </label>
-            <input
-              type="text"
-              placeholder="Nombre del responsable"
-              value={personInCharge}
-              onChange={(e) => setPersonInCharge(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all"
-              required
-            />
-          </div>
-
-          {/* Description */}
-          <div className="col-span-2 flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Descripción
-            </label>
-            <textarea
-              placeholder="Detalles sobre el evento..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all resize-none"
-            />
-          </div>
-
-          {/* Date */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Fecha *
-            </label>
-            <div className="relative">
-              <input
-                type="date"
-                value={dateStr}
-                onChange={(e) => setDateStr(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Times Grid */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                Inicio *
+              <label>
+                <span className="section-label mb-2 block">Prioridad</span>
+                <select className="input-field" value={priority} onChange={(e) => setPriority(e.target.value as EventPriority)}>
+                  {PRIORITY_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <input
-                type="time"
-                value={startTimeStr}
-                onChange={(e) => setStartTimeStr(e.target.value)}
-                disabled={allDay}
-                className="w-full px-3 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all disabled:opacity-50"
-                required
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                Fin *
+              <label>
+                <span className="section-label mb-2 block">Recordatorio</span>
+                <select className="input-field" value={reminderMinutes} onChange={(e) => setReminderMinutes(Number(e.target.value))}>
+                  {REMINDER_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <input
-                type="time"
-                value={endTimeStr}
-                onChange={(e) => setEndTimeStr(e.target.value)}
-                disabled={allDay}
-                className="w-full px-3 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all disabled:opacity-50"
-                required
-              />
-            </div>
-          </div>
-
-          {/* All Day Checkbox & Customized Color */}
-          <div className="flex items-center justify-between p-2 col-span-2 bg-slate-50/50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-800/40">
-            <div className="flex items-center gap-2">
-              <input
-                id="allDay"
-                type="checkbox"
-                checked={allDay}
-                onChange={(e) => setAllDay(e.target.checked)}
-                className="w-4 h-4 text-violet-600 border-slate-350 rounded-md focus:ring-violet-500"
-              />
-              <label htmlFor="allDay" className="text-xs font-bold text-slate-650 dark:text-slate-350 cursor-pointer select-none">
-                ¿Todo el día?
+              <label>
+                <span className="section-label mb-2 block">Color</span>
+                <input className="h-12 w-full cursor-pointer rounded-2xl border border-app-soft bg-app-soft p-1" type="color" value={color} onChange={(e) => setColor(e.target.value)} />
               </label>
             </div>
+          </FormSection>
 
-            <div className="flex items-center gap-2">
-              <label htmlFor="color" className="text-xs font-bold text-slate-400 dark:text-slate-500">
-                Color
-              </label>
-              <input
-                id="color"
-                type="color"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="w-7 h-7 p-0 bg-transparent rounded-lg border-0 cursor-pointer"
-              />
-            </div>
-          </div>
-
-          {/* Modality */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Modalidad
-            </label>
-            <select
-              value={modality}
-              onChange={(e) => setModality(e.target.value as EventModality)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all capitalize"
-            >
-              <option value="virtual">Virtual (Zoom/Teams)</option>
-              <option value="presencial">Presencial (Oficina/Lugar)</option>
-              <option value="llamada">Llamada Telefónica</option>
-              <option value="otro">Otro</option>
-            </select>
-          </div>
-
-          {/* Reminder Minutes */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Recordatorio (Minutos antes)
-            </label>
-            <input
-              type="number"
-              min="0"
-              placeholder="15"
-              value={reminderMinutes}
-              onChange={(e) => setReminderMinutes(Number(e.target.value))}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all"
-            />
-          </div>
-
-          {/* Location */}
-          <div className="flex flex-col gap-1.5 col-span-2 md:col-span-1">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Ubicación física / Dirección
-            </label>
-            <input
-              type="text"
-              placeholder="Ej. Calle 10 # 5-40"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all"
-            />
-          </div>
-
-          {/* Meeting Link */}
-          <div className="flex flex-col gap-1.5 col-span-2 md:col-span-1">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Enlace de la sesión (Reunión Virtual)
-            </label>
-            <input
-              type="url"
-              placeholder="https://zoom.us/j/..."
-              value={meetingLink}
-              onChange={(e) => setMeetingLink(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all"
-            />
-          </div>
-
-          {/* Notes */}
-          <div className="col-span-2 flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Notas Adicionales
-            </label>
-            <textarea
-              placeholder="Observaciones, recordatorios de temas a tratar..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900 focus:border-violet-500 outline-none text-sm transition-all resize-none"
-            />
-          </div>
-
-          {/* Form Actions */}
-          <div className="col-span-2 flex gap-3 border-t border-slate-100 dark:border-slate-800/40 pt-4 mt-2 justify-end">
-            <button
-              type="button"
-              onClick={() => setActivePage("dashboard")}
-              className="flex items-center gap-1.5 py-3 px-6 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-350 text-sm font-semibold transition-all active:scale-98"
-            >
-              <X size={16} />
-              <span>Cancelar</span>
-            </button>
-            
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex items-center gap-2 py-3 px-6 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold text-sm shadow-md shadow-violet-500/20 active:scale-98 transition-all disabled:opacity-50"
-            >
-              {loading ? (
-                <Spinner className="w-5 h-5 text-white" />
+          <FormSection title="Imagen">
+            <div className="space-y-3">
+              {(imagePreview || (existingImageUrl && !removeExistingImage)) ? (
+                <div className="overflow-hidden rounded-3xl border border-app-soft bg-app-soft">
+                  <img src={imagePreview || existingImageUrl || ""} alt="Vista previa" className="h-48 w-full object-cover" />
+                </div>
               ) : (
-                <>
-                  <Save size={16} />
-                  <span>Guardar Evento</span>
-                </>
+                <div className="flex h-48 flex-col items-center justify-center rounded-3xl border border-dashed border-app-soft bg-app-soft text-center">
+                  <ImageIcon size={34} className="mb-2 text-app-accent" />
+                  <p className="m-0 text-sm font-bold text-app-muted">Imagen opcional</p>
+                  <p className="m-0 mt-1 text-xs text-app-faint">JPG, PNG o WEBP. Maximo 5 MB.</p>
+                </div>
               )}
+
+              <label className="btn-secondary w-full">
+                <Upload size={16} />
+                Subir imagen
+                <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" className="hidden" onChange={(e) => handleImageChange(e.target.files?.[0] || null)} />
+              </label>
+
+              {(imagePreview || existingImageUrl) && (
+                <button type="button" onClick={clearImage} className="btn-danger-soft w-full">
+                  <Trash2 size={16} />
+                  Quitar imagen
+                </button>
+              )}
+            </div>
+          </FormSection>
+
+          <div className="flex flex-col gap-3">
+            <button type="submit" disabled={loading} className="btn-primary w-full">
+              {loading ? <Spinner className="h-5 w-5" /> : <Save size={17} />}
+              Guardar evento
+            </button>
+            <button type="button" onClick={() => setActivePage("dashboard")} className="btn-secondary w-full">
+              <X size={17} />
+              Cancelar
             </button>
           </div>
-
-        </form>
-      </Card>
+        </aside>
+      </form>
     </div>
   );
 }
+
+function FormSection({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Card className="space-y-4">
+      <div className="flex items-center gap-2">
+        {icon && <span className="text-app-accent">{icon}</span>}
+        <h3 className="m-0 text-lg font-black text-app-strong">{title}</h3>
+      </div>
+      {children}
+    </Card>
+  );
+}
+

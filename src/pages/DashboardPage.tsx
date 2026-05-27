@@ -1,21 +1,13 @@
-import { useState } from "react";
-import type { CalendarEvent, EventStatus, EventType } from "../types/event";
-import type { UserProfile } from "../types/user";
+import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { CalendarDays, Clock, ListChecks, Plus, Sparkles, UserRound } from "lucide-react";
 import { Card } from "../components/ui/Card";
-import { Modal } from "../components/ui/Modal";
-import { 
-  Plus, 
-  CalendarDays, 
-  Sparkles, 
-  Clock, 
-  MapPin, 
-  Video, 
-  Phone, 
-  User as UserIcon,
-  Trash2,
-  Edit,
-  ExternalLink
-} from "lucide-react";
+import { EventDetailModal } from "../components/events/EventDetailModal";
+import { EventTypeIcon } from "../components/events/EventTypeIcon";
+import { endOfDay, formatEventTime, isEventPending, isSameDay, startOfDay, toDate } from "../lib/dateUtils";
+import { getEventMeta, getPriorityMeta, getStatusMeta } from "../lib/eventMeta";
+import type { CalendarEvent, EventStatus } from "../types/event";
+import type { UserProfile } from "../types/user";
 
 interface DashboardPageProps {
   events: CalendarEvent[];
@@ -35,431 +27,253 @@ export default function DashboardPage({
   onDeleteEvent
 }: DashboardPageProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
-  // Time-based greeting helper
-  const getGreeting = () => {
-    const hours = new Date().getHours();
-    if (hours < 12) return "¡Buenos días";
-    if (hours < 18) return "¡Buenas tardes";
-    return "¡Buenas noches";
-  };
-
-  // Get current date boundaries
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
 
-  // Filter events for today
-  const todayEvents = events.filter((event) => {
-    const eventStart = new Date(event.startAt as Date);
-    return eventStart >= startOfToday && eventStart <= endOfToday;
-  });
+  const todayEvents = useMemo(
+    () =>
+      events
+        .filter((event) => {
+          const start = toDate(event.startAt);
+          return start >= todayStart && start <= todayEnd;
+        })
+        .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime()),
+    [events, todayEnd, todayStart]
+  );
 
-  // Filter upcoming coaching sessions (today or future)
-  const upcomingSessions = events
-    .filter((event) => {
-      const eventStart = new Date(event.startAt as Date);
-      return event.type === "session" && eventStart >= startOfToday;
-    })
-    .slice(0, 4); // Limit to top 4
+  const visualReminders = useMemo(
+    () =>
+      events
+        .filter((event) => {
+          const start = toDate(event.startAt);
+          const overduePending = start < now && isEventPending(event);
+          const nextDay = start >= now && start <= tomorrow;
+          return overduePending || nextDay;
+        })
+        .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime())
+        .slice(0, 5),
+    [events, now, tomorrow]
+  );
 
-  // Event utilities
-  const getEventBadgeStyles = (type: EventType) => {
-    switch (type) {
-      case "session":
-        return "bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/40";
-      case "task":
-        return "bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/40";
-      case "reminder":
-        return "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/40";
-      case "family":
-        return "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/40";
-      case "foundation":
-        return "bg-pink-50 text-pink-700 border-pink-100 dark:bg-pink-950/40 dark:text-pink-300 dark:border-pink-900/40";
-    }
-  };
+  const upcomingMeetings = useMemo(
+    () =>
+      events
+        .filter((event) => ["meeting", "session"].includes(event.type) && toDate(event.startAt) >= now && event.status !== "cancelled")
+        .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime())
+        .slice(0, 4),
+    [events, now]
+  );
 
-  const getEventTypeName = (type: EventType) => {
-    const names = {
-      session: "Sesión Coach",
-      task: "Tarea Interna",
-      reminder: "Recordatorio",
-      family: "Actividad Familiar",
-      foundation: "Actividad Fundación"
-    };
-    return names[type];
-  };
+  const pendingTasks = useMemo(
+    () =>
+      events
+        .filter((event) => event.type === "task" && isEventPending(event))
+        .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime())
+        .slice(0, 4),
+    [events]
+  );
 
-  const getStatusBadgeStyles = (status: EventStatus) => {
-    switch (status) {
-      case "scheduled":
-        return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
-      case "confirmed":
-        return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
-      case "completed":
-        return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
-      case "cancelled":
-        return "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300";
-    }
-  };
+  const greeting = getGreeting(now);
+  const hasNoEvents = events.length === 0;
 
-  const getStatusName = (status: EventStatus) => {
-    const names = {
-      scheduled: "Programado",
-      confirmed: "Confirmado",
-      completed: "Completado",
-      cancelled: "Cancelado"
-    };
-    return names[status];
-  };
-
-  const getModalityIcon = (modality: string) => {
-    switch (modality) {
-      case "presencial":
-        return <MapPin size={14} />;
-      case "virtual":
-        return <Video size={14} />;
-      case "llamada":
-        return <Phone size={14} />;
-      default:
-        return null;
-    }
-  };
-
-  const formatEventTime = (event: CalendarEvent) => {
-    if (event.allDay) return "Todo el día";
-    const start = new Date(event.startAt as Date);
-    const end = new Date(event.endAt as Date);
-    const formatTime = (date: Date) => 
-      date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", hour12: true });
-    return `${formatTime(start)} - ${formatTime(end)}`;
-  };
-
-  const handleEditClick = (event: CalendarEvent) => {
+  const handleEdit = (event: CalendarEvent) => {
     setEditingEvent(event);
-    setActivePage("event-form");
     setSelectedEvent(null);
-  };
-
-  const handleDeleteClick = async (id: string) => {
-    try {
-      await onDeleteEvent(id);
-      setConfirmDeleteId(null);
-      setSelectedEvent(null);
-    } catch (error) {
-      alert("Error al eliminar el evento.");
-    }
+    setActivePage("event-form");
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Welcome message */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white m-0">
-            {getGreeting()}, {profile?.name || "Brillante"} ✨
-          </h2>
-          <p className="text-slate-500 dark:text-slate-400 mt-1.5 text-base">
-            Que hoy sea un día lleno de paz, luz y propósito para tu gimnasio emocional.
-          </p>
-        </div>
-        
-        {/* Quick action button */}
-        <button
-          onClick={() => {
-            setEditingEvent(null);
-            setActivePage("event-form");
-          }}
-          className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-semibold shadow-md shadow-violet-500/20 active:scale-98 transition-all w-full md:w-auto justify-center"
-        >
-          <Plus size={18} className="stroke-[2.5px]" />
-          <span>Nuevo Evento</span>
-        </button>
-      </div>
-
-      {/* Grid containing Today and Sessions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Today's Agenda (Col Span 2) */}
-        <div className="lg:col-span-2 flex flex-col gap-4">
-          <div className="flex items-center gap-2 px-1">
-            <CalendarDays size={20} className="text-violet-600 dark:text-violet-400" />
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white m-0">Agenda de Hoy</h3>
-            <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold px-2.5 py-1 rounded-full">
-              {todayEvents.length}
-            </span>
+    <div className="flex flex-col gap-6">
+      <section className="glass-panel overflow-hidden rounded-[2rem] p-5 sm:p-7">
+        <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="flex items-center gap-4">
+            {profile?.photoURL ? (
+              <img src={profile.photoURL} alt={profile.name} className="h-16 w-16 rounded-full object-cover shadow-lg" />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full text-xl font-black text-white shadow-lg" style={{ backgroundColor: profile?.color || "#d7b46a" }}>
+                {profile?.name ? profile.name.slice(0, 2).toUpperCase() : <UserRound size={24} />}
+              </div>
+            )}
+            <div>
+              <p className="section-label mb-2">{now.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}</p>
+              <h2 className="m-0 text-3xl font-black tracking-tight text-app-strong sm:text-4xl">
+                {greeting}, {profile?.name?.split(" ")[0] || "Brillante"}
+              </h2>
+              <p className="mt-2 text-sm text-app-muted">Organiza tu dia con calma, claridad y conciencia.</p>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-4">
+          <button type="button" onClick={() => setActivePage("event-form")} className="btn-primary w-full lg:w-auto">
+            <Plus size={18} />
+            Nuevo evento
+          </button>
+        </div>
+      </section>
+
+      {hasNoEvents ? (
+        <Card className="flex min-h-80 flex-col items-center justify-center border-dashed text-center">
+          <Sparkles size={54} className="mb-4 text-app-accent" />
+          <h3 className="m-0 text-2xl font-black text-app-strong">Bienvenido a tu agenda</h3>
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-app-muted">Crea tu primera sesion, tarea o recordatorio.</p>
+          <button type="button" onClick={() => setActivePage("event-form")} className="btn-primary mt-6">
+            <Plus size={17} />
+            Crear primer evento
+          </button>
+        </Card>
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+          <section className="space-y-4">
+            <SectionHeader icon={<CalendarDays size={20} />} title="Eventos de hoy" count={todayEvents.length} />
             {todayEvents.length === 0 ? (
-              <Card className="flex flex-col items-center justify-center py-12 text-center border-dashed border-slate-200 dark:border-slate-800/80">
-                <CalendarDays size={48} className="text-slate-300 dark:text-slate-700 mb-3" />
-                <p className="font-semibold text-slate-600 dark:text-slate-400">No hay eventos para hoy</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 max-w-xs mt-1">
-                  Tu agenda está limpia. Usa el botón de arriba para programar sesiones o tareas.
-                </p>
-              </Card>
+              <EmptyBlock title="Hoy esta tranquilo" action="Crear evento" onAction={() => setActivePage("event-form")} />
             ) : (
-              todayEvents.map((event) => (
-                <Card 
-                  key={event.id} 
-                  onClick={() => setSelectedEvent(event)}
-                  className="hover:translate-x-1 active:scale-[0.99] border-l-4"
-                  style={{ borderLeftColor: event.color }}
-                >
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md border ${getEventBadgeStyles(event.type)}`}>
-                          {getEventTypeName(event.type)}
-                        </span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${getStatusBadgeStyles(event.status)}`}>
-                          {getStatusName(event.status)}
-                        </span>
-                      </div>
-                      <h4 className="font-bold text-base text-slate-900 dark:text-white mt-1 truncate m-0">
-                        {event.title}
-                      </h4>
-                      <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mt-2">
-                        <div className="flex items-center gap-1">
-                          <Clock size={13} />
-                          <span>{formatEventTime(event)}</span>
-                        </div>
-                        {event.location && (
-                          <div className="flex items-center gap-1 truncate max-w-[200px]">
-                            {getModalityIcon(event.modality)}
-                            <span className="truncate">{event.location}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="text-right">
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold m-0">RESPONSABLE</p>
-                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-[100px] m-0">{event.personInCharge}</p>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Coaching Sessions (Col Span 1) */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 px-1">
-            <Sparkles size={20} className="text-violet-600 dark:text-violet-400" />
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white m-0">Próximas Sesiones</h3>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            {upcomingSessions.length === 0 ? (
-              <Card className="flex flex-col items-center justify-center py-10 text-center border-dashed border-slate-200 dark:border-slate-800/80">
-                <Sparkles size={36} className="text-slate-300 dark:text-slate-700 mb-2" />
-                <p className="font-semibold text-xs text-slate-600 dark:text-slate-400">No hay sesiones agendadas</p>
-              </Card>
-            ) : (
-              upcomingSessions.map((session) => {
-                const sessionDate = new Date(session.startAt as Date);
-                const day = sessionDate.toLocaleDateString("es-ES", { day: "numeric" });
-                const month = sessionDate.toLocaleDateString("es-ES", { month: "short" }).replace(".", "");
-                
-                return (
-                  <Card 
-                    key={session.id}
-                    onClick={() => setSelectedEvent(session)}
-                    className="hover:shadow-md py-4 px-4 flex gap-4 items-center"
-                  >
-                    {/* Compact Date Box */}
-                    <div className="w-12 h-12 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-xl flex flex-col items-center justify-center shrink-0">
-                      <span className="text-lg font-extrabold leading-none">{day}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider">{month}</span>
-                    </div>
-
-                    {/* Session Details */}
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate m-0">{session.title}</h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
-                        Cliente: <span className="font-semibold text-slate-700 dark:text-slate-300">{session.clientName || "N/A"}</span>
-                      </p>
-                      <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400 dark:text-slate-500">
-                        <Clock size={11} />
-                        <span>
-                          {sessionDate.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", hour12: true })}
-                        </span>
-                        <span className="capitalize">&bull; {session.modality}</span>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-      </div>
-
-      {/* Event Details Quick-View Modal */}
-      <Modal
-        isOpen={!!selectedEvent}
-        onClose={() => setSelectedEvent(null)}
-        title="Detalles del Evento"
-      >
-        {selectedEvent && (
-          <div className="flex flex-col gap-6">
-            {/* Header info */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md border ${getEventBadgeStyles(selectedEvent.type)}`}>
-                  {getEventTypeName(selectedEvent.type)}
-                </span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${getStatusBadgeStyles(selectedEvent.status)}`}>
-                  {getStatusName(selectedEvent.status)}
-                </span>
-              </div>
-              <h4 className="text-xl font-bold text-slate-900 dark:text-white mt-1 m-0">
-                {selectedEvent.title}
-              </h4>
-              {selectedEvent.description && (
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                  {selectedEvent.description}
-                </p>
-              )}
-            </div>
-
-            {/* Event parameters */}
-            <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/40 text-xs">
-              <div>
-                <p className="text-slate-400 font-semibold mb-0.5 uppercase tracking-wide">Fecha y Hora</p>
-                <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
-                  <Clock size={13} className="text-violet-600" />
-                  <span>
-                    {new Date(selectedEvent.startAt as Date).toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })}
-                    <br />
-                    {formatEventTime(selectedEvent)}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-slate-400 font-semibold mb-0.5 uppercase tracking-wide">Responsable</p>
-                <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
-                  <UserIcon size={13} className="text-violet-600" />
-                  <span>{selectedEvent.personInCharge}</span>
-                </div>
-              </div>
-
-              {selectedEvent.clientName && (
-                <div>
-                  <p className="text-slate-400 font-semibold mb-0.5 uppercase tracking-wide">Cliente / Persona</p>
-                  <p className="font-bold text-slate-700 dark:text-slate-300 m-0">{selectedEvent.clientName}</p>
-                </div>
-              )}
-
-              <div>
-                <p className="text-slate-400 font-semibold mb-0.5 uppercase tracking-wide">Modalidad</p>
-                <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 capitalize">
-                  {getModalityIcon(selectedEvent.modality)}
-                  <span>{selectedEvent.modality}</span>
-                </div>
-              </div>
-
-              {selectedEvent.location && (
-                <div className="col-span-2">
-                  <p className="text-slate-400 font-semibold mb-0.5 uppercase tracking-wide">Ubicación</p>
-                  <p className="font-bold text-slate-700 dark:text-slate-300 m-0 truncate">{selectedEvent.location}</p>
-                </div>
-              )}
-
-              {selectedEvent.meetingLink && (
-                <div className="col-span-2">
-                  <p className="text-slate-400 font-semibold mb-0.5 uppercase tracking-wide">Enlace de Reunión</p>
-                  <a 
-                    href={selectedEvent.meetingLink}
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="flex items-center gap-1 font-bold text-violet-600 dark:text-violet-400 hover:underline m-0 truncate"
-                  >
-                    <span>Unirse a reunión</span>
-                    <ExternalLink size={12} />
-                  </a>
-                </div>
-              )}
-
-              {selectedEvent.notes && (
-                <div className="col-span-2">
-                  <p className="text-slate-400 font-semibold mb-0.5 uppercase tracking-wide">Notas</p>
-                  <p className="text-slate-600 dark:text-slate-400 m-0 italic whitespace-pre-wrap">{selectedEvent.notes}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Status Change Actions */}
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Cambiar Estado</span>
-              <div className="grid grid-cols-2 gap-2">
-                {(["scheduled", "confirmed", "completed", "cancelled"] as EventStatus[]).map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => {
-                      onUpdateStatus(selectedEvent.id!, status);
-                      setSelectedEvent({ ...selectedEvent, status });
-                    }}
-                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all ${
-                      selectedEvent.status === status
-                        ? "bg-violet-600 text-white border-violet-600"
-                        : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                    }`}
-                  >
-                    {getStatusName(status)}
-                  </button>
+              <div className="grid gap-3">
+                {todayEvents.map((event) => (
+                  <EventRow key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
                 ))}
               </div>
-            </div>
+            )}
+          </section>
 
-            {/* Edit / Delete Buttons */}
-            <div className="flex gap-3 border-t border-slate-100 dark:border-slate-800/40 pt-4 mt-2">
-              <button
-                onClick={() => handleEditClick(selectedEvent)}
-                className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200 text-sm font-semibold transition-all"
-              >
-                <Edit size={16} />
-                <span>Editar</span>
-              </button>
+          <section className="space-y-4">
+            <SectionHeader icon={<Clock size={20} />} title="Proximos recordatorios" count={visualReminders.length} />
+            {visualReminders.length === 0 ? (
+              <EmptyBlock title="Sin recordatorios urgentes" compact />
+            ) : (
+              <div className="grid gap-3">
+                {visualReminders.map((event) => (
+                  <CompactEvent key={event.id} event={event} onClick={() => setSelectedEvent(event)} highlight={toDate(event.startAt) < now} />
+                ))}
+              </div>
+            )}
+          </section>
 
-              {confirmDeleteId === selectedEvent.id ? (
-                <div className="flex-1 flex gap-2">
-                  <button
-                    onClick={() => handleDeleteClick(selectedEvent.id!)}
-                    className="flex-1 py-3 px-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all"
-                  >
-                    Confirmar
-                  </button>
-                  <button
-                    onClick={() => setConfirmDeleteId(null)}
-                    className="flex-1 py-3 px-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 text-xs font-bold transition-all"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setConfirmDeleteId(selectedEvent.id!)}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 text-sm font-semibold transition-all border border-red-100 dark:border-red-900/20"
-                >
-                  <Trash2 size={16} />
-                  <span>Eliminar</span>
-                </button>
-              )}
-            </div>
+          <section className="space-y-4">
+            <SectionHeader icon={<Sparkles size={20} />} title="Proximas reuniones y sesiones" count={upcomingMeetings.length} />
+            {upcomingMeetings.length === 0 ? (
+              <EmptyBlock title="No hay reuniones proximas" compact />
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {upcomingMeetings.map((event) => (
+                  <CompactEvent key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
+                ))}
+              </div>
+            )}
+          </section>
 
-          </div>
-        )}
-      </Modal>
+          <section className="space-y-4">
+            <SectionHeader icon={<ListChecks size={20} />} title="Tareas pendientes" count={pendingTasks.length} />
+            {pendingTasks.length === 0 ? (
+              <EmptyBlock title="Sin tareas pendientes" compact />
+            ) : (
+              <div className="grid gap-3">
+                {pendingTasks.map((event) => (
+                  <CompactEvent key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
+      <EventDetailModal
+        event={selectedEvent}
+        isOpen={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        onEdit={handleEdit}
+        onUpdateStatus={onUpdateStatus}
+        onDeleteEvent={onDeleteEvent}
+      />
     </div>
   );
+}
+
+function EventRow({ event, onClick }: { event: CalendarEvent; onClick: () => void }) {
+  const meta = getEventMeta(event.type);
+  const status = getStatusMeta(event.status);
+  const priority = getPriorityMeta(event.priority);
+  const eventDate = toDate(event.startAt);
+
+  return (
+    <Card onClick={onClick} className="border-l-4 p-4 hover:-translate-y-0.5" style={{ borderLeftColor: event.color || meta.color }}>
+      <div className="flex gap-4">
+        {event.imageUrl && <img src={event.imageUrl} alt={event.title} className="hidden h-20 w-24 rounded-2xl object-cover sm:block" />}
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black ${meta.softClass}`}>
+              <EventTypeIcon type={event.type} size={13} />
+              {meta.label}
+            </span>
+            <span className={`rounded-full border px-2.5 py-1 text-xs font-black ${status.softClass}`}>{status.label}</span>
+            {event.priority === "high" && <span className={`rounded-full border px-2.5 py-1 text-xs font-black ${priority.softClass}`}>Importante</span>}
+          </div>
+          <h3 className="m-0 truncate text-lg font-black text-app-strong">{event.title}</h3>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-bold text-app-muted">
+            <span>{formatEventTime(event)}</span>
+            {event.personInCharge && <span>{event.personInCharge}</span>}
+            {!isSameDay(eventDate, new Date()) && <span>{eventDate.toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function CompactEvent({ event, onClick, highlight = false }: { event: CalendarEvent; onClick: () => void; highlight?: boolean }) {
+  const meta = getEventMeta(event.type);
+  const date = toDate(event.startAt);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-3xl border p-4 text-left transition hover:-translate-y-0.5 ${
+        highlight ? "border-red-500/25 bg-red-500/10" : "border-app-soft bg-app-panel hover:bg-app-soft"
+      }`}
+    >
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black ${meta.softClass}`}>
+          <EventTypeIcon type={event.type} size={13} />
+          {meta.shortLabel}
+        </span>
+        <span className="text-xs font-black text-app-faint">{date.toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
+      </div>
+      <p className="m-0 line-clamp-2 font-black text-app-strong">{event.title}</p>
+      <p className="m-0 mt-2 text-xs font-bold text-app-muted">{formatEventTime(event)}</p>
+    </button>
+  );
+}
+
+function SectionHeader({ icon, title, count }: { icon: ReactNode; title: string; count: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-app-accent">{icon}</span>
+      <h3 className="m-0 text-lg font-black text-app-strong">{title}</h3>
+      <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1 text-xs font-black text-app-muted">{count}</span>
+    </div>
+  );
+}
+
+function EmptyBlock({ title, action, onAction, compact = false }: { title: string; action?: string; onAction?: () => void; compact?: boolean }) {
+  return (
+    <Card className={`flex flex-col items-center justify-center border-dashed text-center ${compact ? "py-8" : "py-12"}`}>
+      <Sparkles size={compact ? 30 : 42} className="mb-3 text-app-accent" />
+      <p className="m-0 text-sm font-black text-app-strong">{title}</p>
+      {action && onAction && (
+        <button type="button" onClick={onAction} className="btn-secondary mt-4">
+          <Plus size={16} />
+          {action}
+        </button>
+      )}
+    </Card>
+  );
+}
+
+function getGreeting(date: Date): string {
+  const hour = date.getHours();
+  if (hour < 12) return "Buenos dias";
+  if (hour < 18) return "Buenas tardes";
+  return "Buenas noches";
 }
