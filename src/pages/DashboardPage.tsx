@@ -4,7 +4,7 @@ import { CalendarDays, Clock, ListChecks, Plus, Sparkles, UserRound } from "luci
 import { Card } from "../components/ui/Card";
 import { EventDetailModal } from "../components/events/EventDetailModal";
 import { EventTypeIcon } from "../components/events/EventTypeIcon";
-import { endOfDay, formatEventTime, isEventPending, isSameDay, startOfDay, toDate } from "../lib/dateUtils";
+import { endOfDay, formatCOP, formatEventTime, isEventPending, isSameDay, startOfDay, toDate } from "../lib/dateUtils";
 import { getEventMeta, getPriorityMeta, getStatusMeta } from "../lib/eventMeta";
 import type { CalendarEvent, EventStatus } from "../types/event";
 import type { UserProfile } from "../types/user";
@@ -215,6 +215,7 @@ function EventRow({ event, onClick }: { event: CalendarEvent; onClick: () => voi
             {event.personInCharge && <span>{event.personInCharge}</span>}
             {!isSameDay(eventDate, new Date()) && <span>{eventDate.toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>}
           </div>
+          <CoachAmounts event={event} />
         </div>
       </div>
     </Card>
@@ -242,6 +243,7 @@ function CompactEvent({ event, onClick, highlight = false }: { event: CalendarEv
       </div>
       <p className="m-0 line-clamp-2 font-black text-app-strong">{event.title}</p>
       <p className="m-0 mt-2 text-xs font-bold text-app-muted">{formatEventTime(event)}</p>
+      <CoachAmounts event={event} compact />
     </button>
   );
 }
@@ -276,4 +278,18 @@ function getGreeting(date: Date): string {
   if (hour < 12) return "Buenos dias";
   if (hour < 18) return "Buenas tardes";
   return "Buenas noches";
+}
+
+function CoachAmounts({ event, compact = false }: { event: CalendarEvent; compact?: boolean }) {
+  if (event.type !== "session") return null;
+  const hasTotal = typeof event.totalAmount === "number";
+  const hasPaid = typeof event.paidAmount === "number";
+  if (!hasTotal && !hasPaid) return null;
+
+  return (
+    <div className={`mt-3 flex flex-wrap gap-2 ${compact ? "text-[11px]" : "text-xs"} font-black text-app-muted`}>
+      {hasTotal && <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1">Valor: {formatCOP(event.totalAmount)}</span>}
+      {hasPaid && <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1">Abono: {formatCOP(event.paidAmount)}</span>}
+    </div>
+  );
 }

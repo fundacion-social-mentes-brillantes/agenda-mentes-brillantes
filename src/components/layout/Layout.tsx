@@ -49,7 +49,7 @@ const quickItems: { type: EventType; label: string; icon: React.ComponentType<{ 
   { type: "reminder", label: "Recordatorio", icon: Bell },
   { type: "meeting", label: "Reunion", icon: Video },
   { type: "task", label: "Tarea", icon: ListChecks },
-  { type: "session", label: "Sesion", icon: Sparkles }
+  { type: "session", label: "Sesión Coach", icon: Sparkles }
 ];
 
 export function Layout({ children, activePage, setActivePage, onQuickCreate }: LayoutProps) {
@@ -173,7 +173,7 @@ export function Layout({ children, activePage, setActivePage, onQuickCreate }: L
           <MobileNavItem key={item.id} item={item} active={activePage === item.id} onClick={() => setActivePage(item.id)} />
         ))}
 
-        <div className="relative">
+        <div className="relative flex min-w-14 flex-col items-center gap-1 text-[10px] font-black text-app-accent">
           <button
             type="button"
             onClick={() => setQuickOpen((value) => !value)}
@@ -182,6 +182,7 @@ export function Layout({ children, activePage, setActivePage, onQuickCreate }: L
           >
             <Plus size={26} />
           </button>
+          <span className="-mt-5">Nuevo</span>
           {quickOpen && <QuickCreateMenu className="fixed bottom-20 left-4 right-4 z-50" onSelect={handleQuick} />}
         </div>
 

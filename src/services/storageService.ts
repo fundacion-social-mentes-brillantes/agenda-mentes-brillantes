@@ -1,8 +1,10 @@
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { withTimeout } from "../lib/asyncUtils";
 import { storage } from "../lib/firebase";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+const STORAGE_TIMEOUT = 30_000;
 
 function getStorageErrorMessage(error: unknown): string {
   const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
@@ -36,8 +38,16 @@ export const storageService = {
     const imageRef = ref(storage, imagePath);
 
     try {
-      await uploadBytes(imageRef, file, { contentType: file.type });
-      const imageUrl = await getDownloadURL(imageRef);
+      await withTimeout(
+        uploadBytes(imageRef, file, { contentType: file.type }),
+        STORAGE_TIMEOUT,
+        "La subida de la imagen tardó demasiado."
+      );
+      const imageUrl = await withTimeout(
+        getDownloadURL(imageRef),
+        STORAGE_TIMEOUT,
+        "No pudimos obtener la URL de la imagen."
+      );
       return { imageUrl, imagePath };
     } catch (error) {
       throw new Error(getStorageErrorMessage(error));
@@ -46,7 +56,11 @@ export const storageService = {
 
   async deleteEventImage(imagePath: string) {
     try {
-      await deleteObject(ref(storage, imagePath));
+      await withTimeout(
+        deleteObject(ref(storage, imagePath)),
+        STORAGE_TIMEOUT,
+        "La eliminación de la imagen tardó demasiado."
+      );
     } catch (error) {
       const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
       if (code !== "storage/object-not-found") {
@@ -55,4 +69,3 @@ export const storageService = {
     }
   }
 };
-

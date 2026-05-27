@@ -10,9 +10,9 @@ export interface EventTypeMeta {
 
 export const EVENT_TYPES: Record<EventType, EventTypeMeta> = {
   session: {
-    label: "Sesion",
-    shortLabel: "Sesion",
-    description: "Acompanamiento coach o gimnasio emocional.",
+    label: "Sesión Coach",
+    shortLabel: "Sesión Coach",
+    description: "Acompañamiento coach o gimnasio emocional.",
     color: "#3b82f6",
     softClass: "bg-blue-500/10 text-blue-600 border-blue-500/20"
   },
@@ -118,4 +118,3 @@ export function getStatusMeta(status?: EventStatus) {
 export function getPriorityMeta(priority?: EventPriority) {
   return PRIORITY_OPTIONS.find((item) => item.value === priority) || PRIORITY_OPTIONS[1];
 }
-

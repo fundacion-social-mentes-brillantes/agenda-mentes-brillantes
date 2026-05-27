@@ -3,7 +3,7 @@ import { CalendarPlus, ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-
 import { Card } from "../components/ui/Card";
 import { EventDetailModal } from "../components/events/EventDetailModal";
 import { EventTypeIcon } from "../components/events/EventTypeIcon";
-import { formatEventTime, isSameDay, toDate } from "../lib/dateUtils";
+import { formatCOP, formatEventTime, isSameDay, toDate } from "../lib/dateUtils";
 import { getEventMeta, getStatusMeta } from "../lib/eventMeta";
 import type { CalendarEvent, EventStatus } from "../types/event";
 
@@ -212,8 +212,22 @@ function DayEvent({ event, onClick }: { event: CalendarEvent; onClick: () => voi
       </div>
       <p className="m-0 font-black text-app-strong">{event.title}</p>
       <p className="m-0 mt-2 text-xs font-bold text-app-muted">{formatEventTime(event)}</p>
+      <CoachAmounts event={event} />
       {event.imageUrl && <img src={event.imageUrl} alt={event.title} className="mt-3 h-24 w-full rounded-2xl object-cover" />}
     </button>
   );
 }
 
+function CoachAmounts({ event }: { event: CalendarEvent }) {
+  if (event.type !== "session") return null;
+  const hasTotal = typeof event.totalAmount === "number";
+  const hasPaid = typeof event.paidAmount === "number";
+  if (!hasTotal && !hasPaid) return null;
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-black text-app-muted">
+      {hasTotal && <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1">Valor: {formatCOP(event.totalAmount)}</span>}
+      {hasPaid && <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1">Abono: {formatCOP(event.paidAmount)}</span>}
+    </div>
+  );
+}

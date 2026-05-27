@@ -3,7 +3,7 @@ import { Filter, Plus, Search, Sparkles } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { EventDetailModal } from "../components/events/EventDetailModal";
 import { EventTypeIcon } from "../components/events/EventTypeIcon";
-import { formatEventTime, isEventPending, toDate } from "../lib/dateUtils";
+import { formatCOP, formatEventTime, isEventPending, toDate } from "../lib/dateUtils";
 import { EVENT_TYPE_OPTIONS, getEventMeta, getStatusMeta } from "../lib/eventMeta";
 import type { CalendarEvent, EventStatus, EventType } from "../types/event";
 
@@ -140,8 +140,22 @@ function AgendaCard({ event, onClick }: { event: CalendarEvent; onClick: () => v
         {(event.participants || event.personInCharge) && (
           <p className="m-0 truncate text-xs font-semibold text-app-faint">{event.participants || event.personInCharge}</p>
         )}
+        <CoachAmounts event={event} />
       </div>
     </button>
   );
 }
 
+function CoachAmounts({ event }: { event: CalendarEvent }) {
+  if (event.type !== "session") return null;
+  const hasTotal = typeof event.totalAmount === "number";
+  const hasPaid = typeof event.paidAmount === "number";
+  if (!hasTotal && !hasPaid) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2 text-xs font-black text-app-muted">
+      {hasTotal && <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1">Valor: {formatCOP(event.totalAmount)}</span>}
+      {hasPaid && <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1">Abono: {formatCOP(event.paidAmount)}</span>}
+    </div>
+  );
+}

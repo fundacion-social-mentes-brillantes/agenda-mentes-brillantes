@@ -46,10 +46,11 @@ En Vite, todas las variables que debe leer el navegador deben empezar por `VITE_
 ## Funcionalidades principales
 
 - Inicio de sesion con Google y correo.
-- Agenda general para sesiones, reuniones, tareas, recordatorios, familia, fundacion, salud, pagos y eventos personales.
+- Agenda general para sesiones coach, reuniones, tareas, recordatorios, familia, fundacion, salud, pagos y eventos personales.
 - Temas visuales: `Noche Dorada` y `Pink Brillante`.
 - Recordatorios visuales dentro del dashboard.
 - Imagen opcional por evento usando Firebase Storage.
+- Campos de valor total y valor abonado para eventos de tipo `Sesion Coach`.
 - Logos reales de Gimnasio Emocional Mentes Brillantes en `public/brand/`.
 
 ## Build de produccion
@@ -77,6 +78,12 @@ Para subir imagenes a eventos, Firebase Storage debe estar activado en el proyec
 
 Las notificaciones push reales se implementaran en una fase posterior con Firebase Cloud Messaging, VAPID key y `firebase-messaging-sw.js`.
 
+## Firestore
+
+Firestore Database debe estar creado en el proyecto `calendario-5ae30`. Los eventos requieren reglas que permitan lectura y escritura a usuarios autenticados. Revisa `docs/firebase-firestore-rules.md` para una regla de prueba de primera version interna.
+
+Si Firestore queda temporalmente sin conexion despues de crear un evento, la app muestra una advertencia y deja que Firebase sincronice automaticamente cuando recupere conexion.
+
 ## Si Google login falla
 
 Revisa esta configuracion en Firebase:
@@ -86,5 +93,7 @@ Revisa esta configuracion en Firebase:
 - Authentication -> Sign-in method -> Google debe estar habilitado.
 - Firestore Database debe estar creado.
 - Las reglas de Firestore deben permitir a usuarios autenticados leer/escribir su documento en `users/{uid}`.
+- Las reglas de Firestore deben permitir eventos para usuarios autenticados en `events/{eventId}`.
+- Storage solo es necesario si se van a subir imagenes opcionales a eventos.
 
 Si Auth funciona pero Firestore esta temporalmente offline o bloqueado por reglas, la app permite entrar con un perfil local temporal y muestra una advertencia suave mientras intenta sincronizar.

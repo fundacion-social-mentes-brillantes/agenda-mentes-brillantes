@@ -34,6 +34,9 @@ export interface CalendarEvent {
   meetingLink?: string;
   reminderMinutes?: number | null;
   notes?: string;
+  totalAmount?: number | null;
+  paidAmount?: number | null;
+  currency?: "COP";
   imageUrl?: string | null;
   imagePath?: string | null;
   createdBy: string;

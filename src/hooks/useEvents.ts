@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { eventsService } from "../services/eventsService";
+import type { EventWriteResult } from "../services/eventsService";
 import type { CalendarEvent, EventStatus } from "../types/event";
 
 export function useEvents(enabled = true) {
@@ -23,7 +24,7 @@ export function useEvents(enabled = true) {
         setError(null);
       },
       (err) => {
-        setError(err.message || "Error al sincronizar los eventos.");
+        setError(err instanceof Error ? err.message : "Error al sincronizar los eventos.");
         setLoading(false);
       }
     );
@@ -31,7 +32,7 @@ export function useEvents(enabled = true) {
     return () => unsubscribe();
   }, [enabled]);
 
-  const createEvent = useCallback(async (eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">) => {
+  const createEvent = useCallback(async (eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">): Promise<EventWriteResult> => {
     try {
       return await eventsService.createEvent(eventData);
     } catch (err: any) {

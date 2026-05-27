@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import type { CalendarEvent, EventStatus } from "../../types/event";
-import { formatEventDate, formatEventTime } from "../../lib/dateUtils";
+import { formatCOP, formatEventDate, formatEventTime } from "../../lib/dateUtils";
 import { getEventMeta, getPriorityMeta, getStatusMeta } from "../../lib/eventMeta";
 import { EventTypeIcon } from "./EventTypeIcon";
 
@@ -44,6 +44,7 @@ export function EventDetailModal({
   const meta = getEventMeta(event.type);
   const status = getStatusMeta(event.status);
   const priority = getPriorityMeta(event.priority);
+  const hasSessionValues = event.type === "session" && (typeof event.totalAmount === "number" || typeof event.paidAmount === "number");
 
   const handleStatus = async (nextStatus: EventStatus) => {
     if (!event.id) return;
@@ -114,6 +115,16 @@ export function EventDetailModal({
           )}
         </div>
 
+        {hasSessionValues && (
+          <div className="rounded-2xl border border-app-soft bg-app-soft p-4">
+            <p className="m-0 mb-3 text-xs font-bold uppercase tracking-wide text-app-faint">Informacion de la sesion</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {typeof event.totalAmount === "number" && <AmountItem label="Valor" value={formatCOP(event.totalAmount)} />}
+              {typeof event.paidAmount === "number" && <AmountItem label="Abono" value={formatCOP(event.paidAmount)} />}
+            </div>
+          </div>
+        )}
+
         {event.notes && (
           <div className="rounded-2xl border border-app-soft bg-app-soft p-4">
             <p className="m-0 mb-2 text-xs font-bold uppercase tracking-wide text-app-faint">Notas</p>
@@ -177,6 +188,15 @@ function InfoItem({ icon, label, value }: { icon: ReactNode; label: string; valu
         {label}
       </p>
       <p className="m-0 text-sm font-bold text-app-strong">{value}</p>
+    </div>
+  );
+}
+
+function AmountItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-app-soft bg-app-panel p-3">
+      <p className="m-0 text-xs font-bold uppercase tracking-wide text-app-faint">{label}</p>
+      <p className="m-0 mt-1 text-base font-black text-app-strong">{value}</p>
     </div>
   );
 }

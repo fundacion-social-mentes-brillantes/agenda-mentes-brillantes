@@ -1,11 +1,20 @@
 import type { CalendarEvent } from "../types/event";
 
-export function toDate(value: CalendarEvent["startAt"]): Date {
-  if (value instanceof Date) return value;
-  if (value && typeof value === "object" && "toDate" in value) {
-    return value.toDate();
+export function toDateSafe(value: unknown, fallback = new Date()): Date {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
+    const date = value.toDate();
+    return date instanceof Date && !Number.isNaN(date.getTime()) ? date : fallback;
   }
-  return new Date(value as Date);
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? fallback : date;
+  }
+  return fallback;
+}
+
+export function toDate(value: CalendarEvent["startAt"]): Date {
+  return toDateSafe(value);
 }
 
 export function isSameDay(first: Date, second: Date): boolean {
@@ -45,3 +54,11 @@ export function isEventPending(event: CalendarEvent): boolean {
   return event.status === "scheduled" || event.status === "confirmed";
 }
 
+export function formatCOP(value?: number | null): string {
+  if (typeof value !== "number" || Number.isNaN(value)) return "";
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0
+  }).format(value);
+}
