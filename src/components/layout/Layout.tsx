@@ -189,7 +189,7 @@ export function Layout({ children, activePage, setActivePage, onQuickCreate }: L
 function BrandBlock({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`flex items-center gap-3 ${compact ? "" : "border-b border-app-soft pb-5"}`}>
-      <img src="/brand/app-icon.png" alt="Agenda Mentes Brillantes" className={`${compact ? "h-9 w-9" : "h-12 w-12"} rounded-2xl object-cover shadow-lg`} />
+      <img src="/brand/logo-gemb-icon.png" alt="Agenda Mentes Brillantes" className={`${compact ? "h-9 w-9" : "h-12 w-12"} rounded-2xl object-cover shadow-lg`} />
       <div className="min-w-0">
         <h1 className={`${compact ? "text-sm" : "text-base"} m-0 truncate font-black leading-tight text-app-strong`}>Agenda Mentes Brillantes</h1>
         {!compact && <p className="m-0 mt-1 text-xs font-semibold text-app-faint">Gimnasio Emocional</p>}

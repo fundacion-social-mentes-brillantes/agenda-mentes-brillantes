@@ -21,6 +21,10 @@ export default function SettingsPage({ profile, onThemeChange }: SettingsPagePro
         <p className="mt-2 text-sm text-app-muted">Personaliza tu agenda y revisa tu perfil.</p>
       </div>
 
+      <Card className="flex items-center justify-center">
+        <img src={theme === "pink" ? "/brand/logo-gemb-blue-small.jpeg" : "/brand/logo-gemb-gold-small.jpeg"} alt="Gimnasio Emocional Mentes Brillantes" className="max-h-28 w-full object-contain" />
+      </Card>
+
       <Card className="flex flex-col gap-5">
         <h3 className="m-0 text-lg font-black text-app-strong">Mi perfil</h3>
         <div className="flex items-center gap-4">
@@ -81,4 +85,3 @@ function ThemeChoice({ active, title, description, onClick }: { active: boolean;
     </button>
   );
 }
-

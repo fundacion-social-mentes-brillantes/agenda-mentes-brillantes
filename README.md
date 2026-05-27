@@ -50,6 +50,7 @@ En Vite, todas las variables que debe leer el navegador deben empezar por `VITE_
 - Temas visuales: `Noche Dorada` y `Pink Brillante`.
 - Recordatorios visuales dentro del dashboard.
 - Imagen opcional por evento usando Firebase Storage.
+- Logos reales de Gimnasio Emocional Mentes Brillantes en `public/brand/`.
 
 ## Build de produccion
 

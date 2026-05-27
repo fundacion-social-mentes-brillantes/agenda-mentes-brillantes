@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [role, setRole] = useState<UserRole>("family");
   const [loadingAction, setLoadingAction] = useState<"google" | "email" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const brandLogo = theme === "pink" ? "/brand/logo-gemb-blue-small.jpeg" : "/brand/logo-gemb-icon.png";
 
   const handleGoogle = async () => {
     setError(null);
@@ -53,7 +54,11 @@ export default function LoginPage() {
           <section className="glass-panel order-2 rounded-[2rem] p-5 sm:p-7 lg:order-1">
             <div className="mb-7 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <img src="/brand/app-icon.png" alt="Agenda Mentes Brillantes" className="h-12 w-12 rounded-2xl object-cover shadow-lg" />
+                <img
+                  src={brandLogo}
+                  alt="Gimnasio Emocional Mentes Brillantes"
+                  className={`${theme === "pink" ? "h-12 w-20 bg-white object-contain p-1" : "h-12 w-12 object-cover"} rounded-2xl shadow-lg`}
+                />
                 <div>
                   <p className="m-0 text-xs font-black uppercase text-app-accent">Gimnasio Emocional</p>
                   <p className="m-0 text-sm font-bold text-app-muted">Mentes Brillantes</p>
@@ -155,6 +160,13 @@ export default function LoginPage() {
 
           <section className="order-1 flex flex-col items-center justify-center lg:order-2">
             <div className="relative w-full max-w-xl">
+              <div className="mx-auto mb-4 hidden max-w-xs justify-center rounded-3xl border border-app-soft bg-app-panel p-3 shadow-xl backdrop-blur sm:flex">
+                <img
+                  src={theme === "pink" ? "/brand/logo-gemb-blue-small.jpeg" : "/brand/logo-gemb-gold-small.jpeg"}
+                  alt="Mentes Brillantes"
+                  className="max-h-20 w-full object-contain"
+                />
+              </div>
               <img src="/brand/login-visual.png" alt="Agenda familiar y emocional" className="mx-auto max-h-[640px] rounded-[2rem] object-contain drop-shadow-2xl" />
               <div className="mx-auto mt-4 max-w-md rounded-3xl border border-app-soft bg-app-panel px-5 py-4 text-center shadow-xl backdrop-blur">
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-app-strong bg-app-soft px-3 py-1 text-xs font-black text-app-accent">
@@ -195,4 +207,3 @@ function GoogleIcon() {
     </svg>
   );
 }
-
