@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #8b5cf6; /* Spiritual/Professional Violet/Purple */
+  --color-brand-light: #f3e8ff;
+  --color-brand-dark: #4c1d95;
+  
+  /* Suggest colors for the different event types */
+  --color-event-session: #3b82f6; /* Blue */
+  --color-event-task: #8b5cf6; /* Violet */
+  --color-event-reminder: #d97706; /* Amber/Yellowish gold */
+  --color-event-family: #10b981; /* Green */
+  --color-event-foundation: #f472b6; /* Soft pink/fuchsia */
+}
+
+/* Smooth transitions for theme switching and interactive elements */
+*, *::before, *::after {
+  transition-property: background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  @apply bg-slate-50 text-slate-800 antialiased min-h-screen;
+}
+
+.dark body {
+  @apply bg-slate-950 text-slate-100;
+}
+
+/* Scrollbar tweaks */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
+}
+.dark ::-webkit-scrollbar-thumb {
+  @apply bg-slate-800;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-700;
+}
