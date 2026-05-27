@@ -76,3 +76,15 @@ El archivo `vercel.json` incluye la reescritura necesaria para que la app Vite f
 Para subir imagenes a eventos, Firebase Storage debe estar activado en el proyecto `calendario-5ae30`. Revisa `docs/firebase-storage-rules.md` para una regla sugerida de acceso autenticado.
 
 Las notificaciones push reales se implementaran en una fase posterior con Firebase Cloud Messaging, VAPID key y `firebase-messaging-sw.js`.
+
+## Si Google login falla
+
+Revisa esta configuracion en Firebase:
+
+- Firebase Authentication -> Settings -> Authorized domains.
+- Debe estar autorizado: `agenda-mentes-brillantes.vercel.app`.
+- Authentication -> Sign-in method -> Google debe estar habilitado.
+- Firestore Database debe estar creado.
+- Las reglas de Firestore deben permitir a usuarios autenticados leer/escribir su documento en `users/{uid}`.
+
+Si Auth funciona pero Firestore esta temporalmente offline o bloqueado por reglas, la app permite entrar con un perfil local temporal y muestra una advertencia suave mientras intenta sincronizar.

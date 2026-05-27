@@ -25,7 +25,7 @@ function AppContent() {
     updateEvent,
     updateEventStatus,
     deleteEvent
-  } = useEvents();
+  } = useEvents(!!user);
 
   const [activePage, setActivePage] = useState<PageType>("dashboard");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
@@ -51,8 +51,12 @@ function AppContent() {
   const handleThemeChange = async (theme: AppTheme) => {
     setTheme(theme);
     if (profile?.uid) {
-      await authService.updateUserTheme(profile.uid, theme);
-      await refreshProfile();
+      try {
+        await authService.updateUserTheme(profile.uid, theme);
+        await refreshProfile();
+      } catch (error) {
+        console.error("Error saving theme preference:", error);
+      }
     }
   };
 
@@ -147,4 +151,3 @@ export default function App() {
     </ThemeProvider>
   );
 }
-

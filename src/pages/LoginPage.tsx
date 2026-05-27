@@ -66,7 +66,7 @@ export default function LoginPage() {
               </div>
               <button type="button" onClick={toggleTheme} className="btn-secondary min-h-10 px-3" aria-label="Cambiar tema">
                 {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-                <span className="hidden sm:inline">{themeLabel}</span>
+                <span className="text-xs sm:text-sm">{themeLabel}</span>
               </button>
             </div>
 
@@ -167,7 +167,7 @@ export default function LoginPage() {
                   className="max-h-20 w-full object-contain"
                 />
               </div>
-              <img src="/brand/login-visual.png" alt="Agenda familiar y emocional" className="mx-auto max-h-[640px] rounded-[2rem] object-contain drop-shadow-2xl" />
+              <img src="/brand/login-visual.png" alt="Agenda familiar y emocional" className="mx-auto max-h-[42vh] rounded-[2rem] object-contain drop-shadow-2xl sm:max-h-[640px]" />
               <div className="mx-auto mt-4 max-w-md rounded-3xl border border-app-soft bg-app-panel px-5 py-4 text-center shadow-xl backdrop-blur">
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-app-strong bg-app-soft px-3 py-1 text-xs font-black text-app-accent">
                   <Sparkles size={14} />

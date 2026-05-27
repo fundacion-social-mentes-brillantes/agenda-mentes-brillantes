@@ -53,7 +53,7 @@ const quickItems: { type: EventType; label: string; icon: React.ComponentType<{ 
 ];
 
 export function Layout({ children, activePage, setActivePage, onQuickCreate }: LayoutProps) {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, profileSyncWarning, refreshProfile } = useAuth();
   const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
@@ -158,7 +158,14 @@ export function Layout({ children, activePage, setActivePage, onQuickCreate }: L
       </aside>
 
       <main className="app-scrollbar min-h-0 flex-1 overflow-y-auto pb-24 md:max-h-screen md:pb-0">
-        <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">{children}</div>
+        <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
+          {profileSyncWarning && (
+            <div className="mb-5 rounded-3xl border border-app-strong bg-app-soft px-4 py-3 text-sm font-bold text-app-muted shadow-sm">
+              <span className="text-app-accent">Entraste correctamente.</span> Estamos sincronizando tus datos. {profileSyncWarning}
+            </div>
+          )}
+          {children}
+        </div>
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-app-soft bg-app-panel px-3 py-2 shadow-2xl backdrop-blur-xl md:hidden">
@@ -201,9 +208,9 @@ function BrandBlock({ compact = false }: { compact?: boolean }) {
 function ThemeButton({ theme, onChange, compact = false }: { theme: AppTheme; onChange: (theme: AppTheme) => void; compact?: boolean }) {
   const next = theme === "dark" ? "pink" : "dark";
   return (
-    <button type="button" onClick={() => onChange(next)} className={`btn-secondary ${compact ? "min-h-10 px-3" : ""}`}>
+    <button type="button" onClick={() => onChange(next)} className={`btn-secondary ${compact ? "min-h-10 px-3 text-xs" : ""}`}>
       {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-      {!compact && <span>{theme === "dark" ? "Pink Brillante" : "Noche Dorada"}</span>}
+      <span>{compact ? (theme === "dark" ? "Noche" : "Pink") : theme === "dark" ? "Noche Dorada" : "Pink Brillante"}</span>
     </button>
   );
 }

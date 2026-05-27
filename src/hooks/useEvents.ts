@@ -2,12 +2,19 @@ import { useState, useEffect, useCallback } from "react";
 import { eventsService } from "../services/eventsService";
 import type { CalendarEvent, EventStatus } from "../types/event";
 
-export function useEvents() {
+export function useEvents(enabled = true) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) {
+      setEvents([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
     const unsubscribe = eventsService.subscribeToEvents(
       (fetchedEvents) => {
@@ -22,7 +29,7 @@ export function useEvents() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [enabled]);
 
   const createEvent = useCallback(async (eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">) => {
     try {

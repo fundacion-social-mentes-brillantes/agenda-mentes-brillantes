@@ -11,6 +11,7 @@ interface AuthContextType {
   profile: UserProfile | null;
   loading: boolean;
   error: string | null;
+  profileSyncWarning: string | null;
   refreshProfile: () => Promise<void>;
 }
 
@@ -19,62 +20,64 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   error: null,
+  profileSyncWarning: null,
   refreshProfile: async () => {}
 });
+
+let redirectResultHandled = false;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [profileSyncWarning, setProfileSyncWarning] = useState<string | null>(null);
 
-  const fetchProfile = async (uid: string) => {
-    try {
-      const userProfile = await authService.getUserProfile(uid);
-      if (userProfile) {
-        setProfile(userProfile);
-      } else {
-        if (auth.currentUser) {
-          const fresh = await authService.ensureUserProfile(auth.currentUser);
-          setProfile(fresh);
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching user profile:", err);
-      setError("Error al cargar perfil de usuario");
-    }
+  const syncProfile = async (firebaseUser: FirebaseUser) => {
+    const result = await authService.ensureUserProfileSafe(firebaseUser);
+    if (auth.currentUser?.uid !== firebaseUser.uid) return;
+
+    setProfile(result.profile);
+    setProfileSyncWarning(result.warning);
   };
 
   const refreshProfile = async () => {
-    if (user) {
-      await fetchProfile(user.uid);
-    }
+    if (!auth.currentUser) return;
+    await syncProfile(auth.currentUser);
   };
 
   useEffect(() => {
-    authService.handleGoogleRedirectResult().catch((err) => {
-      console.error("Error handling Google redirect:", err);
-      setError("No pudimos completar el ingreso con Google.");
-    });
+    if (!redirectResultHandled) {
+      redirectResultHandled = true;
+      authService.handleGoogleRedirectResult().catch((err) => {
+        console.error("Error handling Google redirect:", err);
+        setError(err instanceof Error ? err.message : "No pudimos completar el ingreso con Google.");
+      });
+    }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setError(null);
       setUser(firebaseUser);
+
       if (firebaseUser) {
-        await fetchProfile(firebaseUser.uid);
-      } else {
-        setProfile(null);
+        setProfile(authService.createFallbackProfile(firebaseUser));
+        setProfileSyncWarning(null);
+        setLoading(false);
+        void syncProfile(firebaseUser);
+        return;
       }
+
+      setProfile(null);
+      setProfileSyncWarning(null);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  // Use React.createElement to avoid JSX in a .ts file
   return React.createElement(
     AuthContext.Provider,
-    { value: { user, profile, loading, error, refreshProfile } },
+    { value: { user, profile, loading, error, profileSyncWarning, refreshProfile } },
     children
   );
 }
