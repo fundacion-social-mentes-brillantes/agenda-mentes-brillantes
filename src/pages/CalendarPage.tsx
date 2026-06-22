@@ -2,17 +2,15 @@ import { useMemo, useState } from "react";
 import { CalendarPlus, ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { EventDetailModal } from "../components/events/EventDetailModal";
-import { EventTypeIcon } from "../components/events/EventTypeIcon";
 import { formatCOP, formatEventTime, isSameDay, toDate } from "../lib/dateUtils";
-import { getEventMeta, getStatusMeta } from "../lib/eventMeta";
-import type { CalendarEvent, EventStatus } from "../types/event";
+import type { CalendarEvent } from "../types/event";
 
 interface CalendarPageProps {
   events: CalendarEvent[];
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
   setSelectedDate: (date: Date) => void;
-  onUpdateStatus: (id: string, status: EventStatus) => Promise<void>;
+  onToggleDone: (id: string, done: boolean) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 
@@ -24,7 +22,7 @@ export default function CalendarPage({
   setActivePage,
   setEditingEvent,
   setSelectedDate,
-  onUpdateStatus,
+  onToggleDone,
   onDeleteEvent
 }: CalendarPageProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -84,7 +82,7 @@ export default function CalendarPage({
           <h2 className="m-0 text-3xl font-black tracking-tight text-app-strong">
             {MONTHS[month]} {year}
           </h2>
-          <p className="mt-2 text-sm text-app-muted">Toca un dia para ver su agenda y crear eventos rapidamente.</p>
+          <p className="mt-2 text-sm text-app-muted">Toca un día para ver su agenda y crear eventos rápidamente.</p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="btn-secondary min-h-11 px-3" aria-label="Mes anterior">
@@ -132,19 +130,20 @@ export default function CalendarPage({
                     {date.getDate()}
                   </span>
                   <div className="mt-2 hidden space-y-1 sm:block">
-                    {dayEvents.slice(0, 2).map((event) => {
-                      const meta = getEventMeta(event.type);
-                      return (
-                        <span key={event.id} className="block truncate rounded-lg px-2 py-1 text-[10px] font-black text-white" style={{ backgroundColor: event.color || meta.color }}>
-                          {event.title}
-                        </span>
-                      );
-                    })}
-                    {dayEvents.length > 2 && <span className="block text-[10px] font-black text-app-faint">+{dayEvents.length - 2} mas</span>}
+                    {dayEvents.slice(0, 2).map((event) => (
+                      <span
+                        key={event.id}
+                        className={`block truncate rounded-lg px-2 py-1 text-[10px] font-black text-white ${event.done ? "opacity-60 line-through" : ""}`}
+                        style={{ backgroundColor: event.color }}
+                      >
+                        {event.title}
+                      </span>
+                    ))}
+                    {dayEvents.length > 2 && <span className="block text-[10px] font-black text-app-faint">+{dayEvents.length - 2} más</span>}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1 sm:hidden">
                     {dayEvents.slice(0, 4).map((event) => (
-                      <span key={event.id} className="h-2 w-2 rounded-full" style={{ backgroundColor: event.color || getEventMeta(event.type).color }} />
+                      <span key={event.id} className="h-2 w-2 rounded-full" style={{ backgroundColor: event.color }} />
                     ))}
                   </div>
                 </button>
@@ -156,12 +155,12 @@ export default function CalendarPage({
         <aside className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="section-label mb-2">Agenda del dia</p>
+              <p className="section-label mb-2">Agenda del día</p>
               <h3 className="m-0 text-xl font-black text-app-strong">
                 {selectedDay.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "short" })}
               </h3>
             </div>
-            <button type="button" onClick={handleCreateForDay} className="btn-primary min-h-11 px-3" aria-label="Crear evento para este dia">
+            <button type="button" onClick={handleCreateForDay} className="btn-primary min-h-11 px-3" aria-label="Crear evento para este día">
               <Plus size={18} />
             </button>
           </div>
@@ -169,7 +168,7 @@ export default function CalendarPage({
           {selectedDayEvents.length === 0 ? (
             <Card className="flex flex-col items-center justify-center border-dashed py-12 text-center">
               <Sparkles size={38} className="mb-3 text-app-accent" />
-              <p className="m-0 text-sm font-black text-app-strong">No hay eventos este dia</p>
+              <p className="m-0 text-sm font-black text-app-strong">No hay eventos este día</p>
               <button type="button" onClick={handleCreateForDay} className="btn-secondary mt-4">
                 <CalendarPlus size={16} />
                 Crear evento
@@ -190,7 +189,7 @@ export default function CalendarPage({
         isOpen={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
         onEdit={handleEdit}
-        onUpdateStatus={onUpdateStatus}
+        onToggleDone={onToggleDone}
         onDeleteEvent={onDeleteEvent}
       />
     </div>
@@ -198,28 +197,23 @@ export default function CalendarPage({
 }
 
 function DayEvent({ event, onClick }: { event: CalendarEvent; onClick: () => void }) {
-  const meta = getEventMeta(event.type);
-  const status = getStatusMeta(event.status);
+  const firstImage = event.attachments?.find((att) => att.kind === "image");
 
   return (
     <button type="button" onClick={onClick} className="w-full rounded-3xl border border-app-soft bg-app-panel p-4 text-left transition hover:-translate-y-0.5 hover:bg-app-soft">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black ${meta.softClass}`}>
-          <EventTypeIcon type={event.type} size={13} />
-          {meta.label}
-        </span>
-        <span className={`rounded-full border px-2.5 py-1 text-xs font-black ${status.softClass}`}>{status.label}</span>
+      <div className="mb-2 flex items-center gap-2">
+        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: event.color }} />
+        <span className="text-xs font-black uppercase tracking-wide text-app-faint">{event.modality}</span>
       </div>
-      <p className="m-0 font-black text-app-strong">{event.title}</p>
+      <p className={`m-0 font-black text-app-strong ${event.done ? "line-through opacity-60" : ""}`}>{event.title}</p>
       <p className="m-0 mt-2 text-xs font-bold text-app-muted">{formatEventTime(event)}</p>
-      <CoachAmounts event={event} />
-      {event.imageUrl && <img src={event.imageUrl} alt={event.title} className="mt-3 h-24 w-full rounded-2xl object-cover" />}
+      <Amounts event={event} />
+      {firstImage && <img src={firstImage.url} alt={event.title} className="mt-3 h-24 w-full rounded-2xl object-cover" />}
     </button>
   );
 }
 
-function CoachAmounts({ event }: { event: CalendarEvent }) {
-  if (event.type !== "session") return null;
+function Amounts({ event }: { event: CalendarEvent }) {
   const hasTotal = typeof event.totalAmount === "number";
   const hasPaid = typeof event.paidAmount === "number";
   if (!hasTotal && !hasPaid) return null;

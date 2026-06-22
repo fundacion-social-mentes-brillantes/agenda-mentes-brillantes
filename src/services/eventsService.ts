@@ -2,18 +2,20 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
-  updateDoc
+  updateDoc,
+  where,
+  writeBatch
 } from "firebase/firestore";
 import { TimeoutError, withTimeout } from "../lib/asyncUtils";
 import { toDateSafe } from "../lib/dateUtils";
-import { getEventMeta } from "../lib/eventMeta";
+import { DEFAULT_EVENT_COLOR } from "../lib/eventMeta";
 import { auth, db } from "../lib/firebase";
-import type { CalendarEvent, EventStatus, EventType } from "../types/event";
+import type { CalendarEvent, EventAttachment, EventModality } from "../types/event";
 
 const EVENT_WRITE_TIMEOUT = 15_000;
 const PENDING_SYNC_MESSAGE = "El evento fue creado y se sincronizará automáticamente.";
@@ -46,7 +48,7 @@ function getEventErrorMessage(error: unknown): string {
   const { code } = getErrorDetails(error);
 
   if (code === "permission-denied") {
-    return "No tienes permiso para guardar eventos. Revisa las reglas de Firestore.";
+    return "No tienes permiso para guardar en esta agenda. Revisa las reglas de Firestore.";
   }
   if (code === "unavailable") {
     return "Firestore no está disponible en este momento.";
@@ -73,9 +75,7 @@ function assertValidDate(value: unknown, fieldName: string): Date {
 }
 
 function cleanTopLevelData<T extends Record<string, unknown>>(data: T): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(data).filter(([, value]) => value !== undefined)
-  );
+  return Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined));
 }
 
 function normalizeMoney(value: unknown): number | null {
@@ -84,111 +84,144 @@ function normalizeMoney(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function sanitizeEventData(
-  eventData: Partial<CalendarEvent>,
-  uid?: string
-): Record<string, unknown> {
+function normalizeModality(value: unknown): EventModality {
+  return value === "virtual" ? "virtual" : "presencial";
+}
+
+function normalizeAttachments(value: unknown): EventAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => item && typeof item === "object" && "url" in item && "path" in item)
+    .map((item) => {
+      const att = item as Partial<EventAttachment>;
+      return {
+        url: String(att.url || ""),
+        path: String(att.path || ""),
+        name: String(att.name || "archivo"),
+        contentType: String(att.contentType || "application/octet-stream"),
+        size: typeof att.size === "number" ? att.size : 0,
+        kind: att.kind === "image" ? "image" : "file"
+      } as EventAttachment;
+    });
+}
+
+/** Convierte un documento de Firestore (incluyendo eventos antiguos) al modelo actual. */
+function mapDocToEvent(id: string, data: Record<string, any>): CalendarEvent {
+  const now = new Date();
+  const startAt = toDateSafe(data.startAt, now);
+  const endAt = toDateSafe(data.endAt, startAt);
+
+  let attachments = normalizeAttachments(data.attachments);
+  if (attachments.length === 0 && data.imageUrl) {
+    attachments = [
+      {
+        url: String(data.imageUrl),
+        path: String(data.imagePath || ""),
+        name: "Imagen",
+        contentType: "image/*",
+        size: 0,
+        kind: "image"
+      }
+    ];
+  }
+
+  const done = data.done === true || data.status === "completed" || data.status === "cancelled";
+
+  return {
+    id,
+    workspaceId: data.workspaceId || "",
+    title: data.title || "",
+    startAt,
+    endAt,
+    allDay: Boolean(data.allDay),
+    color: data.color || DEFAULT_EVENT_COLOR,
+    modality: normalizeModality(data.modality),
+    reminderMinutes: typeof data.reminderMinutes === "number" ? data.reminderMinutes : null,
+    totalAmount: typeof data.totalAmount === "number" ? data.totalAmount : null,
+    paidAmount: typeof data.paidAmount === "number" ? data.paidAmount : null,
+    currency: data.currency || undefined,
+    attachments,
+    done,
+    createdBy: data.createdBy || "",
+    createdByName: data.createdByName || "",
+    createdAt: toDateSafe(data.createdAt, now),
+    updatedAt: toDateSafe(data.updatedAt, now),
+    notes: data.notes || "",
+    description: data.description || ""
+  };
+}
+
+function sanitizeNewEvent(eventData: Partial<CalendarEvent>, uid: string): Record<string, unknown> {
   const startAt = eventData.startAt ? assertValidDate(eventData.startAt, "La fecha de inicio") : undefined;
   const endAt = eventData.endAt ? assertValidDate(eventData.endAt, "La fecha final") : undefined;
 
+  if (!eventData.workspaceId) {
+    throw new Error("Falta la agenda del evento.");
+  }
+
   return cleanTopLevelData({
+    workspaceId: eventData.workspaceId,
     title: eventData.title?.trim() || "",
-    description: eventData.description?.trim() || "",
-    type: eventData.type || "other",
-    status: eventData.status || "scheduled",
-    priority: eventData.priority || "medium",
     startAt,
     endAt,
     allDay: Boolean(eventData.allDay),
-    color: eventData.color || getEventMeta(eventData.type).color,
-    clientName: eventData.clientName ?? "",
-    participants: eventData.participants ?? "",
-    personInCharge: eventData.personInCharge?.trim() || "",
-    modality: eventData.modality || "otro",
-    location: eventData.location ?? "",
-    meetingLink: eventData.meetingLink ?? "",
+    color: eventData.color || DEFAULT_EVENT_COLOR,
+    modality: normalizeModality(eventData.modality),
     reminderMinutes: typeof eventData.reminderMinutes === "number" ? eventData.reminderMinutes : null,
-    notes: eventData.notes ?? "",
     totalAmount: normalizeMoney(eventData.totalAmount),
     paidAmount: normalizeMoney(eventData.paidAmount),
-    currency: eventData.type === "session" ? "COP" : eventData.currency,
-    imageUrl: eventData.imageUrl ?? null,
-    imagePath: eventData.imagePath ?? null,
-    createdBy: uid || eventData.createdBy || ""
+    currency: normalizeMoney(eventData.totalAmount) !== null || normalizeMoney(eventData.paidAmount) !== null ? "COP" : undefined,
+    attachments: normalizeAttachments(eventData.attachments),
+    done: Boolean(eventData.done),
+    createdBy: uid,
+    createdByName: eventData.createdByName || ""
   });
 }
 
-function sanitizeEventUpdateData(eventData: Partial<CalendarEvent>): Record<string, unknown> {
+function sanitizeEventUpdate(eventData: Partial<CalendarEvent>): Record<string, unknown> {
   const data: Record<string, unknown> = {};
 
   if (eventData.title !== undefined) data.title = eventData.title.trim();
-  if (eventData.description !== undefined) data.description = eventData.description.trim();
-  if (eventData.type !== undefined) data.type = eventData.type;
-  if (eventData.status !== undefined) data.status = eventData.status;
-  if (eventData.priority !== undefined) data.priority = eventData.priority;
   if (eventData.startAt !== undefined) data.startAt = assertValidDate(eventData.startAt, "La fecha de inicio");
   if (eventData.endAt !== undefined) data.endAt = assertValidDate(eventData.endAt, "La fecha final");
   if (eventData.allDay !== undefined) data.allDay = Boolean(eventData.allDay);
-  if (eventData.color !== undefined) data.color = eventData.color || getEventMeta(eventData.type).color;
-  if (eventData.clientName !== undefined) data.clientName = eventData.clientName ?? "";
-  if (eventData.participants !== undefined) data.participants = eventData.participants ?? "";
-  if (eventData.personInCharge !== undefined) data.personInCharge = eventData.personInCharge.trim();
-  if (eventData.modality !== undefined) data.modality = eventData.modality;
-  if (eventData.location !== undefined) data.location = eventData.location ?? "";
-  if (eventData.meetingLink !== undefined) data.meetingLink = eventData.meetingLink ?? "";
+  if (eventData.color !== undefined) data.color = eventData.color || DEFAULT_EVENT_COLOR;
+  if (eventData.modality !== undefined) data.modality = normalizeModality(eventData.modality);
   if (eventData.reminderMinutes !== undefined) {
     data.reminderMinutes = typeof eventData.reminderMinutes === "number" ? eventData.reminderMinutes : null;
   }
-  if (eventData.notes !== undefined) data.notes = eventData.notes ?? "";
   if (eventData.totalAmount !== undefined) data.totalAmount = normalizeMoney(eventData.totalAmount);
   if (eventData.paidAmount !== undefined) data.paidAmount = normalizeMoney(eventData.paidAmount);
-  if (eventData.currency !== undefined) data.currency = eventData.currency;
-  if (eventData.imageUrl !== undefined) data.imageUrl = eventData.imageUrl ?? null;
-  if (eventData.imagePath !== undefined) data.imagePath = eventData.imagePath ?? null;
-  if (eventData.createdBy !== undefined) data.createdBy = eventData.createdBy;
+  if (eventData.totalAmount !== undefined || eventData.paidAmount !== undefined) {
+    const hasMoney = normalizeMoney(eventData.totalAmount) !== null || normalizeMoney(eventData.paidAmount) !== null;
+    data.currency = hasMoney ? "COP" : null;
+  }
+  if (eventData.attachments !== undefined) data.attachments = normalizeAttachments(eventData.attachments);
+  if (eventData.done !== undefined) data.done = Boolean(eventData.done);
+  if (eventData.workspaceId !== undefined) data.workspaceId = eventData.workspaceId;
 
   return cleanTopLevelData(data);
 }
 
 export const eventsService = {
-  subscribeToEvents(onUpdate: (events: CalendarEvent[]) => void, onError?: (error: unknown) => void) {
-    const q = query(
-      collection(db, "events"),
-      orderBy("startAt", "asc")
-    );
+  subscribeToEvents(
+    workspaceId: string,
+    onUpdate: (events: CalendarEvent[]) => void,
+    onError?: (error: unknown) => void
+  ) {
+    if (!workspaceId) {
+      onUpdate([]);
+      return () => {};
+    }
+
+    const q = query(collection(db, "events"), where("workspaceId", "==", workspaceId));
 
     return onSnapshot(
       q,
       (snapshot) => {
-        const now = new Date();
-        const events: CalendarEvent[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          const type = (data.type || "other") as EventType;
-          const meta = getEventMeta(type);
-          const startAt = toDateSafe(data.startAt, now);
-          const endAt = toDateSafe(data.endAt, startAt);
-
-          return {
-            id: docSnap.id,
-            ...data,
-            type,
-            status: data.status || "scheduled",
-            priority: data.priority || "medium",
-            color: data.color || meta.color,
-            description: data.description || "",
-            participants: data.participants || data.clientName || "",
-            reminderMinutes: typeof data.reminderMinutes === "number" ? data.reminderMinutes : null,
-            totalAmount: typeof data.totalAmount === "number" ? data.totalAmount : null,
-            paidAmount: typeof data.paidAmount === "number" ? data.paidAmount : null,
-            currency: data.currency || (type === "session" ? "COP" : undefined),
-            imageUrl: data.imageUrl || null,
-            imagePath: data.imagePath || null,
-            startAt,
-            endAt,
-            createdAt: toDateSafe(data.createdAt, now),
-            updatedAt: toDateSafe(data.updatedAt, now)
-          } as CalendarEvent;
-        });
+        const events = snapshot.docs
+          .map((docSnap) => mapDocToEvent(docSnap.id, docSnap.data()))
+          .sort((a, b) => toDateSafe(a.startAt).getTime() - toDateSafe(b.startAt).getTime());
         onUpdate(events);
       },
       (error) => {
@@ -206,17 +239,13 @@ export const eventsService = {
 
     const docRef = doc(collection(db, "events"));
     const data = {
-      ...sanitizeEventData(eventData, uid),
+      ...sanitizeNewEvent(eventData, uid),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
 
     try {
-      await withTimeout(
-        setDoc(docRef, data),
-        EVENT_WRITE_TIMEOUT,
-        PENDING_SYNC_MESSAGE
-      );
+      await withTimeout(setDoc(docRef, data), EVENT_WRITE_TIMEOUT, PENDING_SYNC_MESSAGE);
       return { id: docRef.id };
     } catch (error) {
       logEventError("Create", error);
@@ -228,7 +257,7 @@ export const eventsService = {
   },
 
   async updateEvent(eventId: string, eventData: Partial<CalendarEvent>): Promise<void> {
-    const cleanData = sanitizeEventUpdateData(eventData);
+    const cleanData = sanitizeEventUpdate(eventData);
     delete cleanData.id;
     delete cleanData.createdAt;
     cleanData.updatedAt = serverTimestamp();
@@ -248,18 +277,15 @@ export const eventsService = {
     }
   },
 
-  async updateEventStatus(eventId: string, status: EventStatus): Promise<void> {
+  async setEventDone(eventId: string, done: boolean): Promise<void> {
     try {
       await withTimeout(
-        updateDoc(doc(db, "events", eventId), {
-          status,
-          updatedAt: serverTimestamp()
-        }),
+        updateDoc(doc(db, "events", eventId), { done, updatedAt: serverTimestamp() }),
         EVENT_WRITE_TIMEOUT,
-        "El estado se sincronizará automáticamente."
+        "El cambio se sincronizará automáticamente."
       );
     } catch (error) {
-      logEventError("Update status", error);
+      logEventError("Set done", error);
       if (error instanceof TimeoutError || isOfflineLikeError(error)) {
         return;
       }
@@ -281,5 +307,27 @@ export const eventsService = {
       }
       throw new Error(getEventErrorMessage(error));
     }
+  },
+
+  /**
+   * Migra eventos antiguos (sin agenda) creados por el usuario hacia su agenda personal.
+   * Es idempotente: solo toca los que aún no tienen workspaceId.
+   */
+  async migrateLegacyEvents(uid: string, personalWorkspaceId: string): Promise<number> {
+    const q = query(collection(db, "events"), where("createdBy", "==", uid));
+    const snapshot = await getDocs(q);
+    const legacy = snapshot.docs.filter((docSnap) => !docSnap.data().workspaceId);
+    if (legacy.length === 0) return 0;
+
+    // Firestore limita writeBatch a 500 operaciones; procesamos en lotes.
+    const CHUNK = 450;
+    for (let i = 0; i < legacy.length; i += CHUNK) {
+      const batch = writeBatch(db);
+      legacy.slice(i, i + CHUNK).forEach((docSnap) => {
+        batch.update(docSnap.ref, { workspaceId: personalWorkspaceId, updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+    }
+    return legacy.length;
   }
 };

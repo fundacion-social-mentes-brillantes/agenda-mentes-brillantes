@@ -51,7 +51,7 @@ export function formatEventDate(event: CalendarEvent): string {
 }
 
 export function isEventPending(event: CalendarEvent): boolean {
-  return event.status === "scheduled" || event.status === "confirmed";
+  return !event.done;
 }
 
 export function formatCOP(value?: number | null): string {

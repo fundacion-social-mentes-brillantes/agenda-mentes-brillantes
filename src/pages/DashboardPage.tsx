@@ -3,32 +3,32 @@ import type { ReactNode } from "react";
 import { CalendarDays, Clock, ListChecks, Plus, Sparkles, UserRound } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { EventDetailModal } from "../components/events/EventDetailModal";
-import { EventTypeIcon } from "../components/events/EventTypeIcon";
-import { endOfDay, formatCOP, formatEventTime, isEventPending, isSameDay, startOfDay, toDate } from "../lib/dateUtils";
-import { getEventMeta, getPriorityMeta, getStatusMeta } from "../lib/eventMeta";
-import type { CalendarEvent, EventStatus } from "../types/event";
+import { endOfDay, formatCOP, formatEventTime, isSameDay, startOfDay, toDate } from "../lib/dateUtils";
+import type { CalendarEvent } from "../types/event";
 import type { UserProfile } from "../types/user";
 
 interface DashboardPageProps {
   events: CalendarEvent[];
   profile: UserProfile | null;
+  workspaceName?: string;
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
-  onUpdateStatus: (id: string, status: EventStatus) => Promise<void>;
+  onToggleDone: (id: string, done: boolean) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 
 export default function DashboardPage({
   events,
   profile,
+  workspaceName,
   setActivePage,
   setEditingEvent,
-  onUpdateStatus,
+  onToggleDone,
   onDeleteEvent
 }: DashboardPageProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const now = new Date();
-  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
 
@@ -43,36 +43,25 @@ export default function DashboardPage({
     [events, todayEnd, todayStart]
   );
 
-  const visualReminders = useMemo(
+  const upcoming = useMemo(
     () =>
       events
         .filter((event) => {
           const start = toDate(event.startAt);
-          const overduePending = start < now && isEventPending(event);
-          const nextDay = start >= now && start <= tomorrow;
-          return overduePending || nextDay;
+          return start > todayEnd && start <= weekAhead && !event.done;
         })
         .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime())
-        .slice(0, 5),
-    [events, now, tomorrow]
+        .slice(0, 6),
+    [events, todayEnd, weekAhead]
   );
 
-  const upcomingMeetings = useMemo(
+  const overdue = useMemo(
     () =>
       events
-        .filter((event) => ["meeting", "session"].includes(event.type) && toDate(event.startAt) >= now && event.status !== "cancelled")
-        .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime())
+        .filter((event) => toDate(event.startAt) < todayStart && !event.done)
+        .sort((a, b) => toDate(b.startAt).getTime() - toDate(a.startAt).getTime())
         .slice(0, 4),
-    [events, now]
-  );
-
-  const pendingTasks = useMemo(
-    () =>
-      events
-        .filter((event) => event.type === "task" && isEventPending(event))
-        .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime())
-        .slice(0, 4),
-    [events]
+    [events, todayStart]
   );
 
   const greeting = getGreeting(now);
@@ -97,11 +86,14 @@ export default function DashboardPage({
               </div>
             )}
             <div>
-              <p className="section-label mb-2">{now.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}</p>
+              <p className="section-label mb-2">
+                {now.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}
+                {workspaceName ? ` · ${workspaceName}` : ""}
+              </p>
               <h2 className="m-0 text-3xl font-black tracking-tight text-app-strong sm:text-4xl">
                 {greeting}, {profile?.name?.split(" ")[0] || "Brillante"}
               </h2>
-              <p className="mt-2 text-sm text-app-muted">Organiza tu dia con calma, claridad y conciencia.</p>
+              <p className="mt-2 text-sm text-app-muted">Organiza tu día con calma, claridad y conciencia.</p>
             </div>
           </div>
 
@@ -116,7 +108,7 @@ export default function DashboardPage({
         <Card className="flex min-h-80 flex-col items-center justify-center border-dashed text-center">
           <Sparkles size={54} className="mb-4 text-app-accent" />
           <h3 className="m-0 text-2xl font-black text-app-strong">Bienvenido a tu agenda</h3>
-          <p className="mt-3 max-w-md text-sm leading-relaxed text-app-muted">Crea tu primera sesion, tarea o recordatorio.</p>
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-app-muted">Crea tu primera sesión, reunión o recordatorio.</p>
           <button type="button" onClick={() => setActivePage("event-form")} className="btn-primary mt-6">
             <Plus size={17} />
             Crear primer evento
@@ -127,7 +119,7 @@ export default function DashboardPage({
           <section className="space-y-4">
             <SectionHeader icon={<CalendarDays size={20} />} title="Eventos de hoy" count={todayEvents.length} />
             {todayEvents.length === 0 ? (
-              <EmptyBlock title="Hoy esta tranquilo" action="Crear evento" onAction={() => setActivePage("event-form")} />
+              <EmptyBlock title="Hoy está tranquilo" action="Crear evento" onAction={() => setActivePage("event-form")} />
             ) : (
               <div className="grid gap-3">
                 {todayEvents.map((event) => (
@@ -135,41 +127,26 @@ export default function DashboardPage({
                 ))}
               </div>
             )}
-          </section>
 
-          <section className="space-y-4">
-            <SectionHeader icon={<Clock size={20} />} title="Proximos recordatorios" count={visualReminders.length} />
-            {visualReminders.length === 0 ? (
-              <EmptyBlock title="Sin recordatorios urgentes" compact />
-            ) : (
-              <div className="grid gap-3">
-                {visualReminders.map((event) => (
-                  <CompactEvent key={event.id} event={event} onClick={() => setSelectedEvent(event)} highlight={toDate(event.startAt) < now} />
-                ))}
-              </div>
+            {overdue.length > 0 && (
+              <>
+                <SectionHeader icon={<ListChecks size={20} />} title="Sin completar" count={overdue.length} />
+                <div className="grid gap-3">
+                  {overdue.map((event) => (
+                    <CompactEvent key={event.id} event={event} onClick={() => setSelectedEvent(event)} highlight />
+                  ))}
+                </div>
+              </>
             )}
           </section>
 
           <section className="space-y-4">
-            <SectionHeader icon={<Sparkles size={20} />} title="Proximas reuniones y sesiones" count={upcomingMeetings.length} />
-            {upcomingMeetings.length === 0 ? (
-              <EmptyBlock title="No hay reuniones proximas" compact />
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {upcomingMeetings.map((event) => (
-                  <CompactEvent key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="space-y-4">
-            <SectionHeader icon={<ListChecks size={20} />} title="Tareas pendientes" count={pendingTasks.length} />
-            {pendingTasks.length === 0 ? (
-              <EmptyBlock title="Sin tareas pendientes" compact />
+            <SectionHeader icon={<Clock size={20} />} title="Próximos 7 días" count={upcoming.length} />
+            {upcoming.length === 0 ? (
+              <EmptyBlock title="Nada agendado próximamente" compact />
             ) : (
               <div className="grid gap-3">
-                {pendingTasks.map((event) => (
+                {upcoming.map((event) => (
                   <CompactEvent key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
                 ))}
               </div>
@@ -183,7 +160,7 @@ export default function DashboardPage({
         isOpen={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
         onEdit={handleEdit}
-        onUpdateStatus={onUpdateStatus}
+        onToggleDone={onToggleDone}
         onDeleteEvent={onDeleteEvent}
       />
     </div>
@@ -191,31 +168,21 @@ export default function DashboardPage({
 }
 
 function EventRow({ event, onClick }: { event: CalendarEvent; onClick: () => void }) {
-  const meta = getEventMeta(event.type);
-  const status = getStatusMeta(event.status);
-  const priority = getPriorityMeta(event.priority);
   const eventDate = toDate(event.startAt);
+  const firstImage = event.attachments?.find((att) => att.kind === "image");
 
   return (
-    <Card onClick={onClick} className="border-l-4 p-4 hover:-translate-y-0.5" style={{ borderLeftColor: event.color || meta.color }}>
+    <Card onClick={onClick} className="border-l-4 p-4 hover:-translate-y-0.5" style={{ borderLeftColor: event.color }}>
       <div className="flex gap-4">
-        {event.imageUrl && <img src={event.imageUrl} alt={event.title} className="hidden h-20 w-24 rounded-2xl object-cover sm:block" />}
+        {firstImage && <img src={firstImage.url} alt={event.title} className="hidden h-20 w-24 rounded-2xl object-cover sm:block" />}
         <div className="min-w-0 flex-1">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black ${meta.softClass}`}>
-              <EventTypeIcon type={event.type} size={13} />
-              {meta.label}
-            </span>
-            <span className={`rounded-full border px-2.5 py-1 text-xs font-black ${status.softClass}`}>{status.label}</span>
-            {event.priority === "high" && <span className={`rounded-full border px-2.5 py-1 text-xs font-black ${priority.softClass}`}>Importante</span>}
-          </div>
-          <h3 className="m-0 truncate text-lg font-black text-app-strong">{event.title}</h3>
+          <h3 className={`m-0 truncate text-lg font-black text-app-strong ${event.done ? "line-through opacity-60" : ""}`}>{event.title}</h3>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-bold text-app-muted">
             <span>{formatEventTime(event)}</span>
-            {event.personInCharge && <span>{event.personInCharge}</span>}
+            <span className="capitalize">{event.modality}</span>
             {!isSameDay(eventDate, new Date()) && <span>{eventDate.toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>}
           </div>
-          <CoachAmounts event={event} />
+          <Amounts event={event} />
         </div>
       </div>
     </Card>
@@ -223,7 +190,6 @@ function EventRow({ event, onClick }: { event: CalendarEvent; onClick: () => voi
 }
 
 function CompactEvent({ event, onClick, highlight = false }: { event: CalendarEvent; onClick: () => void; highlight?: boolean }) {
-  const meta = getEventMeta(event.type);
   const date = toDate(event.startAt);
 
   return (
@@ -235,15 +201,15 @@ function CompactEvent({ event, onClick, highlight = false }: { event: CalendarEv
       }`}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black ${meta.softClass}`}>
-          <EventTypeIcon type={event.type} size={13} />
-          {meta.shortLabel}
+        <span className="inline-flex items-center gap-2 text-xs font-black text-app-muted">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: event.color }} />
+          <span className="capitalize">{event.modality}</span>
         </span>
         <span className="text-xs font-black text-app-faint">{date.toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
       </div>
-      <p className="m-0 line-clamp-2 font-black text-app-strong">{event.title}</p>
+      <p className={`m-0 line-clamp-2 font-black text-app-strong ${event.done ? "line-through opacity-60" : ""}`}>{event.title}</p>
       <p className="m-0 mt-2 text-xs font-bold text-app-muted">{formatEventTime(event)}</p>
-      <CoachAmounts event={event} compact />
+      <Amounts event={event} compact />
     </button>
   );
 }
@@ -275,13 +241,12 @@ function EmptyBlock({ title, action, onAction, compact = false }: { title: strin
 
 function getGreeting(date: Date): string {
   const hour = date.getHours();
-  if (hour < 12) return "Buenos dias";
+  if (hour < 12) return "Buenos días";
   if (hour < 18) return "Buenas tardes";
   return "Buenas noches";
 }
 
-function CoachAmounts({ event, compact = false }: { event: CalendarEvent; compact?: boolean }) {
-  if (event.type !== "session") return null;
+function Amounts({ event, compact = false }: { event: CalendarEvent; compact?: boolean }) {
   const hasTotal = typeof event.totalAmount === "number";
   const hasPaid = typeof event.paidAmount === "number";
   if (!hasTotal && !hasPaid) return null;

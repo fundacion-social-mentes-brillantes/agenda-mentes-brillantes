@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// Reglas de Firestore para Agenda Mentes Brillantes.
+// Modelo: cada usuario tiene su agenda personal y puede crear agendas
+// compartidas e invitar a otras personas con un enlace/codigo.
+// Solo los miembros de una agenda pueden ver y editar sus eventos.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Es miembro de la agenda si existe su documento de membresia.
+    function isMember(wsId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/workspaces/$(wsId)/members/$(request.auth.uid));
+    }
+
+    function wsDoc(wsId) {
+      return get(/databases/$(database)/documents/workspaces/$(wsId)).data;
+    }
+
+    // Perfiles de usuario.
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    // Agendas (workspaces).
+    match /workspaces/{wsId} {
+      allow read: if isMember(wsId);
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      // Miembros de la agenda.
+      match /members/{memberUid} {
+        allow read: if isMember(wsId) || request.auth.uid == memberUid;
+
+        // Te puedes agregar a ti mismo si eres el dueno (agenda personal/propia)
+        // o si presentas el codigo de invitacion correcto y la agenda permite unirse.
+        allow create: if signedIn()
+          && request.auth.uid == memberUid
+          && (
+            wsDoc(wsId).ownerId == request.auth.uid
+            || (wsDoc(wsId).joinEnabled == true && wsDoc(wsId).joinCode == request.resource.data.joinCode)
+          );
+
+        // Cada quien puede actualizar su propio doc, pero NO cambiar su rol ni su uid
+        // (evita que un miembro se auto-ascienda a dueno).
+        allow update: if isMember(wsId)
+          && request.auth.uid == memberUid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.uid == resource.data.uid;
+        allow delete: if request.auth.uid == memberUid || wsDoc(wsId).ownerId == request.auth.uid;
+      }
+    }
+
+    // Consulta de grupo para listar "mis agendas".
+    match /{path=**}/members/{memberUid} {
+      allow read: if signedIn() && request.auth.uid == resource.data.uid;
+    }
+
+    // Eventos. Pertenecen a una agenda (workspaceId).
+    // Los eventos antiguos sin workspaceId solo los ve y migra su creador.
+    match /events/{eventId} {
+      allow read: if (resource.data.get('workspaceId', '') != '' && isMember(resource.data.workspaceId))
+        || (resource.data.get('workspaceId', '') == '' && resource.data.createdBy == request.auth.uid);
+
+      allow create: if isMember(request.resource.data.workspaceId)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if (resource.data.get('workspaceId', '') != '' && isMember(resource.data.workspaceId))
+        || (resource.data.get('workspaceId', '') == '' && resource.data.createdBy == request.auth.uid);
+
+      allow delete: if (resource.data.get('workspaceId', '') != '' && isMember(resource.data.workspaceId))
+        || (resource.data.get('workspaceId', '') == '' && resource.data.createdBy == request.auth.uid);
+    }
+  }
+}

@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Reglas de Firebase Storage para Agenda Mentes Brillantes.
+// Los archivos (imagenes y documentos) de un evento se guardan en
+// attachments/{workspaceId}/{eventId}/...  y solo los miembros de esa
+// agenda pueden leerlos o subirlos.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Comprueba en Firestore si el usuario es miembro de la agenda.
+    function isMember(wsId) {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/workspaces/$(wsId)/members/$(request.auth.uid));
+    }
+
+    match /attachments/{wsId}/{eventId}/{fileName} {
+      allow read: if isMember(wsId);
+      allow write: if isMember(wsId) && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Imagenes antiguas (modelo anterior de una sola imagen por evento).
+    match /event-images/{userId}/{eventId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024;
+    }
+  }
+}

@@ -1,99 +1,61 @@
 # Agenda Mentes Brillantes
 
-Agenda web interna para sesiones coach, tareas, recordatorios y actividades de Gimnasio Emocional Mentes Brillantes.
+Agenda del Gimnasio Emocional Mentes Brillantes para sesiones, reuniones y recordatorios.
+Funciona en **web, Android e iPhone** (instalable como app), con **agendas personales y compartidas**,
+y se puede manejar desde un asistente de IA (Claude, Codex o ChatGPT) gracias a un **servidor MCP**.
 
-## Stack usado
+> ¿Qué tengo que hacer para dejarlo andando? Lee **[GUIA-RAPIDA.md](GUIA-RAPIDA.md)**.
 
-- React
-- Vite
-- TypeScript
-- Tailwind CSS
-- Firebase
-- Firebase Storage para imagenes opcionales de eventos
+## Funcionalidades
 
-## Instalacion
+- Inicio de sesión con Google y correo.
+- **Agenda personal** privada + **agendas compartidas** con invitación por enlace (ver [docs/COLABORACION.md](docs/COLABORACION.md)).
+- Formulario de evento simple: título, fecha, horas, modalidad (presencial/virtual), recordatorio, color,
+  pagos (valor total y abonado) e **imágenes y documentos** adjuntos.
+- Calendario mensual, lista general y panel "Hoy", todo en tiempo real.
+- Temas visuales: **Noche Dorada** y **Pink Brillante**.
+- **Instalable como app (PWA)** en web, Android e iOS, con funcionamiento offline básico y auto‑actualización.
+- **Servidor MCP** para crear/ver/editar eventos desde un LLM (ver [docs/MCP.md](docs/MCP.md)).
 
-Instala las dependencias con:
+## Stack
+
+- React 19 + Vite + TypeScript + Tailwind CSS v4
+- Firebase (Authentication, Firestore, Storage)
+- vite-plugin-pwa (service worker + manifest)
+- Servidor MCP en Node + firebase-admin (carpeta [`mcp-server/`](mcp-server))
+
+## Desarrollo
 
 ```bash
 npm install
-```
-
-## Ejecucion local
-
-Crea un archivo `.env.local` con las variables de Firebase y luego ejecuta:
-
-```bash
 npm run dev
 ```
 
-## Variables de entorno
+Crea un `.env.local` con las variables de Firebase (usa [.env.example](.env.example) como plantilla).
+Todas deben empezar por `VITE_`.
 
-Usa `.env.example` como plantilla:
-
-```bash
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
-VITE_FIREBASE_PROJECT_ID=
-VITE_FIREBASE_STORAGE_BUCKET=
-VITE_FIREBASE_MESSAGING_SENDER_ID=
-VITE_FIREBASE_APP_ID=
-VITE_FIREBASE_MEASUREMENT_ID=
-```
-
-En Vite, todas las variables que debe leer el navegador deben empezar por `VITE_`.
-
-## Funcionalidades principales
-
-- Inicio de sesion con Google y correo.
-- Agenda general para sesiones coach, reuniones, tareas, recordatorios, familia, fundacion, salud, pagos y eventos personales.
-- Temas visuales: `Noche Dorada` y `Pink Brillante`.
-- Recordatorios visuales dentro del dashboard.
-- Imagen opcional por evento usando Firebase Storage.
-- Campos de valor total y valor abonado para eventos de tipo `Sesion Coach`.
-- Logos reales de Gimnasio Emocional Mentes Brillantes en `public/brand/`.
-
-## Build de produccion
+## Build de producción
 
 ```bash
-npm run build
+npm run build   # genera dist/ con la PWA
 ```
 
-El resultado se genera en `dist`.
+## Despliegue (Vercel)
 
-## Despliegue en Vercel
+1. El repositorio está conectado a Vercel; cada push a GitHub redespliega.
+2. Variables de entorno de Firebase configuradas en Vercel (las mismas de siempre).
+3. Build command `npm run build`, output `dist`.
+4. `vercel.json` incluye el rewrite de SPA y los headers para el service worker y el manifest.
 
-1. Importa el repositorio desde GitHub en Vercel.
-2. Configura las variables de entorno de Firebase en el proyecto de Vercel.
-3. Usa estos valores de build:
+## Seguridad (Firebase)
 
-- Build command: `npm run build`
-- Output directory: `dist`
+Publica las reglas de los archivos [`firestore.rules`](firestore.rules) y [`storage.rules`](storage.rules)
+en Firebase Console. Detalles en [docs/firebase-firestore-rules.md](docs/firebase-firestore-rules.md) y
+[docs/firebase-storage-rules.md](docs/firebase-storage-rules.md).
 
-El archivo `vercel.json` incluye la reescritura necesaria para que la app Vite funcione como SPA.
+## Documentación
 
-## Firebase Storage
-
-Para subir imagenes a eventos, Firebase Storage debe estar activado en el proyecto `calendario-5ae30`. Revisa `docs/firebase-storage-rules.md` para una regla sugerida de acceso autenticado.
-
-Las notificaciones push reales se implementaran en una fase posterior con Firebase Cloud Messaging, VAPID key y `firebase-messaging-sw.js`.
-
-## Firestore
-
-Firestore Database debe estar creado en el proyecto `calendario-5ae30`. Los eventos requieren reglas que permitan lectura y escritura a usuarios autenticados. Revisa `docs/firebase-firestore-rules.md` para una regla de prueba de primera version interna.
-
-Si Firestore queda temporalmente sin conexion despues de crear un evento, la app muestra una advertencia y deja que Firebase sincronice automaticamente cuando recupere conexion.
-
-## Si Google login falla
-
-Revisa esta configuracion en Firebase:
-
-- Firebase Authentication -> Settings -> Authorized domains.
-- Debe estar autorizado: `agenda-mentes-brillantes.vercel.app`.
-- Authentication -> Sign-in method -> Google debe estar habilitado.
-- Firestore Database debe estar creado.
-- Las reglas de Firestore deben permitir a usuarios autenticados leer/escribir su documento en `users/{uid}`.
-- Las reglas de Firestore deben permitir eventos para usuarios autenticados en `events/{eventId}`.
-- Storage solo es necesario si se van a subir imagenes opcionales a eventos.
-
-Si Auth funciona pero Firestore esta temporalmente offline o bloqueado por reglas, la app permite entrar con un perfil local temporal y muestra una advertencia suave mientras intenta sincronizar.
+- [GUIA-RAPIDA.md](GUIA-RAPIDA.md) — pasos que debe hacer el dueño del proyecto.
+- [docs/INSTALACION-APP.md](docs/INSTALACION-APP.md) — instalar en celular y computador.
+- [docs/COLABORACION.md](docs/COLABORACION.md) — agendas compartidas e invitaciones.
+- [docs/MCP.md](docs/MCP.md) — conectar Claude, Codex o ChatGPT.

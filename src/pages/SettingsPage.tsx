@@ -1,4 +1,4 @@
-import { LogOut, ShieldAlert, UserRound } from "lucide-react";
+import { LogOut, Smartphone, UserRound, Users } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { useTheme } from "../hooks/useTheme";
 import { authService } from "../services/authService";
@@ -8,9 +8,10 @@ import type { UserProfile } from "../types/user";
 interface SettingsPageProps {
   profile: UserProfile;
   onThemeChange: (theme: AppTheme) => Promise<void>;
+  onGoToWorkspaces: () => void;
 }
 
-export default function SettingsPage({ profile, onThemeChange }: SettingsPageProps) {
+export default function SettingsPage({ profile, onThemeChange, onGoToWorkspaces }: SettingsPageProps) {
   const { theme } = useTheme();
 
   return (
@@ -55,14 +56,27 @@ export default function SettingsPage({ profile, onThemeChange }: SettingsPagePro
       </Card>
 
       <Card className="space-y-3">
-        <h3 className="m-0 text-lg font-black text-app-strong">Agenda Mentes Brillantes</h3>
-        <p className="m-0 text-sm leading-relaxed text-app-muted">
-          Una agenda familiar e institucional para reuniones, tareas, recordatorios, sesiones, pagos, salud y actividades de la fundacion.
-        </p>
-        <div className="flex items-start gap-2 rounded-2xl border border-app-soft bg-app-soft p-3 text-sm font-semibold text-app-muted">
-          <ShieldAlert size={18} className="mt-0.5 text-app-accent" />
-          <span>Las notificaciones push reales quedan para una fase posterior. Por ahora los recordatorios son visuales dentro de la app.</span>
+        <div className="flex items-center gap-2">
+          <Users size={18} className="text-app-accent" />
+          <h3 className="m-0 text-lg font-black text-app-strong">Agendas y personas</h3>
         </div>
+        <p className="m-0 text-sm leading-relaxed text-app-muted">
+          Crea agendas compartidas e invita a otras personas para trabajar juntas. Cada quien tiene además su agenda personal.
+        </p>
+        <button type="button" onClick={onGoToWorkspaces} className="btn-secondary">
+          <Users size={16} />
+          Administrar agendas
+        </button>
+      </Card>
+
+      <Card className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Smartphone size={18} className="text-app-accent" />
+          <h3 className="m-0 text-lg font-black text-app-strong">Instalar en el celular</h3>
+        </div>
+        <p className="m-0 text-sm leading-relaxed text-app-muted">
+          En Android: abre el menú del navegador y elige "Instalar app" o "Agregar a pantalla de inicio". En iPhone (Safari): toca Compartir y luego "Agregar a inicio". Quedará como una app más.
+        </p>
       </Card>
 
       <button type="button" onClick={() => authService.logout()} className="btn-danger-soft">
