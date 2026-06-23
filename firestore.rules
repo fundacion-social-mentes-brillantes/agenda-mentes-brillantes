@@ -22,6 +22,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/workspaces/$(wsId)).data;
     }
 
+    // La agenda personal de cada usuario tiene id "personal_{uid}".
+    // Esto permite leerla/crearla aunque todavia no exista (primer ingreso).
+    function isOwnPersonal(wsId) {
+      return signedIn() && wsId == ('personal_' + request.auth.uid);
+    }
+
     // Perfiles de usuario.
     match /users/{userId} {
       allow read: if signedIn();
@@ -31,7 +37,7 @@ service cloud.firestore {
 
     // Agendas (workspaces).
     match /workspaces/{wsId} {
-      allow read: if isMember(wsId);
+      allow read: if isMember(wsId) || isOwnPersonal(wsId);
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if signedIn() && resource.data.ownerId == request.auth.uid;
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
