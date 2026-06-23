@@ -116,6 +116,7 @@ function buildSystem({ workspaceName, userName, today, events }) {
     `- Fechas relativas ("mañana", "el próximo martes", "en 2 semanas", "fin de mes") → calcula la fecha real desde HOY.`,
     `- Si falta la hora al crear, usa la del evento original (al duplicar/mover) o 09:00–10:00; duración 1 hora por defecto.`,
     `- Usa el "id" exacto de la lista para mover/duplicar/borrar. Si hay varias coincidencias reales y no puedes elegir, SOLO ahí pregunta (corto).`,
+    `- Si acabas de crear un evento y en el mismo pedido debes moverlo/duplicarlo, usa el id que devuelve create_event (texto "id=...") como id en la siguiente herramienta.`,
     `- Consultas (contar, sumar, fechas, "cuándo se creó"): usa SOLO la lista; exacto, con fechas; no inventes.`,
     ``,
     `ESTILO: MUY CONCISO. Responde en 1–2 frases. Tras actuar, confirma en una sola línea (ej. "Listo, dupliqué 'Sala de Reducción' al jueves 25."). Amplía o usa viñetas SOLO si te piden detalle o si listas varios resultados.`,

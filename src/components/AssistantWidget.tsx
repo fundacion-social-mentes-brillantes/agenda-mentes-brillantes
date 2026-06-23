@@ -59,6 +59,12 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
   const [status, setStatus] = useState("Pensando...");
   const convoRef = useRef<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Caché de eventos creados/duplicados en ESTE turno: permite mover/duplicar/borrar
+  // algo recién creado, aunque el listener de Firestore todavía no haya refrescado "events".
+  const localCacheRef = useRef<CalendarEvent[]>([]);
+
+  const findEvent = (id: string): CalendarEvent | undefined =>
+    events.find((e) => e.id === id) || localCacheRef.current.find((e) => e.id === id);
 
   useEffect(() => {
     if (open && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -74,7 +80,7 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
         const start = allDay ? buildDate(date, "00:00") : buildDate(date, args.startTime || "09:00");
         const end = allDay ? buildDate(date, "23:59") : buildDate(date, args.endTime || addHourStr(args.startTime || "09:00"));
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "Fecha u hora inválida.";
-        const r = await onCreateEvent({
+        const newEvent: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt"> = {
           workspaceId,
           title: String(args.title || "Evento"),
           startAt: start,
@@ -89,13 +95,15 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
           done: false,
           createdBy: auth.currentUser?.uid || "",
           createdByName: userName || ""
-        });
+        };
+        const r = await onCreateEvent(newEvent);
+        localCacheRef.current.push({ ...newEvent, id: r.id, createdAt: new Date(), updatedAt: new Date() });
         return `OK: evento creado "${args.title}" el ${date}${allDay ? " (todo el día)" : " a las " + (args.startTime || "09:00")}. id=${r.id}`;
       }
 
       if (name === "update_event") {
         if (!args.id) return "Falta el id del evento.";
-        const ev = events.find((e) => e.id === args.id);
+        const ev = findEvent(args.id);
         const patch: Partial<CalendarEvent> = {};
         if (args.title != null) patch.title = String(args.title);
         if (args.modality != null) patch.modality = args.modality === "presencial" || args.modality === "virtual" ? args.modality : "otro";
@@ -117,13 +125,13 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
 
       if (name === "duplicate_event") {
         if (!workspaceId) return "No hay agenda seleccionada.";
-        const ev = events.find((e) => e.id === args.id);
+        const ev = findEvent(args.id);
         if (!ev) return "No encontré el evento a duplicar.";
         const date = args.date && /^\d{4}-\d{2}-\d{2}$/.test(args.date) ? args.date : evDate(ev.startAt);
         const allDay = !!ev.allDay;
         const start = allDay ? buildDate(date, "00:00") : buildDate(date, args.startTime || ev24(ev.startAt));
         const end = allDay ? buildDate(date, "23:59") : buildDate(date, args.endTime || ev24(ev.endAt));
-        const r = await onCreateEvent({
+        const dup: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt"> = {
           workspaceId,
           title: ev.title,
           startAt: start,
@@ -138,7 +146,9 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
           done: false,
           createdBy: auth.currentUser?.uid || "",
           createdByName: userName || ""
-        });
+        };
+        const r = await onCreateEvent(dup);
+        localCacheRef.current.push({ ...dup, id: r.id, createdAt: new Date(), updatedAt: new Date() });
         return `OK: evento duplicado "${ev.title}" al ${date}. id=${r.id}`;
       }
 
@@ -164,6 +174,7 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
     setInput("");
     setLoading(true);
     setStatus("Pensando...");
+    localCacheRef.current = [];
 
     try {
       const idToken = await auth.currentUser?.getIdToken();
