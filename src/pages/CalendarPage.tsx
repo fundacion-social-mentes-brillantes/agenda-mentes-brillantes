@@ -118,7 +118,7 @@ export default function CalendarPage({
                   key={`${date.toISOString()}-${index}`}
                   type="button"
                   onClick={() => setSelectedDay(date)}
-                  className={`min-h-[76px] rounded-2xl border p-2 text-left transition sm:min-h-[104px] ${
+                  className={`min-h-[96px] rounded-2xl border p-1.5 text-left transition sm:min-h-[128px] sm:p-2 ${
                     selected
                       ? "border-app-strong bg-app-soft shadow-lg"
                       : currentMonth
@@ -126,25 +126,21 @@ export default function CalendarPage({
                         : "border-transparent bg-app-soft/40 opacity-55"
                   }`}
                 >
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-black ${today ? "bg-app-accent text-slate-950" : "text-app-strong"}`}>
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-lg text-xs font-black sm:h-7 sm:w-7 ${today ? "bg-app-accent text-slate-950" : "text-app-strong"}`}>
                     {date.getDate()}
                   </span>
-                  <div className="mt-2 hidden space-y-1 sm:block">
-                    {dayEvents.slice(0, 2).map((event) => (
+                  <div className="mt-1 space-y-0.5">
+                    {dayEvents.slice(0, 4).map((event) => (
                       <span
                         key={event.id}
-                        className={`block truncate rounded-lg px-2 py-1 text-[10px] font-black text-white ${event.done ? "opacity-60 line-through" : ""}`}
+                        title={event.title}
+                        className={`block truncate rounded px-1 py-0.5 text-[9px] font-bold leading-tight text-white sm:text-[10px] ${event.done ? "opacity-60 line-through" : ""}`}
                         style={{ backgroundColor: event.color }}
                       >
                         {event.title}
                       </span>
                     ))}
-                    {dayEvents.length > 2 && <span className="block text-[10px] font-black text-app-faint">+{dayEvents.length - 2} más</span>}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1 sm:hidden">
-                    {dayEvents.slice(0, 4).map((event) => (
-                      <span key={event.id} className="h-2 w-2 rounded-full" style={{ backgroundColor: event.color }} />
-                    ))}
+                    {dayEvents.length > 4 && <span className="block px-1 text-[9px] font-black text-app-faint sm:text-[10px]">+{dayEvents.length - 4} más</span>}
                   </div>
                 </button>
               );
