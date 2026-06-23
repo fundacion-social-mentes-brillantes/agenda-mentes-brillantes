@@ -87,7 +87,7 @@ export default function CalendarPage({
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex h-[calc(100dvh-10.5rem)] flex-col gap-3 md:h-[calc(100dvh-6rem)]">
       <div className="flex items-center justify-between gap-3">
         <h2 className="m-0 text-2xl font-black tracking-tight text-app-strong sm:text-3xl">
           {MONTHS[month]} {year}
@@ -105,7 +105,7 @@ export default function CalendarPage({
         </div>
       </div>
 
-      <Card className="p-1.5 sm:p-3">
+      <Card className="flex min-h-0 flex-1 flex-col p-1.5 sm:p-3">
         <div className="mb-1 grid grid-cols-7">
           {DAYS.map((day) => (
             <span key={day} className="py-1 text-center text-[10px] font-black uppercase text-app-faint sm:text-xs">
@@ -114,7 +114,7 @@ export default function CalendarPage({
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
+        <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-0.5 sm:gap-1">
           {gridCells.map(({ date, currentMonth }, index) => {
             const dayEvents = getEventsForDay(date);
             const today = isSameDay(date, new Date());
@@ -124,7 +124,7 @@ export default function CalendarPage({
                 key={`${date.toISOString()}-${index}`}
                 type="button"
                 onClick={() => setDayModal(date)}
-                className={`flex min-h-[110px] flex-col rounded-xl border p-1 text-left transition sm:min-h-[152px] ${
+                className={`flex min-h-0 flex-col overflow-hidden rounded-xl border p-1 text-left transition ${
                   today
                     ? "border-2 border-app-accent bg-app-soft"
                     : currentMonth
@@ -133,8 +133,10 @@ export default function CalendarPage({
                 }`}
               >
                 <span
-                  className={`mb-0.5 flex h-5 w-5 items-center justify-center self-start rounded-full text-[11px] font-black sm:h-6 sm:w-6 sm:text-xs ${
-                    today ? "bg-app-accent text-slate-950" : "text-app-strong"
+                  className={`mb-0.5 flex items-center justify-center self-start rounded-full font-black ${
+                    today
+                      ? "h-7 w-7 bg-app-accent text-sm text-slate-950 shadow-md"
+                      : "h-5 w-5 text-[11px] text-app-strong sm:h-6 sm:w-6 sm:text-xs"
                   }`}
                 >
                   {date.getDate()}
