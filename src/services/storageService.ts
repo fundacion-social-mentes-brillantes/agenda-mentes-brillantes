@@ -25,8 +25,10 @@ const DOCUMENT_TYPES = [
 ];
 const ALLOWED_TYPES = [...IMAGE_TYPES, ...DOCUMENT_TYPES];
 
-const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
-const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
+// Valores de Cloudinary del proyecto (públicos: se usan en el navegador para subir sin firma).
+// Se pueden sobrescribir con variables de entorno VITE_CLOUDINARY_* si algún día cambian.
+const CLOUD_NAME = (import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined) || "de9rr3tyi";
+const UPLOAD_PRESET = (import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined) || "idbafn4b";
 
 function kindForType(contentType: string): AttachmentKind {
   return contentType.startsWith("image/") ? "image" : "file";
