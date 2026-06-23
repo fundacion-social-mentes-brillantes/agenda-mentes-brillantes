@@ -33,12 +33,6 @@ const pad = (n: number) => String(n).padStart(2, "0");
 function buildDate(dateStr: string, timeStr: string): Date {
   return new Date(`${dateStr}T${timeStr || "09:00"}`);
 }
-function addHourStr(t: string): string {
-  const [h, m] = (t || "09:00").split(":").map(Number);
-  const d = new Date(2000, 0, 1, h || 9, m || 0);
-  d.setHours(d.getHours() + 1);
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 function ev24(value: CalendarEvent["startAt"]): string {
   const d = toDate(value);
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -78,7 +72,12 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "La fecha no es válida (formato YYYY-MM-DD).";
         const allDay = !!args.allDay;
         const start = allDay ? buildDate(date, "00:00") : buildDate(date, args.startTime || "09:00");
-        const end = allDay ? buildDate(date, "23:59") : buildDate(date, args.endTime || addHourStr(args.startTime || "09:00"));
+        // Si dan hora de fin, se usa; si solo dan hora de inicio, dura exactamente 1 hora (4 → 5, seguro al cruzar medianoche).
+        const end = allDay
+          ? buildDate(date, "23:59")
+          : args.endTime
+            ? buildDate(date, args.endTime)
+            : new Date(start.getTime() + 60 * 60 * 1000);
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "Fecha u hora inválida.";
         const newEvent: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt"> = {
           workspaceId,

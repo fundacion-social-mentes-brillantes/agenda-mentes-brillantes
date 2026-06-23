@@ -114,7 +114,7 @@ function buildSystem({ workspaceName, userName, today, events }) {
     `- "Duplicar/copiar X para tal día" → usa duplicate_event. "Mover/pasar/cambiar X a tal día/hora" → usa update_event. "Agéndame/crea" → create_event.`,
     `- Si piden duplicar/mover a varias fechas ("los próximos 3 martes", "toda la semana"), haz VARIAS llamadas, una por fecha.`,
     `- Fechas relativas ("mañana", "el próximo martes", "en 2 semanas", "fin de mes") → calcula la fecha real desde HOY.`,
-    `- Si falta la hora al crear, usa la del evento original (al duplicar/mover) o 09:00–10:00; duración 1 hora por defecto.`,
+    `- HORAS exactamente según lo que pida el usuario: si da inicio Y fin, usa ambas; si da SOLO la hora de inicio (ej. "a las 4"), NO inventes la hora de fin (déjala vacía: la app la pone 1 hora después, 4→5); si dice "todo el día", allDay=true; si no menciona hora, usa 09:00 (la app la deja de 1 hora). Al duplicar/mover sin hora nueva, conserva la del evento original.`,
     `- Usa el "id" exacto de la lista para mover/duplicar/borrar. Si hay varias coincidencias reales y no puedes elegir, SOLO ahí pregunta (corto).`,
     `- Si acabas de crear un evento y en el mismo pedido debes moverlo/duplicarlo, usa el id que devuelve create_event (texto "id=...") como id en la siguiente herramienta.`,
     `- Consultas (contar, sumar, fechas, "cuándo se creó"): usa SOLO la lista; exacto, con fechas; no inventes.`,
