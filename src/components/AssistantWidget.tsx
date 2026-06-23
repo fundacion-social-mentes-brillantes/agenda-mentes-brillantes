@@ -115,6 +115,33 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
         return `OK: evento actualizado (id=${args.id}).`;
       }
 
+      if (name === "duplicate_event") {
+        if (!workspaceId) return "No hay agenda seleccionada.";
+        const ev = events.find((e) => e.id === args.id);
+        if (!ev) return "No encontré el evento a duplicar.";
+        const date = args.date && /^\d{4}-\d{2}-\d{2}$/.test(args.date) ? args.date : evDate(ev.startAt);
+        const allDay = !!ev.allDay;
+        const start = allDay ? buildDate(date, "00:00") : buildDate(date, args.startTime || ev24(ev.startAt));
+        const end = allDay ? buildDate(date, "23:59") : buildDate(date, args.endTime || ev24(ev.endAt));
+        const r = await onCreateEvent({
+          workspaceId,
+          title: ev.title,
+          startAt: start,
+          endAt: end,
+          allDay,
+          color: ev.color,
+          modality: ev.modality,
+          reminderMinutes: typeof ev.reminderMinutes === "number" ? ev.reminderMinutes : 30,
+          totalAmount: typeof ev.totalAmount === "number" ? ev.totalAmount : null,
+          paidAmount: typeof ev.paidAmount === "number" ? ev.paidAmount : null,
+          attachments: [],
+          done: false,
+          createdBy: auth.currentUser?.uid || "",
+          createdByName: userName || ""
+        });
+        return `OK: evento duplicado "${ev.title}" al ${date}. id=${r.id}`;
+      }
+
       if (name === "delete_event") {
         const ok = window.confirm(`¿Eliminar "${args.title || "este evento"}"? No se puede deshacer.`);
         if (!ok) return "El usuario canceló la eliminación.";
@@ -169,7 +196,7 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
         if (toolCalls.length > 0) {
           for (const tc of toolCalls) {
             const name = tc.function?.name || "";
-            setStatus(name === "create_event" ? "Creando evento..." : name === "update_event" ? "Editando evento..." : name === "delete_event" ? "Eliminando evento..." : "Trabajando...");
+            setStatus(name === "create_event" ? "Creando evento..." : name === "update_event" ? "Moviendo evento..." : name === "duplicate_event" ? "Duplicando evento..." : name === "delete_event" ? "Eliminando evento..." : "Trabajando...");
             let parsed: any = {};
             try {
               parsed = JSON.parse(tc.function?.arguments || "{}");

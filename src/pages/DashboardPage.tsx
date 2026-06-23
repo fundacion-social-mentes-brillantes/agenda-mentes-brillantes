@@ -13,6 +13,7 @@ interface DashboardPageProps {
   workspaceName?: string;
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
+  onDuplicate: (event: CalendarEvent) => void;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 
@@ -22,6 +23,7 @@ export default function DashboardPage({
   workspaceName,
   setActivePage,
   setEditingEvent,
+  onDuplicate,
   onDeleteEvent
 }: DashboardPageProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -110,6 +112,7 @@ export default function DashboardPage({
         isOpen={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
         onEdit={handleEdit}
+        onDuplicate={onDuplicate}
         onDeleteEvent={onDeleteEvent}
       />
     </div>

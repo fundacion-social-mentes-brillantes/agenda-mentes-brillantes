@@ -1,4 +1,5 @@
-import { LogOut, Smartphone, UserRound, Users } from "lucide-react";
+import { useState } from "react";
+import { Bell, BellOff, LogOut, Smartphone, UserRound, Users } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { useTheme } from "../hooks/useTheme";
 import { authService } from "../services/authService";
@@ -69,6 +70,8 @@ export default function SettingsPage({ profile, onThemeChange, onGoToWorkspaces 
         </button>
       </Card>
 
+      <NotificationsCard />
+
       <Card className="space-y-3">
         <div className="flex items-center gap-2">
           <Smartphone size={18} className="text-app-accent" />
@@ -84,6 +87,60 @@ export default function SettingsPage({ profile, onThemeChange, onGoToWorkspaces 
         Cerrar sesion
       </button>
     </div>
+  );
+}
+
+function NotificationsCard() {
+  const supported = typeof window !== "undefined" && "Notification" in window;
+  const [status, setStatus] = useState<NotificationPermission | "unsupported">(supported ? Notification.permission : "unsupported");
+  const [busy, setBusy] = useState(false);
+
+  const request = async () => {
+    if (!supported) return;
+    setBusy(true);
+    try {
+      const result = await Notification.requestPermission();
+      setStatus(result);
+      if (result === "granted") {
+        try {
+          const reg = await navigator.serviceWorker?.ready;
+          const opts = { body: "Te avisaremos 15 minutos antes de cada evento.", icon: "/icons/icon-192.png" };
+          if (reg && reg.showNotification) await reg.showNotification("🔔 Recordatorios activados", opts);
+          else new Notification("🔔 Recordatorios activados", opts);
+        } catch {
+          /* ignore */
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-center gap-2">
+        {status === "granted" ? <Bell size={18} className="text-app-accent" /> : <BellOff size={18} className="text-app-accent" />}
+        <h3 className="m-0 text-lg font-black text-app-strong">Recordatorios</h3>
+      </div>
+      <p className="m-0 text-sm leading-relaxed text-app-muted">
+        Recibe un aviso 15 minutos antes de cada evento. Funciona mejor si instalas la app en tu celular y la dejas abierta de fondo.
+      </p>
+      {!supported && <p className="m-0 text-sm font-bold text-app-muted">Este dispositivo o navegador no permite notificaciones.</p>}
+      {supported && status === "granted" && (
+        <p className="m-0 inline-flex rounded-full border border-app-soft bg-app-soft px-3 py-1 text-xs font-black text-app-accent">Activados ✓</p>
+      )}
+      {supported && status === "denied" && (
+        <p className="m-0 text-sm font-bold text-app-muted">
+          Están bloqueados. Actívalos en los ajustes del navegador (candado junto a la dirección → Notificaciones → Permitir).
+        </p>
+      )}
+      {supported && status === "default" && (
+        <button type="button" onClick={request} disabled={busy} className="btn-secondary">
+          <Bell size={16} />
+          {busy ? "Activando..." : "Activar recordatorios"}
+        </button>
+      )}
+    </Card>
   );
 }
 

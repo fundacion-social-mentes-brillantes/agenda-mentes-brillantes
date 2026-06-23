@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
 import { useEvents } from "./hooks/useEvents";
 import { useWorkspaces } from "./hooks/useWorkspaces";
+import { useEventReminders } from "./hooks/useEventReminders";
 import { Layout } from "./components/layout/Layout";
 import type { PageType } from "./components/layout/Layout";
 import LoginPage from "./pages/LoginPage";
@@ -14,6 +15,7 @@ import SettingsPage from "./pages/SettingsPage";
 import WorkspacePage from "./pages/WorkspacePage";
 import { AssistantWidget } from "./components/AssistantWidget";
 import type { CalendarEvent } from "./types/event";
+import { toDate } from "./lib/dateUtils";
 import { Spinner } from "./components/ui/Spinner";
 import { authService } from "./services/authService";
 import { workspaceService } from "./services/workspaceService";
@@ -31,6 +33,8 @@ function AppContent() {
     error: workspacesError
   } = useWorkspaces(user);
   const { events, loading: eventsLoading, createEvent, updateEvent, deleteEvent } = useEvents(activeWorkspaceId);
+
+  useEventReminders(events);
 
   const [activePage, setActivePage] = useState<PageType>("calendar");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
@@ -77,6 +81,30 @@ function AppContent() {
     setEditingEvent(null);
     setSelectedDate(new Date());
     setActivePage("event-form");
+  };
+
+  const handleDuplicate = async (event: CalendarEvent) => {
+    if (!activeWorkspaceId) return;
+    try {
+      await createEvent({
+        workspaceId: activeWorkspaceId,
+        title: `${event.title} (copia)`,
+        startAt: toDate(event.startAt),
+        endAt: toDate(event.endAt),
+        allDay: event.allDay,
+        color: event.color,
+        modality: event.modality,
+        reminderMinutes: event.reminderMinutes ?? 30,
+        totalAmount: event.totalAmount ?? null,
+        paidAmount: event.paidAmount ?? null,
+        attachments: event.attachments || [],
+        done: false,
+        createdBy: "",
+        createdByName: profile?.name || ""
+      });
+    } catch (error) {
+      console.error("No se pudo duplicar el evento", error);
+    }
   };
 
   const handleThemeChange = async (theme: AppTheme) => {
@@ -150,6 +178,7 @@ function AppContent() {
             workspaceName={activeWorkspace?.name}
             setActivePage={(page) => handlePageChange(page as PageType)}
             setEditingEvent={setEditingEvent}
+            onDuplicate={handleDuplicate}
             onDeleteEvent={deleteEvent}
           />
         );
@@ -160,6 +189,8 @@ function AppContent() {
             setActivePage={(page) => handlePageChange(page as PageType)}
             setEditingEvent={setEditingEvent}
             setSelectedDate={setSelectedDate}
+            onDuplicate={handleDuplicate}
+            onUpdateEvent={updateEvent}
             onDeleteEvent={deleteEvent}
           />
         );
@@ -169,6 +200,7 @@ function AppContent() {
             events={events}
             setActivePage={(page) => handlePageChange(page as PageType)}
             setEditingEvent={setEditingEvent}
+            onDuplicate={handleDuplicate}
             onDeleteEvent={deleteEvent}
           />
         );

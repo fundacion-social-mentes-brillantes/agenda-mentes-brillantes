@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import {
   Clock,
+  Copy,
   Edit,
   ExternalLink,
   FileText,
@@ -21,6 +22,7 @@ interface EventDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onEdit: (event: CalendarEvent) => void;
+  onDuplicate: (event: CalendarEvent) => void;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 
@@ -35,7 +37,7 @@ function formatDateTime(value: CalendarEvent["createdAt"]): string {
   });
 }
 
-export function EventDetailModal({ event, isOpen, onClose, onEdit, onDeleteEvent }: EventDetailModalProps) {
+export function EventDetailModal({ event, isOpen, onClose, onEdit, onDuplicate, onDeleteEvent }: EventDetailModalProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -139,6 +141,10 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onDeleteEvent
           <button type="button" onClick={() => onEdit(event)} className="btn-secondary flex-1">
             <Edit size={16} />
             Editar
+          </button>
+          <button type="button" onClick={() => { onDuplicate(event); onClose(); }} className="btn-secondary flex-1">
+            <Copy size={16} />
+            Duplicar
           </button>
           {confirmDelete ? (
             <button type="button" onClick={handleDelete} disabled={busy} className="btn-danger flex-1">

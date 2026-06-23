@@ -9,10 +9,11 @@ interface DayPageProps {
   events: CalendarEvent[];
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
+  onDuplicate: (event: CalendarEvent) => void;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 
-export default function DayPage({ events, setActivePage, setEditingEvent, onDeleteEvent }: DayPageProps) {
+export default function DayPage({ events, setActivePage, setEditingEvent, onDuplicate, onDeleteEvent }: DayPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
@@ -78,6 +79,7 @@ export default function DayPage({ events, setActivePage, setEditingEvent, onDele
         isOpen={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
         onEdit={handleEdit}
+        onDuplicate={onDuplicate}
         onDeleteEvent={onDeleteEvent}
       />
     </div>

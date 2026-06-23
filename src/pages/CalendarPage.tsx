@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import type React from "react";
 import { Bell, CalendarPlus, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Modal } from "../components/ui/Modal";
@@ -11,6 +12,8 @@ interface CalendarPageProps {
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
   setSelectedDate: (date: Date) => void;
+  onDuplicate: (event: CalendarEvent) => void;
+  onUpdateEvent: (id: string, eventData: Partial<CalendarEvent>) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 
@@ -26,11 +29,75 @@ export default function CalendarPage({
   setActivePage,
   setEditingEvent,
   setSelectedDate,
+  onDuplicate,
+  onUpdateEvent,
   onDeleteEvent
 }: CalendarPageProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dayModal, setDayModal] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [drag, setDrag] = useState<{ event: CalendarEvent; x: number; y: number; overKey: string | null } | null>(null);
+  const didDragRef = useRef(false);
+
+  const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const moveEventToKey = (event: CalendarEvent, key: string) => {
+    const s = toDate(event.startAt);
+    const e = toDate(event.endAt);
+    const dur = Math.max(0, e.getTime() - s.getTime());
+    const [y, m, dd] = key.split("-").map(Number);
+    const ns = new Date(y, m - 1, dd, s.getHours(), s.getMinutes(), 0, 0);
+    const ne = new Date(ns.getTime() + dur);
+    if (event.id) void onUpdateEvent(event.id, { startAt: ns, endAt: ne });
+  };
+
+  const startChipDrag = (e: React.PointerEvent, event: CalendarEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let active = false;
+    const timer = window.setTimeout(() => {
+      active = true;
+      setDrag({ event, x: startX, y: startY, overKey: null });
+      if (navigator.vibrate) navigator.vibrate(20);
+    }, 320);
+
+    const move = (ev: PointerEvent) => {
+      if (!active) {
+        if (Math.abs(ev.clientX - startX) > 8 || Math.abs(ev.clientY - startY) > 8) {
+          window.clearTimeout(timer);
+          cleanup();
+        }
+        return;
+      }
+      ev.preventDefault();
+      const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+      const cell = el?.closest("[data-daykey]") as HTMLElement | null;
+      const overKey = cell?.getAttribute("data-daykey") || null;
+      setDrag((d) => (d ? { ...d, x: ev.clientX, y: ev.clientY, overKey } : d));
+    };
+    const up = (ev: PointerEvent) => {
+      window.clearTimeout(timer);
+      cleanup();
+      if (active) {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+        const cell = el?.closest("[data-daykey]") as HTMLElement | null;
+        const overKey = cell?.getAttribute("data-daykey") || null;
+        if (overKey && overKey !== dateKey(toDate(event.startAt))) moveEventToKey(event, overKey);
+        didDragRef.current = true;
+        window.setTimeout(() => { didDragRef.current = false; }, 60);
+        setDrag(null);
+      }
+    };
+    function cleanup() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    }
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -123,13 +190,19 @@ export default function CalendarPage({
               <button
                 key={`${date.toISOString()}-${index}`}
                 type="button"
-                onClick={() => setDayModal(date)}
+                data-daykey={dateKey(date)}
+                onClick={() => {
+                  if (didDragRef.current) return;
+                  setDayModal(date);
+                }}
                 className={`flex min-h-0 flex-col overflow-hidden rounded-xl border p-1 text-left transition ${
-                  today
-                    ? "border-2 border-app-accent bg-app-soft"
-                    : currentMonth
-                      ? "border-app-soft bg-app-panel hover:bg-app-soft"
-                      : "border-transparent opacity-45"
+                  drag && drag.overKey === dateKey(date)
+                    ? "border-2 border-app-accent bg-app-soft ring-2 ring-app-accent"
+                    : today
+                      ? "border-2 border-app-accent bg-app-soft"
+                      : currentMonth
+                        ? "border-app-soft bg-app-panel hover:bg-app-soft"
+                        : "border-transparent opacity-45"
                 }`}
               >
                 <span
@@ -146,8 +219,11 @@ export default function CalendarPage({
                     <span
                       key={event.id}
                       title={event.title}
-                      className="block truncate rounded-[4px] px-1 text-[9px] font-semibold leading-[15px] text-white sm:text-[10px] sm:leading-4"
-                      style={{ backgroundColor: event.color }}
+                      onPointerDown={(e) => startChipDrag(e, event)}
+                      className={`block truncate rounded-[4px] px-1 text-[9px] font-semibold leading-[15px] text-white sm:text-[10px] sm:leading-4 ${
+                        drag?.event.id === event.id ? "opacity-40" : ""
+                      }`}
+                      style={{ backgroundColor: event.color, touchAction: "none" }}
                     >
                       {event.title}
                     </span>
@@ -192,8 +268,18 @@ export default function CalendarPage({
         isOpen={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
         onEdit={handleEdit}
+        onDuplicate={onDuplicate}
         onDeleteEvent={onDeleteEvent}
       />
+
+      {drag && (
+        <div
+          className="pointer-events-none fixed z-[60] max-w-[40vw] -translate-x-1/2 -translate-y-1/2 truncate rounded-md px-2 py-1 text-[11px] font-bold text-white shadow-2xl"
+          style={{ left: drag.x, top: drag.y, backgroundColor: drag.event.color }}
+        >
+          {drag.event.title}
+        </div>
+      )}
     </div>
   );
 }
