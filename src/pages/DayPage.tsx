@@ -9,12 +9,10 @@ interface DayPageProps {
   events: CalendarEvent[];
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
-  onToggleDone: (id: string, done: boolean) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 
-export default function DayPage({ events, setActivePage, setEditingEvent, onToggleDone, onDeleteEvent }: DayPageProps) {
-  const [activeTab, setActiveTab] = useState<"pending" | "done">("pending");
+export default function DayPage({ events, setActivePage, setEditingEvent, onDeleteEvent }: DayPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
@@ -23,12 +21,10 @@ export default function DayPage({ events, setActivePage, setEditingEvent, onTogg
     return events
       .filter((event) => {
         const text = `${event.title} ${event.createdByName || ""}`.toLowerCase();
-        const matchesSearch = !queryText || text.includes(queryText);
-        const matchesTab = activeTab === "pending" ? !event.done : !!event.done;
-        return matchesSearch && matchesTab;
+        return !queryText || text.includes(queryText);
       })
       .sort((a, b) => toDate(b.startAt).getTime() - toDate(a.startAt).getTime());
-  }, [activeTab, events, searchQuery]);
+  }, [events, searchQuery]);
 
   const handleEdit = (event: CalendarEvent) => {
     setEditingEvent(event);
@@ -51,23 +47,12 @@ export default function DayPage({ events, setActivePage, setEditingEvent, onTogg
       </div>
 
       <Card className="space-y-4">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
-          <label className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-app-faint">
-              <Search size={17} />
-            </span>
-            <input className="input-field pl-11" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por título o persona..." />
-          </label>
-
-          <div className="grid grid-cols-2 rounded-2xl border border-app-soft bg-app-soft p-1">
-            <button type="button" onClick={() => setActiveTab("pending")} className={`rounded-xl px-4 py-2 text-sm font-black ${activeTab === "pending" ? "bg-app-panel text-app-accent" : "text-app-faint"}`}>
-              Pendientes
-            </button>
-            <button type="button" onClick={() => setActiveTab("done")} className={`rounded-xl px-4 py-2 text-sm font-black ${activeTab === "done" ? "bg-app-panel text-app-accent" : "text-app-faint"}`}>
-              Hechos
-            </button>
-          </div>
-        </div>
+        <label className="relative block">
+          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-app-faint">
+            <Search size={17} />
+          </span>
+          <input className="input-field pl-11" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por título o persona..." />
+        </label>
       </Card>
 
       {filteredEvents.length === 0 ? (
@@ -93,7 +78,6 @@ export default function DayPage({ events, setActivePage, setEditingEvent, onTogg
         isOpen={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
         onEdit={handleEdit}
-        onToggleDone={onToggleDone}
         onDeleteEvent={onDeleteEvent}
       />
     </div>
@@ -111,9 +95,8 @@ function AgendaCard({ event, onClick }: { event: CalendarEvent; onClick: () => v
         <div className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-full" style={{ backgroundColor: event.color }} />
           <span className="text-xs font-black uppercase tracking-wide text-app-faint">{event.modality}</span>
-          {event.done && <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black text-emerald-600">Hecho</span>}
         </div>
-        <h3 className={`m-0 line-clamp-2 text-lg font-black leading-tight text-app-strong ${event.done ? "line-through opacity-60" : ""}`}>{event.title}</h3>
+        <h3 className="m-0 line-clamp-2 text-lg font-black leading-tight text-app-strong">{event.title}</h3>
         <p className="m-0 text-xs font-bold uppercase text-app-faint">{date.toLocaleDateString("es-CO", { weekday: "short", day: "numeric", month: "short" })}</p>
         <p className="m-0 text-sm font-bold text-app-muted">{formatEventTime(event)}</p>
         <Amounts event={event} />

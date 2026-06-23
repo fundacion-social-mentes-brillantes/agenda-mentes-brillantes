@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { CalendarDays, Clock, ListChecks, Plus, Sparkles, UserRound } from "lucide-react";
+import { CalendarDays, Clock, Plus, Sparkles, UserRound } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { EventDetailModal } from "../components/events/EventDetailModal";
 import { endOfDay, formatCOP, formatEventTime, isSameDay, startOfDay, toDate } from "../lib/dateUtils";
@@ -13,7 +13,6 @@ interface DashboardPageProps {
   workspaceName?: string;
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
-  onToggleDone: (id: string, done: boolean) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 
@@ -23,7 +22,6 @@ export default function DashboardPage({
   workspaceName,
   setActivePage,
   setEditingEvent,
-  onToggleDone,
   onDeleteEvent
 }: DashboardPageProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -48,20 +46,11 @@ export default function DashboardPage({
       events
         .filter((event) => {
           const start = toDate(event.startAt);
-          return start > todayEnd && start <= weekAhead && !event.done;
+          return start > todayEnd && start <= weekAhead;
         })
         .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime())
         .slice(0, 6),
     [events, todayEnd, weekAhead]
-  );
-
-  const overdue = useMemo(
-    () =>
-      events
-        .filter((event) => toDate(event.startAt) < todayStart && !event.done)
-        .sort((a, b) => toDate(b.startAt).getTime() - toDate(a.startAt).getTime())
-        .slice(0, 4),
-    [events, todayStart]
   );
 
   const greeting = getGreeting(now);
@@ -127,17 +116,6 @@ export default function DashboardPage({
                 ))}
               </div>
             )}
-
-            {overdue.length > 0 && (
-              <>
-                <SectionHeader icon={<ListChecks size={20} />} title="Sin completar" count={overdue.length} />
-                <div className="grid gap-3">
-                  {overdue.map((event) => (
-                    <CompactEvent key={event.id} event={event} onClick={() => setSelectedEvent(event)} highlight />
-                  ))}
-                </div>
-              </>
-            )}
           </section>
 
           <section className="space-y-4">
@@ -160,7 +138,6 @@ export default function DashboardPage({
         isOpen={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
         onEdit={handleEdit}
-        onToggleDone={onToggleDone}
         onDeleteEvent={onDeleteEvent}
       />
     </div>
@@ -176,7 +153,7 @@ function EventRow({ event, onClick }: { event: CalendarEvent; onClick: () => voi
       <div className="flex gap-4">
         {firstImage && <img src={firstImage.url} alt={event.title} className="hidden h-20 w-24 rounded-2xl object-cover sm:block" />}
         <div className="min-w-0 flex-1">
-          <h3 className={`m-0 truncate text-lg font-black text-app-strong ${event.done ? "line-through opacity-60" : ""}`}>{event.title}</h3>
+          <h3 className="m-0 truncate text-lg font-black text-app-strong">{event.title}</h3>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-bold text-app-muted">
             <span>{formatEventTime(event)}</span>
             <span className="capitalize">{event.modality}</span>
@@ -207,7 +184,7 @@ function CompactEvent({ event, onClick, highlight = false }: { event: CalendarEv
         </span>
         <span className="text-xs font-black text-app-faint">{date.toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
       </div>
-      <p className={`m-0 line-clamp-2 font-black text-app-strong ${event.done ? "line-through opacity-60" : ""}`}>{event.title}</p>
+      <p className="m-0 line-clamp-2 font-black text-app-strong">{event.title}</p>
       <p className="m-0 mt-2 text-xs font-bold text-app-muted">{formatEventTime(event)}</p>
       <Amounts event={event} compact />
     </button>

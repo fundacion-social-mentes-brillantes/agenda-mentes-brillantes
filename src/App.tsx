@@ -29,7 +29,7 @@ function AppContent() {
     loading: workspacesLoading,
     error: workspacesError
   } = useWorkspaces(user);
-  const { events, loading: eventsLoading, createEvent, updateEvent, setEventDone, deleteEvent } = useEvents(activeWorkspaceId);
+  const { events, loading: eventsLoading, createEvent, updateEvent, deleteEvent } = useEvents(activeWorkspaceId);
 
   const [activePage, setActivePage] = useState<PageType>("calendar");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
@@ -149,7 +149,6 @@ function AppContent() {
             workspaceName={activeWorkspace?.name}
             setActivePage={(page) => handlePageChange(page as PageType)}
             setEditingEvent={setEditingEvent}
-            onToggleDone={setEventDone}
             onDeleteEvent={deleteEvent}
           />
         );
@@ -160,7 +159,6 @@ function AppContent() {
             setActivePage={(page) => handlePageChange(page as PageType)}
             setEditingEvent={setEditingEvent}
             setSelectedDate={setSelectedDate}
-            onToggleDone={setEventDone}
             onDeleteEvent={deleteEvent}
           />
         );
@@ -170,7 +168,6 @@ function AppContent() {
             events={events}
             setActivePage={(page) => handlePageChange(page as PageType)}
             setEditingEvent={setEditingEvent}
-            onToggleDone={setEventDone}
             onDeleteEvent={deleteEvent}
           />
         );

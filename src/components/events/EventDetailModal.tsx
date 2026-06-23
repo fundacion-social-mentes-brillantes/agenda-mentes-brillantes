@@ -1,20 +1,19 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import {
-  CheckCircle2,
   Clock,
   Edit,
   ExternalLink,
   FileText,
+  History,
+  MapPin,
   MonitorSmartphone,
-  RotateCcw,
   Trash2,
-  UserRound,
-  MapPin
+  UserRound
 } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import type { CalendarEvent } from "../../types/event";
-import { formatCOP, formatEventDate, formatEventTime } from "../../lib/dateUtils";
+import { formatCOP, formatEventDate, formatEventTime, toDate } from "../../lib/dateUtils";
 import { getModalityLabel } from "../../lib/eventMeta";
 
 interface EventDetailModalProps {
@@ -22,11 +21,21 @@ interface EventDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onEdit: (event: CalendarEvent) => void;
-  onToggleDone: (id: string, done: boolean) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 
-export function EventDetailModal({ event, isOpen, onClose, onEdit, onToggleDone, onDeleteEvent }: EventDetailModalProps) {
+function formatDateTime(value: CalendarEvent["createdAt"]): string {
+  return toDate(value).toLocaleString("es-CO", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+}
+
+export function EventDetailModal({ event, isOpen, onClose, onEdit, onDeleteEvent }: EventDetailModalProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -36,13 +45,6 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onToggleDone,
   const images = attachments.filter((att) => att.kind === "image");
   const files = attachments.filter((att) => att.kind !== "image");
   const hasAmounts = typeof event.totalAmount === "number" || typeof event.paidAmount === "number";
-
-  const handleToggleDone = async () => {
-    if (!event.id) return;
-    setBusy(true);
-    await onToggleDone(event.id, !event.done);
-    setBusy(false);
-  };
 
   const handleDelete = async () => {
     if (!event.id) return;
@@ -67,20 +69,11 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onToggleDone,
         )}
 
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-app-soft px-3 py-1 text-xs font-bold text-app-strong">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: event.color }} />
-              {getModalityLabel(event.modality)}
-            </span>
-            {event.done && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600">
-                <CheckCircle2 size={13} />
-                Hecho
-              </span>
-            )}
-          </div>
-
-          <h2 className={`m-0 text-2xl font-black tracking-tight text-app-strong ${event.done ? "line-through opacity-70" : ""}`}>{event.title}</h2>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-app-soft px-3 py-1 text-xs font-bold text-app-strong">
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: event.color }} />
+            {getModalityLabel(event.modality)}
+          </span>
+          <h2 className="m-0 text-2xl font-black tracking-tight text-app-strong">{event.title}</h2>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -124,11 +117,18 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onToggleDone,
           </div>
         )}
 
+        <div className="rounded-2xl border border-app-soft bg-app-soft p-3">
+          <p className="m-0 flex items-center gap-2 text-xs font-semibold text-app-faint">
+            <History size={13} />
+            Agregado el {formatDateTime(event.createdAt)}
+          </p>
+          <p className="m-0 mt-1 flex items-center gap-2 text-xs font-semibold text-app-faint">
+            <Edit size={13} />
+            Última modificación el {formatDateTime(event.updatedAt)}
+          </p>
+        </div>
+
         <div className="flex flex-col gap-3 border-t border-app-soft pt-4 sm:flex-row">
-          <button type="button" onClick={handleToggleDone} disabled={busy} className="btn-secondary flex-1">
-            {event.done ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
-            {event.done ? "Marcar pendiente" : "Marcar hecho"}
-          </button>
           <button type="button" onClick={() => onEdit(event)} className="btn-secondary flex-1">
             <Edit size={16} />
             Editar

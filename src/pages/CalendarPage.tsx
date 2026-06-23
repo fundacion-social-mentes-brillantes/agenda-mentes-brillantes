@@ -11,7 +11,6 @@ interface CalendarPageProps {
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
   setSelectedDate: (date: Date) => void;
-  onToggleDone: (id: string, done: boolean) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 
@@ -27,7 +26,6 @@ export default function CalendarPage({
   setActivePage,
   setEditingEvent,
   setSelectedDate,
-  onToggleDone,
   onDeleteEvent
 }: CalendarPageProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -126,8 +124,12 @@ export default function CalendarPage({
                 key={`${date.toISOString()}-${index}`}
                 type="button"
                 onClick={() => setDayModal(date)}
-                className={`flex min-h-[92px] flex-col rounded-xl border p-0.5 text-left transition sm:min-h-[120px] sm:p-1 ${
-                  currentMonth ? "border-app-soft bg-app-panel hover:bg-app-soft" : "border-transparent opacity-45"
+                className={`flex min-h-[110px] flex-col rounded-xl border p-1 text-left transition sm:min-h-[152px] ${
+                  today
+                    ? "border-2 border-app-accent bg-app-soft"
+                    : currentMonth
+                      ? "border-app-soft bg-app-panel hover:bg-app-soft"
+                      : "border-transparent opacity-45"
                 }`}
               >
                 <span
@@ -142,9 +144,7 @@ export default function CalendarPage({
                     <span
                       key={event.id}
                       title={event.title}
-                      className={`block truncate rounded-[4px] px-1 text-[9px] font-semibold leading-[15px] text-white sm:text-[10px] sm:leading-4 ${
-                        event.done ? "line-through opacity-60" : ""
-                      }`}
+                      className="block truncate rounded-[4px] px-1 text-[9px] font-semibold leading-[15px] text-white sm:text-[10px] sm:leading-4"
                       style={{ backgroundColor: event.color }}
                     >
                       {event.title}
@@ -190,7 +190,6 @@ export default function CalendarPage({
         isOpen={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
         onEdit={handleEdit}
-        onToggleDone={onToggleDone}
         onDeleteEvent={onDeleteEvent}
       />
     </div>
@@ -220,7 +219,7 @@ function DayRow({ event, onClick }: { event: CalendarEvent; onClick: () => void 
       </div>
       <span className="w-1.5 shrink-0 rounded-full" style={{ backgroundColor: event.color }} />
       <div className="min-w-0 flex-1">
-        <p className={`m-0 truncate text-base font-bold text-app-strong ${event.done ? "line-through opacity-60" : ""}`}>{event.title}</p>
+        <p className="m-0 truncate text-base font-bold text-app-strong">{event.title}</p>
         <p className="m-0 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-app-faint">
           <span className="capitalize">{event.modality}</span>
           {!!event.reminderMinutes && (
