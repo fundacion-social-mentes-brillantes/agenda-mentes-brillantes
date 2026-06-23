@@ -117,6 +117,13 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onDeleteEvent
           </div>
         )}
 
+        {event.notes && (
+          <div className="rounded-2xl border border-app-soft bg-app-soft p-4">
+            <p className="m-0 mb-1 text-xs font-bold uppercase tracking-wide text-app-faint">Nota</p>
+            <p className="m-0 whitespace-pre-wrap text-sm leading-relaxed text-app-muted">{event.notes}</p>
+          </div>
+        )}
+
         <div className="rounded-2xl border border-app-soft bg-app-soft p-3">
           <p className="m-0 flex items-center gap-2 text-xs font-semibold text-app-faint">
             <History size={13} />
