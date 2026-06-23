@@ -25,11 +25,6 @@ interface ProfileSyncResult {
   warning: string | null;
 }
 
-function isMobileEnvironment(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-}
-
 function getErrorDetails(error: unknown) {
   const maybeError = error as { code?: string; message?: string; name?: string };
   return {
@@ -132,16 +127,8 @@ export const authService = {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
 
-    if (isMobileEnvironment()) {
-      try {
-        await signInWithRedirect(auth, provider);
-        return null;
-      } catch (error) {
-        logGoogleSignInFailure(error);
-        throw new Error(getFriendlyAuthError(error));
-      }
-    }
-
+    // Popup en todas las plataformas (incluido celular): la redirección falla en
+    // navegadores modernos por el bloqueo de almacenamiento entre dominios.
     try {
       const result = await signInWithPopup(auth, provider);
       void this.ensureUserProfileSafe(result.user);
@@ -151,6 +138,7 @@ export const authService = {
       const { code } = getErrorDetails(error);
       const shouldRedirect =
         code === "auth/popup-blocked" ||
+        code === "auth/cancelled-popup-request" ||
         code === "auth/operation-not-supported-in-this-environment";
 
       if (shouldRedirect) {
