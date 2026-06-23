@@ -33,14 +33,25 @@ export function getDb(): Firestore {
   const serviceAccount = loadServiceAccount();
 
   if (serviceAccount) {
+    // Opción 1: llave de servicio (JSON) por archivo o base64.
     app = initializeApp({ credential: cert(serviceAccount as any) });
-  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    app = initializeApp({ credential: applicationDefault() });
   } else {
-    throw new Error(
-      "Faltan las credenciales de Firebase. Define FIREBASE_SERVICE_ACCOUNT (ruta al JSON), " +
-        "FIREBASE_SERVICE_ACCOUNT_BASE64 o GOOGLE_APPLICATION_CREDENTIALS."
-    );
+    // Opción 2: Application Default Credentials (sin descargar llave).
+    // Funciona con `gcloud auth application-default login` en local,
+    // con GOOGLE_APPLICATION_CREDENTIALS, o con la cuenta del entorno en la nube (Cloud Run).
+    try {
+      app = initializeApp({
+        credential: applicationDefault(),
+        projectId: process.env.AGENDA_PROJECT_ID || "calendario-5ae30"
+      });
+    } catch (err) {
+      throw new Error(
+        "Faltan las credenciales de Firebase. Usa una de estas opciones: " +
+          "(a) FIREBASE_SERVICE_ACCOUNT (ruta al JSON) o FIREBASE_SERVICE_ACCOUNT_BASE64; " +
+          "(b) inicia sesión con `gcloud auth application-default login`; " +
+          "(c) GOOGLE_APPLICATION_CREDENTIALS."
+      );
+    }
   }
 
   firestore = getFirestore(app);
