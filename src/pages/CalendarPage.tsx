@@ -88,18 +88,18 @@ export default function CalendarPage({
 
   return (
     <div className="flex h-[calc(100dvh-10.5rem)] flex-col gap-3 md:h-[calc(100dvh-6rem)]">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="m-0 text-2xl font-black tracking-tight text-app-strong sm:text-3xl">
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <h2 className="m-0 text-xl font-black tracking-tight text-app-strong sm:text-2xl">
           {MONTHS[month]} {year}
         </h2>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="btn-secondary min-h-10 px-3" aria-label="Mes anterior">
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="btn-secondary min-h-9 px-2.5" aria-label="Mes anterior">
             <ChevronLeft size={18} />
           </button>
-          <button type="button" onClick={() => setCurrentDate(new Date())} className="btn-secondary min-h-10 px-3 text-sm">
+          <button type="button" onClick={() => setCurrentDate(new Date())} className="btn-secondary min-h-9 px-3 text-sm">
             Hoy
           </button>
-          <button type="button" onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="btn-secondary min-h-10 px-3" aria-label="Mes siguiente">
+          <button type="button" onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="btn-secondary min-h-9 px-2.5" aria-label="Mes siguiente">
             <ChevronRight size={18} />
           </button>
         </div>
@@ -114,7 +114,7 @@ export default function CalendarPage({
           ))}
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-0.5 sm:gap-1">
+        <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-7 grid-rows-6 gap-0.5 sm:gap-1">
           {gridCells.map(({ date, currentMonth }, index) => {
             const dayEvents = getEventsForDay(date);
             const today = isSameDay(date, new Date());

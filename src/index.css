@@ -163,6 +163,18 @@ img {
   color: var(--app-accent);
 }
 
+.bg-app-accent {
+  background: var(--app-accent);
+}
+
+.bg-app-accent-strong {
+  background: var(--app-accent-strong);
+}
+
+.border-app-accent {
+  border-color: var(--app-accent);
+}
+
 .btn-primary,
 .btn-secondary,
 .btn-danger,
