@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Bot, Send, Sparkles, X } from "lucide-react";
 import { auth } from "../lib/firebase";
 import { toDate } from "../lib/dateUtils";
+import { DEFAULT_EVENT_COLOR } from "../lib/eventMeta";
 import { Spinner } from "./ui/Spinner";
+import type { EventWriteResult } from "../services/eventsService";
 import type { CalendarEvent } from "../types/event";
 
-interface ChatMessage {
+interface UiMessage {
   role: "assistant" | "user";
   content: string;
 }
@@ -13,79 +15,182 @@ interface ChatMessage {
 interface AssistantWidgetProps {
   events: CalendarEvent[];
   workspaceName?: string;
+  workspaceId: string | null;
+  userName?: string;
+  onCreateEvent: (eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">) => Promise<EventWriteResult>;
+  onUpdateEvent: (id: string, eventData: Partial<CalendarEvent>) => Promise<void>;
+  onDeleteEvent: (id: string) => Promise<void>;
 }
 
-const GREETING: ChatMessage = {
+const GREETING: UiMessage = {
   role: "assistant",
   content:
-    "¡Hola! Soy tu asistente de la agenda. Pregúntame cosas como: \"¿cuántas sesiones tuvo Laura y en qué fechas?\", \"¿qué tengo esta semana?\" o \"¿cuándo creé el evento de Marcela?\"."
+    "¡Hola! Soy tu asistente y soy uno con tu agenda. Puedo responder (\"¿cuántas sesiones tuvo Laura y en qué fechas?\") y también actuar: \"agéndame una sesión con Laura el martes a las 3 pm\", \"muévela a las 4\" o \"borra el evento de prueba\"."
 };
 
-function fmtDate(value: CalendarEvent["startAt"]): string {
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function buildDate(dateStr: string, timeStr: string): Date {
+  return new Date(`${dateStr}T${timeStr || "09:00"}`);
+}
+function addHourStr(t: string): string {
+  const [h, m] = (t || "09:00").split(":").map(Number);
+  const d = new Date(2000, 0, 1, h || 9, m || 0);
+  d.setHours(d.getHours() + 1);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function ev24(value: CalendarEvent["startAt"]): string {
   const d = toDate(value);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-
-function fmtTime(event: CalendarEvent): string {
-  if (event.allDay) return "todo el día";
-  return toDate(event.startAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: true });
+function evDate(value: CalendarEvent["startAt"]): string {
+  const d = toDate(value);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-
-function fmtCreated(value: CalendarEvent["createdAt"]): string {
+function evCreated(value: CalendarEvent["createdAt"]): string {
   return toDate(value).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
-export function AssistantWidget({ events, workspaceName }: AssistantWidgetProps) {
+export function AssistantWidget({ events, workspaceName, workspaceId, userName, onCreateEvent, onUpdateEvent, onDeleteEvent }: AssistantWidgetProps) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
+  const [uiMessages, setUiMessages] = useState<UiMessage[]>([GREETING]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("Pensando...");
+  const convoRef = useRef<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages, open, loading]);
+  }, [uiMessages, open, loading, status]);
+
+  async function execTool(name: string, args: any): Promise<string> {
+    try {
+      if (name === "create_event") {
+        if (!workspaceId) return "No hay agenda seleccionada.";
+        const date = String(args.date || "");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "La fecha no es válida (formato YYYY-MM-DD).";
+        const allDay = !!args.allDay;
+        const start = allDay ? buildDate(date, "00:00") : buildDate(date, args.startTime || "09:00");
+        const end = allDay ? buildDate(date, "23:59") : buildDate(date, args.endTime || addHourStr(args.startTime || "09:00"));
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "Fecha u hora inválida.";
+        const r = await onCreateEvent({
+          workspaceId,
+          title: String(args.title || "Evento"),
+          startAt: start,
+          endAt: end,
+          allDay,
+          color: args.color || DEFAULT_EVENT_COLOR,
+          modality: args.modality === "presencial" || args.modality === "virtual" ? args.modality : "otro",
+          reminderMinutes: typeof args.reminderMinutes === "number" ? args.reminderMinutes : 30,
+          totalAmount: typeof args.totalAmount === "number" ? args.totalAmount : null,
+          paidAmount: typeof args.paidAmount === "number" ? args.paidAmount : null,
+          attachments: [],
+          done: false,
+          createdBy: auth.currentUser?.uid || "",
+          createdByName: userName || ""
+        });
+        return `OK: evento creado "${args.title}" el ${date}${allDay ? " (todo el día)" : " a las " + (args.startTime || "09:00")}. id=${r.id}`;
+      }
+
+      if (name === "update_event") {
+        if (!args.id) return "Falta el id del evento.";
+        const ev = events.find((e) => e.id === args.id);
+        const patch: Partial<CalendarEvent> = {};
+        if (args.title != null) patch.title = String(args.title);
+        if (args.modality != null) patch.modality = args.modality === "presencial" || args.modality === "virtual" ? args.modality : "otro";
+        if (args.color != null) patch.color = String(args.color);
+        if (typeof args.reminderMinutes === "number") patch.reminderMinutes = args.reminderMinutes;
+        if (typeof args.totalAmount === "number") patch.totalAmount = args.totalAmount;
+        if (typeof args.paidAmount === "number") patch.paidAmount = args.paidAmount;
+        if (args.date != null || args.startTime != null || args.endTime != null || args.allDay != null) {
+          const base = args.date || (ev ? evDate(ev.startAt) : null);
+          if (!base) return "No pude determinar la fecha del evento.";
+          const allDay = args.allDay != null ? !!args.allDay : ev ? !!ev.allDay : false;
+          patch.allDay = allDay;
+          patch.startAt = allDay ? buildDate(base, "00:00") : buildDate(base, args.startTime || (ev ? ev24(ev.startAt) : "09:00"));
+          patch.endAt = allDay ? buildDate(base, "23:59") : buildDate(base, args.endTime || (ev ? ev24(ev.endAt) : "10:00"));
+        }
+        await onUpdateEvent(args.id, patch);
+        return `OK: evento actualizado (id=${args.id}).`;
+      }
+
+      if (name === "delete_event") {
+        const ok = window.confirm(`¿Eliminar "${args.title || "este evento"}"? No se puede deshacer.`);
+        if (!ok) return "El usuario canceló la eliminación.";
+        await onDeleteEvent(String(args.id));
+        return `OK: evento eliminado (id=${args.id}).`;
+      }
+
+      return "Herramienta desconocida.";
+    } catch (e: any) {
+      return "No se pudo ejecutar la acción: " + (e?.message || "error");
+    }
+  }
 
   const send = async () => {
     const question = input.trim();
     if (!question || loading) return;
 
-    const nextMessages = [...messages, { role: "user" as const, content: question }];
-    setMessages(nextMessages);
+    setUiMessages((prev) => [...prev, { role: "user", content: question }]);
+    convoRef.current.push({ role: "user", content: question });
     setInput("");
     setLoading(true);
+    setStatus("Pensando...");
 
     try {
       const idToken = await auth.currentUser?.getIdToken();
       const payload = events.slice(0, 800).map((e) => {
-        const item: Record<string, unknown> = { t: e.title, f: fmtDate(e.startAt), h: fmtTime(e), m: e.modality, creado: fmtCreated(e.createdAt) };
+        const item: Record<string, unknown> = { id: e.id, t: e.title, f: evDate(e.startAt), h: e.allDay ? "todo el día" : ev24(e.startAt), m: e.modality, creado: evCreated(e.createdAt) };
         if (typeof e.totalAmount === "number") item.vt = e.totalAmount;
         if (typeof e.paidAmount === "number") item.va = e.paidAmount;
         return item;
       });
       const today = new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
-      const res = await fetch("/api/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idToken,
-          question,
-          events: payload,
-          history: messages.filter((m) => m !== GREETING).slice(-6),
-          today,
-          workspaceName: workspaceName || ""
-        })
-      });
+      let answered = false;
+      for (let i = 0; i < 6 && !answered; i++) {
+        const res = await fetch("/api/assistant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken, messages: convoRef.current, events: payload, today, workspaceName: workspaceName || "", userName: userName || "" })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setUiMessages((prev) => [...prev, { role: "assistant", content: data.error || "No pude responder en este momento." }]);
+          answered = true;
+          break;
+        }
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setMessages([...nextMessages, { role: "assistant", content: data.error || "No pude responder en este momento." }]);
-      } else {
-        setMessages([...nextMessages, { role: "assistant", content: data.answer || "No pude generar una respuesta." }]);
+        const message = data.message || { role: "assistant", content: "No pude generar una respuesta." };
+        convoRef.current.push(message);
+
+        const toolCalls = message.tool_calls || [];
+        if (toolCalls.length > 0) {
+          for (const tc of toolCalls) {
+            const name = tc.function?.name || "";
+            setStatus(name === "create_event" ? "Creando evento..." : name === "update_event" ? "Editando evento..." : name === "delete_event" ? "Eliminando evento..." : "Trabajando...");
+            let parsed: any = {};
+            try {
+              parsed = JSON.parse(tc.function?.arguments || "{}");
+            } catch {
+              parsed = {};
+            }
+            const result = await execTool(name, parsed);
+            convoRef.current.push({ role: "tool", tool_call_id: tc.id, content: result });
+          }
+          setStatus("Pensando...");
+        } else {
+          if (message.content) setUiMessages((prev) => [...prev, { role: "assistant", content: message.content }]);
+          answered = true;
+        }
+      }
+
+      if (!answered) {
+        setUiMessages((prev) => [...prev, { role: "assistant", content: "Hice varias acciones; dime si quieres algo más." }]);
       }
     } catch {
-      setMessages([...nextMessages, { role: "assistant", content: "No pude conectar con el asistente. Revisa tu conexión e intenta de nuevo." }]);
+      setUiMessages((prev) => [...prev, { role: "assistant", content: "No pude conectar con el asistente. Revisa tu conexión e intenta de nuevo." }]);
     } finally {
       setLoading(false);
     }
@@ -105,7 +210,7 @@ export function AssistantWidget({ events, workspaceName }: AssistantWidgetProps)
       )}
 
       {open && (
-        <div className="fixed bottom-24 right-3 left-3 z-50 flex h-[70vh] max-h-[560px] flex-col overflow-hidden rounded-3xl border border-app-soft bg-app-panel shadow-2xl backdrop-blur-xl sm:left-auto sm:w-[400px] md:bottom-6 md:right-6">
+        <div className="fixed bottom-24 left-3 right-3 z-50 flex h-[70vh] max-h-[560px] flex-col overflow-hidden rounded-3xl border border-app-soft bg-app-panel shadow-2xl backdrop-blur-xl sm:left-auto sm:w-[400px] md:bottom-6 md:right-6">
           <div className="flex items-center justify-between border-b border-app-soft px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-app-soft text-app-accent">
@@ -122,7 +227,7 @@ export function AssistantWidget({ events, workspaceName }: AssistantWidgetProps)
           </div>
 
           <div ref={scrollRef} className="app-scrollbar flex-1 space-y-3 overflow-y-auto p-3">
-            {messages.map((m, i) => (
+            {uiMessages.map((m, i) => (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-relaxed ${
@@ -137,7 +242,7 @@ export function AssistantWidget({ events, workspaceName }: AssistantWidgetProps)
               <div className="flex justify-start">
                 <div className="flex items-center gap-2 rounded-2xl border border-app-soft bg-app-soft px-3 py-2 text-sm text-app-muted">
                   <Spinner className="h-4 w-4" />
-                  Pensando...
+                  {status}
                 </div>
               </div>
             )}
@@ -155,7 +260,7 @@ export function AssistantWidget({ events, workspaceName }: AssistantWidgetProps)
                   }
                 }}
                 rows={1}
-                placeholder="Pregúntale a tu agenda..."
+                placeholder="Pídele o pregúntale a tu agenda..."
                 className="input-field max-h-28 min-h-11 flex-1 resize-none py-2.5"
               />
               <button type="button" onClick={send} disabled={loading || !input.trim()} className="btn-primary min-h-11 px-3" aria-label="Enviar">

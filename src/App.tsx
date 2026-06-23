@@ -214,7 +214,15 @@ function AppContent() {
         <div className="mb-5 rounded-3xl border border-app-accent bg-app-soft px-4 py-3 text-sm font-bold text-app-accent shadow-sm">{inviteNotice}</div>
       )}
       {renderActivePage()}
-      <AssistantWidget events={events} workspaceName={activeWorkspace?.name} />
+      <AssistantWidget
+        events={events}
+        workspaceName={activeWorkspace?.name}
+        workspaceId={activeWorkspaceId}
+        userName={profile?.name}
+        onCreateEvent={createEvent}
+        onUpdateEvent={updateEvent}
+        onDeleteEvent={deleteEvent}
+      />
     </Layout>
   );
 }
