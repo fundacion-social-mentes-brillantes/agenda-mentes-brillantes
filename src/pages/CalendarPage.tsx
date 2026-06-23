@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Bell, CalendarPlus, ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-react";
+import { Bell, CalendarPlus, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Modal } from "../components/ui/Modal";
 import { EventDetailModal } from "../components/events/EventDetailModal";
