@@ -31,7 +31,7 @@ function AppContent() {
   } = useWorkspaces(user);
   const { events, loading: eventsLoading, createEvent, updateEvent, setEventDone, deleteEvent } = useEvents(activeWorkspaceId);
 
-  const [activePage, setActivePage] = useState<PageType>("dashboard");
+  const [activePage, setActivePage] = useState<PageType>("calendar");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
