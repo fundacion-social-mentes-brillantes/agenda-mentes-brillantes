@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { CalendarDays, Clock, Plus, Sparkles, UserRound } from "lucide-react";
+import { CalendarDays, Plus, Sparkles, UserRound } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { EventDetailModal } from "../components/events/EventDetailModal";
 import { endOfDay, formatCOP, formatEventTime, isSameDay, startOfDay, toDate } from "../lib/dateUtils";
@@ -26,7 +26,6 @@ export default function DashboardPage({
 }: DashboardPageProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const now = new Date();
-  const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
 
@@ -39,18 +38,6 @@ export default function DashboardPage({
         })
         .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime()),
     [events, todayEnd, todayStart]
-  );
-
-  const upcoming = useMemo(
-    () =>
-      events
-        .filter((event) => {
-          const start = toDate(event.startAt);
-          return start > todayEnd && start <= weekAhead;
-        })
-        .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime())
-        .slice(0, 6),
-    [events, todayEnd, weekAhead]
   );
 
   const greeting = getGreeting(now);
@@ -104,33 +91,18 @@ export default function DashboardPage({
           </button>
         </Card>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-          <section className="space-y-4">
-            <SectionHeader icon={<CalendarDays size={20} />} title="Eventos de hoy" count={todayEvents.length} />
-            {todayEvents.length === 0 ? (
-              <EmptyBlock title="Hoy está tranquilo" action="Crear evento" onAction={() => setActivePage("event-form")} />
-            ) : (
-              <div className="grid gap-3">
-                {todayEvents.map((event) => (
-                  <EventRow key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="space-y-4">
-            <SectionHeader icon={<Clock size={20} />} title="Próximos 7 días" count={upcoming.length} />
-            {upcoming.length === 0 ? (
-              <EmptyBlock title="Nada agendado próximamente" compact />
-            ) : (
-              <div className="grid gap-3">
-                {upcoming.map((event) => (
-                  <CompactEvent key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
+        <section className="space-y-4">
+          <SectionHeader icon={<CalendarDays size={20} />} title="Eventos de hoy" count={todayEvents.length} />
+          {todayEvents.length === 0 ? (
+            <EmptyBlock title="Hoy está tranquilo" action="Crear evento" onAction={() => setActivePage("event-form")} />
+          ) : (
+            <div className="grid gap-3">
+              {todayEvents.map((event) => (
+                <EventRow key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       <EventDetailModal
@@ -163,31 +135,6 @@ function EventRow({ event, onClick }: { event: CalendarEvent; onClick: () => voi
         </div>
       </div>
     </Card>
-  );
-}
-
-function CompactEvent({ event, onClick, highlight = false }: { event: CalendarEvent; onClick: () => void; highlight?: boolean }) {
-  const date = toDate(event.startAt);
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-3xl border p-4 text-left transition hover:-translate-y-0.5 ${
-        highlight ? "border-red-500/25 bg-red-500/10" : "border-app-soft bg-app-panel hover:bg-app-soft"
-      }`}
-    >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-2 text-xs font-black text-app-muted">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: event.color }} />
-          <span className="capitalize">{event.modality}</span>
-        </span>
-        <span className="text-xs font-black text-app-faint">{date.toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
-      </div>
-      <p className="m-0 line-clamp-2 font-black text-app-strong">{event.title}</p>
-      <p className="m-0 mt-2 text-xs font-bold text-app-muted">{formatEventTime(event)}</p>
-      <Amounts event={event} compact />
-    </button>
   );
 }
 

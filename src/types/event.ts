@@ -1,6 +1,6 @@
 import { Timestamp } from "firebase/firestore";
 
-export type EventModality = "presencial" | "virtual";
+export type EventModality = "presencial" | "virtual" | "otro";
 
 export type AttachmentKind = "image" | "file";
 

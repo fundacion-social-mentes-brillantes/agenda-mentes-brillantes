@@ -85,7 +85,9 @@ function normalizeMoney(value: unknown): number | null {
 }
 
 function normalizeModality(value: unknown): EventModality {
-  return value === "virtual" ? "virtual" : "presencial";
+  if (value === "virtual") return "virtual";
+  if (value === "presencial") return "presencial";
+  return "otro";
 }
 
 function normalizeAttachments(value: unknown): EventAttachment[] {

@@ -18,12 +18,13 @@ export const COLOR_PRESETS: { value: string; label: string }[] = [
 ];
 
 export const MODALITY_OPTIONS: { value: EventModality; label: string }[] = [
+  { value: "otro", label: "Otros" },
   { value: "presencial", label: "Presencial" },
   { value: "virtual", label: "Virtual" }
 ];
 
 export function getModalityLabel(modality?: EventModality): string {
-  return MODALITY_OPTIONS.find((item) => item.value === modality)?.label || "Presencial";
+  return MODALITY_OPTIONS.find((item) => item.value === modality)?.label || "Otros";
 }
 
 export const REMINDER_OPTIONS: { value: number; label: string }[] = [

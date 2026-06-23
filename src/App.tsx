@@ -12,6 +12,7 @@ import DayPage from "./pages/DayPage";
 import EventFormPage from "./pages/EventFormPage";
 import SettingsPage from "./pages/SettingsPage";
 import WorkspacePage from "./pages/WorkspacePage";
+import { AssistantWidget } from "./components/AssistantWidget";
 import type { CalendarEvent } from "./types/event";
 import { Spinner } from "./components/ui/Spinner";
 import { authService } from "./services/authService";
@@ -213,6 +214,7 @@ function AppContent() {
         <div className="mb-5 rounded-3xl border border-app-accent bg-app-soft px-4 py-3 text-sm font-bold text-app-accent shadow-sm">{inviteNotice}</div>
       )}
       {renderActivePage()}
+      <AssistantWidget events={events} workspaceName={activeWorkspace?.name} />
     </Layout>
   );
 }

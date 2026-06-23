@@ -55,7 +55,7 @@ export default function EventFormPage({
   const [startTimeStr, setStartTimeStr] = useState("09:00");
   const [endTimeStr, setEndTimeStr] = useState("10:00");
   const [allDay, setAllDay] = useState(false);
-  const [modality, setModality] = useState<EventModality>("presencial");
+  const [modality, setModality] = useState<EventModality>("otro");
   const [color, setColor] = useState(DEFAULT_EVENT_COLOR);
   const [reminderMinutes, setReminderMinutes] = useState<number>(30);
   const [totalAmount, setTotalAmount] = useState("");
@@ -106,7 +106,7 @@ export default function EventFormPage({
       setStartTimeStr(formatTime(start));
       setEndTimeStr(formatTime(end));
       setAllDay(!!editingEvent.allDay);
-      setModality(editingEvent.modality === "virtual" ? "virtual" : "presencial");
+      setModality(editingEvent.modality || "otro");
       setColor(editingEvent.color || DEFAULT_EVENT_COLOR);
       setReminderMinutes(editingEvent.reminderMinutes ?? 30);
       setTotalAmount(formatMoneyInput(editingEvent.totalAmount));
@@ -120,7 +120,7 @@ export default function EventFormPage({
       setStartTimeStr("09:00");
       setEndTimeStr("10:00");
       setAllDay(false);
-      setModality("presencial");
+      setModality("otro");
       setColor(DEFAULT_EVENT_COLOR);
       setReminderMinutes(30);
       setTotalAmount("");
@@ -319,8 +319,29 @@ export default function EventFormPage({
             <div className="grid gap-4 md:grid-cols-2">
               <label className="md:col-span-2">
                 <span className="section-label mb-2 block">Título</span>
-                <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Sesión con María, reunión, recordatorio" required autoFocus />
+                <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Reunión, Recordatorio, Sesión Coach…" required autoFocus />
               </label>
+
+              <div className="md:col-span-2">
+                <span className="section-label mb-2 block">Color</span>
+                <div className="flex flex-wrap gap-2">
+                  {COLOR_PRESETS.map((preset) => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() => setColor(preset.value)}
+                      aria-label={preset.label}
+                      title={preset.label}
+                      className={`h-9 w-9 rounded-full border-2 transition ${color === preset.value ? "scale-110 border-app-strong" : "border-transparent"}`}
+                      style={{ backgroundColor: preset.value }}
+                    />
+                  ))}
+                  <label className="relative h-9 w-9 cursor-pointer overflow-hidden rounded-full border-2 border-dashed border-app-soft" title="Color personalizado">
+                    <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                    <span className="flex h-full w-full items-center justify-center text-app-faint">+</span>
+                  </label>
+                </div>
+              </div>
 
               <label>
                 <span className="section-label mb-2 block">Fecha</span>
@@ -426,40 +447,17 @@ export default function EventFormPage({
         </div>
 
         <aside className="space-y-5 pb-28 lg:pb-0">
-          <FormSection title="Recordatorio y color">
-            <div className="space-y-4">
-              <label>
-                <span className="section-label mb-2 block">Recordatorio</span>
-                <select className="input-field" value={reminderMinutes} onChange={(e) => setReminderMinutes(Number(e.target.value))}>
-                  {REMINDER_OPTIONS.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div>
-                <span className="section-label mb-2 block">Color</span>
-                <div className="flex flex-wrap gap-2">
-                  {COLOR_PRESETS.map((preset) => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      onClick={() => setColor(preset.value)}
-                      aria-label={preset.label}
-                      title={preset.label}
-                      className={`h-9 w-9 rounded-full border-2 transition ${color === preset.value ? "border-app-strong scale-110" : "border-transparent"}`}
-                      style={{ backgroundColor: preset.value }}
-                    />
-                  ))}
-                  <label className="relative h-9 w-9 cursor-pointer overflow-hidden rounded-full border-2 border-dashed border-app-soft" title="Color personalizado">
-                    <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
-                    <span className="flex h-full w-full items-center justify-center text-app-faint">+</span>
-                  </label>
-                </div>
-              </div>
-            </div>
+          <FormSection title="Recordatorio">
+            <label className="block">
+              <span className="section-label mb-2 block">Recordatorio</span>
+              <select className="input-field" value={reminderMinutes} onChange={(e) => setReminderMinutes(Number(e.target.value))}>
+                {REMINDER_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </FormSection>
 
           <div className="hidden flex-col gap-3 lg:flex">
