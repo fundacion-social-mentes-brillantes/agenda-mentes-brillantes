@@ -19,15 +19,10 @@ Sin esto, las agendas compartidas y los archivos no funcionan, y los datos no qu
 3. Borra lo que haya y pega el contenido del archivo [`firestore.rules`](firestore.rules).
 4. Clic en **Publicar**.
 
-**Storage (para imágenes y documentos):**
-1. Menú izquierdo: **Storage**. Si nunca lo activaste, dale **Comenzar** y acepta.
-2. Pestaña **Reglas**.
-3. Borra lo que haya y pega el contenido de [`storage.rules`](storage.rules).
-4. Clic en **Publicar**.
-
-> Nota: las reglas de Storage usan una comprobación en Firestore (`firestore.exists`). Es una función
-> estándar de Firebase y ya viene activa. Si por algún motivo diera error al publicar, en
-> [`docs/firebase-storage-rules.md`](docs/firebase-storage-rules.md) hay una versión alternativa.
+**Storage: NO lo necesitas.** Firebase Storage exige plan de pago (Blaze). Para que siga **gratis**, los
+archivos (imágenes y documentos) se guardan en **Cloudinary**. Configúralo una sola vez siguiendo
+[`docs/ARCHIVOS-CLOUDINARY.md`](docs/ARCHIVOS-CLOUDINARY.md). Mientras no lo configures, la app funciona
+igual pero sin la opción de adjuntar archivos.
 
 ---
 

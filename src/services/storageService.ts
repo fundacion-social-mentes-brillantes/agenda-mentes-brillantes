@@ -1,13 +1,14 @@
-import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { withTimeout } from "../lib/asyncUtils";
-import { storage } from "../lib/firebase";
 import type { AttachmentKind, EventAttachment } from "../types/event";
 
+// Subida de archivos a Cloudinary (plan gratuito, sin tarjeta).
+// Requiere dos variables de entorno (build de Vite):
+//   VITE_CLOUDINARY_CLOUD_NAME    -> el "cloud name" de tu cuenta
+//   VITE_CLOUDINARY_UPLOAD_PRESET -> un "upload preset" sin firma (unsigned)
+
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB por archivo
-const STORAGE_TIMEOUT = 60_000;
+const UPLOAD_TIMEOUT = 60_000;
 
 const IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"];
-
 const DOCUMENT_TYPES = [
   "application/pdf",
   "application/msword",
@@ -22,22 +23,10 @@ const DOCUMENT_TYPES = [
   "application/zip",
   "application/x-zip-compressed"
 ];
-
 const ALLOWED_TYPES = [...IMAGE_TYPES, ...DOCUMENT_TYPES];
 
-function getStorageErrorMessage(error: unknown): string {
-  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
-  if (code === "storage/unauthorized") {
-    return "No tienes permiso para subir archivos. Revisa que Firebase Storage esté activado y que las reglas permitan a los miembros de la agenda.";
-  }
-  if (code === "storage/canceled") {
-    return "La subida del archivo fue cancelada.";
-  }
-  if (code === "storage/quota-exceeded") {
-    return "Firebase Storage no tiene cuota disponible para subir este archivo.";
-  }
-  return "No se pudo subir el archivo. Verifica Firebase Storage y vuelve a intentarlo.";
-}
+const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
+const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
 
 function kindForType(contentType: string): AttachmentKind {
   return contentType.startsWith("image/") ? "image" : "file";
@@ -48,6 +37,11 @@ function sanitizeName(name: string): string {
 }
 
 export const storageService = {
+  /** ¿Está configurado Cloudinary? Si no, se ocultan las opciones de adjuntar. */
+  isConfigured(): boolean {
+    return Boolean(CLOUD_NAME && UPLOAD_PRESET);
+  },
+
   isImageType(contentType: string): boolean {
     return contentType.startsWith("image/");
   },
@@ -65,50 +59,61 @@ export const storageService = {
 
   async uploadAttachment(file: File, workspaceId: string, eventId: string): Promise<EventAttachment> {
     this.validateFile(file);
+    if (!CLOUD_NAME || !UPLOAD_PRESET) {
+      throw new Error("Los archivos no están configurados todavía (falta Cloudinary). Avisa para terminar la configuración.");
+    }
+
     const contentType = file.type || "application/octet-stream";
-    const extension = file.name.split(".").pop()?.toLowerCase() || "";
-    const safeName = `${Date.now()}-${crypto.randomUUID()}${extension ? "." + extension : ""}`;
-    const path = `attachments/${workspaceId}/${eventId}/${safeName}`;
-    const fileRef = ref(storage, path);
+    const form = new FormData();
+    form.append("file", file);
+    form.append("upload_preset", UPLOAD_PRESET);
+    form.append("folder", `agenda/${workspaceId}/${eventId}`);
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), UPLOAD_TIMEOUT);
 
     try {
-      await withTimeout(
-        uploadBytes(fileRef, file, { contentType }),
-        STORAGE_TIMEOUT,
-        "La subida del archivo tardó demasiado."
-      );
-      const url = await withTimeout(
-        getDownloadURL(fileRef),
-        STORAGE_TIMEOUT,
-        "No pudimos obtener el enlace del archivo."
-      );
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
+        method: "POST",
+        body: form,
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        let message = "No se pudo subir el archivo.";
+        try {
+          const errorData = await response.json();
+          if (errorData?.error?.message) message = `Cloudinary: ${errorData.error.message}`;
+        } catch {
+          /* sin cuerpo JSON */
+        }
+        throw new Error(message);
+      }
+
+      const data = await response.json();
       return {
-        url,
-        path,
+        url: data.secure_url || data.url,
+        path: data.public_id || "",
         name: sanitizeName(file.name),
         contentType,
-        size: file.size,
+        size: typeof data.bytes === "number" ? data.bytes : file.size,
         kind: kindForType(contentType)
       };
     } catch (error) {
-      throw new Error(getStorageErrorMessage(error));
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("La subida del archivo tardó demasiado. Revisa tu conexión e intenta de nuevo.");
+      }
+      throw error instanceof Error ? error : new Error("No se pudo subir el archivo.");
+    } finally {
+      window.clearTimeout(timer);
     }
   },
 
-  async deleteAttachment(path: string) {
-    if (!path) return;
-    try {
-      await withTimeout(
-        deleteObject(ref(storage, path)),
-        STORAGE_TIMEOUT,
-        "La eliminación del archivo tardó demasiado."
-      );
-    } catch (error) {
-      const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
-      if (code !== "storage/object-not-found") {
-        // No bloqueamos al usuario por un archivo huérfano; lo registramos.
-        console.warn("No se pudo eliminar el archivo de Storage", path, error);
-      }
-    }
+  /**
+   * En Cloudinary gratuito no se puede borrar desde el navegador sin la clave secreta.
+   * Solo quitamos la referencia del evento; el archivo queda en Cloudinary (espacio gratuito amplio).
+   */
+  async deleteAttachment(_path: string) {
+    return;
   }
 };

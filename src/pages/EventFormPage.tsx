@@ -77,6 +77,7 @@ export default function EventFormPage({
   const isBusy = submitPhase === "saving" || submitPhase === "uploading";
   const submitLabel = getSubmitLabel(submitPhase);
   const submitDisabled = isBusy || submitPhase === "saved";
+  const attachmentsEnabled = storageService.isConfigured();
 
   useEffect(() => {
     return () => {
@@ -370,21 +371,29 @@ export default function EventFormPage({
 
           <FormSection title="Imágenes y documentos" icon={<Paperclip size={18} />}>
             <div className="space-y-3">
-              <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-app-soft bg-app-soft px-4 py-7 text-center transition hover:border-app-strong">
-                <Upload size={28} className="mb-2 text-app-accent" />
-                <span className="text-sm font-bold text-app-muted">Toca para agregar archivos</span>
-                <span className="mt-1 text-xs text-app-faint">Imágenes, PDF, Word, Excel, PowerPoint o texto. Hasta 15 MB cada uno.</span>
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.zip"
-                  className="hidden"
-                  onChange={(e) => {
-                    handleAddFiles(e.target.files);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
+              {attachmentsEnabled ? (
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-app-soft bg-app-soft px-4 py-7 text-center transition hover:border-app-strong">
+                  <Upload size={28} className="mb-2 text-app-accent" />
+                  <span className="text-sm font-bold text-app-muted">Toca para agregar archivos</span>
+                  <span className="mt-1 text-xs text-app-faint">Imágenes, PDF, Word, Excel, PowerPoint o texto. Hasta 15 MB cada uno.</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.zip"
+                    className="hidden"
+                    onChange={(e) => {
+                      handleAddFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              ) : (
+                <div className="rounded-3xl border border-dashed border-app-soft bg-app-soft px-4 py-6 text-center">
+                  <Paperclip size={24} className="mx-auto mb-2 text-app-faint" />
+                  <p className="m-0 text-sm font-bold text-app-muted">Adjuntar archivos aún no está activo</p>
+                  <p className="m-0 mt-1 text-xs text-app-faint">Falta terminar la configuración de Cloudinary.</p>
+                </div>
+              )}
 
               {totalAttachments === 0 ? (
                 <p className="m-0 text-center text-xs text-app-faint">Sin archivos adjuntos todavía.</p>

@@ -47,15 +47,22 @@ npm run build   # genera dist/ con la PWA
 3. Build command `npm run build`, output `dist`.
 4. `vercel.json` incluye el rewrite de SPA y los headers para el service worker y el manifest.
 
+## Archivos adjuntos
+
+Las imágenes y documentos se suben a **Cloudinary** (plan gratuito, sin tarjeta) en vez de Firebase Storage,
+para mantener el proyecto sin costo. Configuración en [docs/ARCHIVOS-CLOUDINARY.md](docs/ARCHIVOS-CLOUDINARY.md)
+(variables `VITE_CLOUDINARY_CLOUD_NAME` y `VITE_CLOUDINARY_UPLOAD_PRESET`). `storage.rules` se conserva por si
+algún día se usa Firebase Storage (plan Blaze), pero no es necesario.
+
 ## Seguridad (Firebase)
 
-Publica las reglas de los archivos [`firestore.rules`](firestore.rules) y [`storage.rules`](storage.rules)
-en Firebase Console. Detalles en [docs/firebase-firestore-rules.md](docs/firebase-firestore-rules.md) y
-[docs/firebase-storage-rules.md](docs/firebase-storage-rules.md).
+Publica las reglas de [`firestore.rules`](firestore.rules) en Firebase Console (Firestore → Reglas).
+Detalles en [docs/firebase-firestore-rules.md](docs/firebase-firestore-rules.md).
 
 ## Documentación
 
 - [GUIA-RAPIDA.md](GUIA-RAPIDA.md) — pasos que debe hacer el dueño del proyecto.
 - [docs/INSTALACION-APP.md](docs/INSTALACION-APP.md) — instalar en celular y computador.
 - [docs/COLABORACION.md](docs/COLABORACION.md) — agendas compartidas e invitaciones.
+- [docs/ARCHIVOS-CLOUDINARY.md](docs/ARCHIVOS-CLOUDINARY.md) — adjuntar imágenes y documentos (gratis).
 - [docs/MCP.md](docs/MCP.md) — conectar Claude, Codex o ChatGPT.
