@@ -89,6 +89,44 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "create_coach_session",
+      description:
+        "Crea una SESIÓN COACH para una persona de la base de datos. Identifica la persona por clientCode (preferido) o por clientName (nombre exacto o parecido de la lista PERSONAS). El título se pone con el nombre de la persona.",
+      parameters: {
+        type: "object",
+        properties: {
+          clientCode: { type: "number", description: "Código de la persona (de la lista PERSONAS)." },
+          clientName: { type: "string", description: "Nombre de la persona, si no tienes el código." },
+          date: { type: "string", description: "Fecha YYYY-MM-DD." },
+          startTime: { type: "string", description: "Hora inicio HH:MM (24h). Si solo das inicio, dura 1 hora." },
+          endTime: { type: "string", description: "Hora fin HH:MM (24h), opcional." },
+          allDay: { type: "boolean" },
+          modality: { type: "string", enum: ["presencial", "virtual", "otro"] },
+          totalAmount: { type: "number" },
+          paidAmount: { type: "number" }
+        },
+        required: ["date"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "add_client",
+      description:
+        "Crea una PERSONA nueva en la base de datos de sesiones coach. Se le asigna automáticamente el siguiente código consecutivo. Úsalo solo si la persona no existe ya en la lista PERSONAS.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Nombre completo de la persona." }
+        },
+        required: ["name"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "delete_event",
       description: "Elimina un evento por su id. El navegador pedirá confirmación al usuario antes de borrar.",
       parameters: {
@@ -103,25 +141,30 @@ const TOOLS = [
   }
 ];
 
-function buildSystem({ workspaceName, userName, today, events }) {
+function buildSystem({ workspaceName, userName, today, events, clients }) {
   return [
     `Eres el asistente personal de la agenda "${workspaceName}" de ${userName || "el usuario"} (Gimnasio Emocional Mentes Brillantes).`,
     `Hoy es ${today}. Zona horaria de Colombia (UTC-5). Hablas español, eres cálido, claro y muy preciso.`,
-    `Eres "uno con la agenda": CONSULTAS y también ACTÚAS con tus herramientas: crear, mover (update_event con nueva fecha/hora), duplicar (duplicate_event) y eliminar.`,
+    `Eres "uno con la agenda": CONSULTAS y también ACTÚAS con tus herramientas: crear evento normal (create_event), crear SESIÓN COACH (create_coach_session), crear persona (add_client), mover (update_event), duplicar (duplicate_event) y eliminar.`,
     ``,
     `Reglas (síguelas al pie de la letra):`,
     `- SÉ AUTOSUFICIENTE Y DECIDIDO: si la intención está clara, ACTÚA de una con la herramienta; NO pidas permiso ni propongas opciones. La única excepción es ELIMINAR (el navegador pedirá confirmación solo).`,
-    `- "Duplicar/copiar X para tal día" → usa duplicate_event. "Mover/pasar/cambiar X a tal día/hora" → usa update_event. "Agéndame/crea" → create_event.`,
-    `- Si piden duplicar/mover a varias fechas ("los próximos 3 martes", "toda la semana"), haz VARIAS llamadas, una por fecha.`,
+    `- SESIONES COACH: cuando el pedido es sobre una sesión con una PERSONA (ej. "agenda sesión con Catalina", "sesión coach de Jorge el lunes"), usa create_coach_session e identifica a la persona por su código de la lista PERSONAS (o por nombre). Si la persona NO está en la lista, primero créala con add_client y luego agenda.`,
+    `- "Duplicar/copiar X" → duplicate_event. "Mover/pasar/cambiar X" → update_event. "Agenda una reunión/recordatorio" (sin persona) → create_event.`,
+    `- Si piden a varias fechas ("los próximos 3 martes", "toda la semana"), haz VARIAS llamadas, una por fecha.`,
     `- Fechas relativas ("mañana", "el próximo martes", "en 2 semanas", "fin de mes") → calcula la fecha real desde HOY.`,
     `- HORAS exactamente según lo que pida el usuario: si da inicio Y fin, usa ambas; si da SOLO la hora de inicio (ej. "a las 4"), NO inventes la hora de fin (déjala vacía: la app la pone 1 hora después, 4→5); si dice "todo el día", allDay=true; si no menciona hora, usa 09:00 (la app la deja de 1 hora). Al duplicar/mover sin hora nueva, conserva la del evento original.`,
     `- Usa el "id" exacto de la lista para mover/duplicar/borrar. Si hay varias coincidencias reales y no puedes elegir, SOLO ahí pregunta (corto).`,
-    `- Si acabas de crear un evento y en el mismo pedido debes moverlo/duplicarlo, usa el id que devuelve create_event (texto "id=...") como id en la siguiente herramienta.`,
-    `- Consultas (contar, sumar, fechas, "cuándo se creó"): usa SOLO la lista; exacto, con fechas; no inventes.`,
+    `- Si acabas de crear algo y en el mismo pedido debes moverlo/duplicarlo, usa el id que devuelve la herramienta (texto "id=...").`,
+    `- Consultas de coach ("cuántas sesiones lleva X", "cuántas ha tomado"): cuenta los eventos con coach=true de esa persona (cc=código). "Tomadas" = las que ya pasaron (fecha < hoy); "próximas" = futuras. Exacto, con números; no inventes.`,
     ``,
-    `ESTILO: MUY CONCISO. Responde en 1–2 frases. Tras actuar, confirma en una sola línea (ej. "Listo, dupliqué 'Sala de Reducción' al jueves 25."). Amplía o usa viñetas SOLO si te piden detalle o si listas varios resultados.`,
+    `ESTILO: MUY CONCISO. Responde en 1–2 frases. Tras actuar, confirma en una sola línea (ej. "Listo, agendé la sesión de Catalina el jueves 25 a las 3 pm."). Amplía o usa viñetas SOLO si te piden detalle o si listas varios resultados.`,
     ``,
-    `Cada evento de la lista tiene: id, t=título, f=fecha (YYYY-MM-DD), h=hora, m=modalidad, vt=valor total, va=valor abonado, creado=fecha y hora en que se registró.`,
+    `Cada evento tiene: id, t=título, f=fecha (YYYY-MM-DD), h=hora, m=modalidad, coach=true si es sesión coach, cn=nombre de la persona, cc=código de la persona, vt=valor total, va=valor abonado, creado=fecha/hora de registro.`,
+    `Cada persona (PERSONAS) tiene: code=código, name=nombre.`,
+    ``,
+    `PERSONAS (${clients.length}):`,
+    JSON.stringify(clients),
     ``,
     `EVENTOS (${events.length}):`,
     JSON.stringify(events)
@@ -135,7 +178,7 @@ export default async function handler(req, res) {
   }
 
   const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
-  const { idToken, messages = [], events = [], today = "", workspaceName = "", userName = "" } = body;
+  const { idToken, messages = [], events = [], clients = [], today = "", workspaceName = "", userName = "" } = body;
 
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: "Faltan los mensajes de la conversación." });
@@ -156,7 +199,8 @@ export default async function handler(req, res) {
 
   const model = process.env.DEEPSEEK_MODEL || "deepseek-chat";
   const safeEvents = Array.isArray(events) ? events.slice(0, 800) : [];
-  const system = buildSystem({ workspaceName, userName, today, events: safeEvents });
+  const safeClients = Array.isArray(clients) ? clients.slice(0, 1000) : [];
+  const system = buildSystem({ workspaceName, userName, today, events: safeEvents, clients: safeClients });
 
   // Mensajes válidos para la API (sin system; lo agregamos nosotros).
   const convo = messages

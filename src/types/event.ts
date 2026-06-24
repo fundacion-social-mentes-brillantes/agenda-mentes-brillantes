@@ -2,6 +2,9 @@ import { Timestamp } from "firebase/firestore";
 
 export type EventModality = "presencial" | "virtual" | "otro";
 
+/** Tipo de evento: normal o sesión coach (ligada a una persona de la base de datos). */
+export type EventKind = "normal" | "coach";
+
 export type AttachmentKind = "image" | "file";
 
 export interface EventAttachment {
@@ -23,6 +26,12 @@ export interface CalendarEvent {
   allDay: boolean;
   color: string;
   modality: EventModality;
+  /** "normal" (por defecto) o "coach" (sesión ligada a una persona). */
+  kind?: EventKind;
+  /** Código de la persona (solo en sesiones coach). */
+  clientCode?: number | null;
+  /** Nombre de la persona (solo en sesiones coach; se guarda denormalizado). */
+  clientName?: string | null;
   reminderMinutes?: number | null;
   totalAmount?: number | null;
   paidAmount?: number | null;

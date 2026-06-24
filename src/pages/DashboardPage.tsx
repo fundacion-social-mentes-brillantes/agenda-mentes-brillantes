@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { CalendarDays, Plus, Sparkles, UserRound } from "lucide-react";
+import { CalendarDays, HeartHandshake, Plus, Sparkles, UserRound } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { EventDetailModal } from "../components/events/EventDetailModal";
 import { endOfDay, formatCOP, formatEventTime, isSameDay, startOfDay, toDate } from "../lib/dateUtils";
@@ -27,6 +27,7 @@ export default function DashboardPage({
   onDeleteEvent
 }: DashboardPageProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [filter, setFilter] = useState<"all" | "coach">("all");
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
@@ -41,6 +42,8 @@ export default function DashboardPage({
         .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime()),
     [events, todayEnd, todayStart]
   );
+
+  const shownEvents = filter === "coach" ? todayEvents.filter((e) => e.kind === "coach") : todayEvents;
 
   const greeting = getGreeting(now);
   const hasNoEvents = events.length === 0;
@@ -94,12 +97,34 @@ export default function DashboardPage({
         </Card>
       ) : (
         <section className="space-y-4">
-          <SectionHeader icon={<CalendarDays size={20} />} title="Eventos de hoy" count={todayEvents.length} />
-          {todayEvents.length === 0 ? (
-            <EmptyBlock title="Hoy está tranquilo" action="Crear evento" onAction={() => setActivePage("event-form")} />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <SectionHeader icon={<CalendarDays size={20} />} title="Eventos de hoy" count={shownEvents.length} />
+            <div className="flex gap-1 rounded-2xl border border-app-soft bg-app-soft p-1">
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${filter === "all" ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
+              >
+                Todo
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilter("coach")}
+                className={`flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-black transition ${filter === "coach" ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
+              >
+                <HeartHandshake size={13} /> Coach
+              </button>
+            </div>
+          </div>
+          {shownEvents.length === 0 ? (
+            <EmptyBlock
+              title={filter === "coach" ? "Hoy no hay sesiones coach" : "Hoy está tranquilo"}
+              action="Crear evento"
+              onAction={() => setActivePage("event-form")}
+            />
           ) : (
             <div className="grid gap-3">
-              {todayEvents.map((event) => (
+              {shownEvents.map((event) => (
                 <EventRow key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
               ))}
             </div>

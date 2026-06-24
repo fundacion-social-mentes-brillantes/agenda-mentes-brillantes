@@ -4,8 +4,10 @@ import { auth } from "../lib/firebase";
 import { toDate } from "../lib/dateUtils";
 import { DEFAULT_EVENT_COLOR } from "../lib/eventMeta";
 import { Spinner } from "./ui/Spinner";
+import { normalizeText } from "../services/clientsService";
 import type { EventWriteResult } from "../services/eventsService";
 import type { CalendarEvent } from "../types/event";
+import type { Client } from "../types/client";
 
 interface UiMessage {
   role: "assistant" | "user";
@@ -14,18 +16,20 @@ interface UiMessage {
 
 interface AssistantWidgetProps {
   events: CalendarEvent[];
+  clients: Client[];
   workspaceName?: string;
   workspaceId: string | null;
   userName?: string;
   onCreateEvent: (eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">) => Promise<EventWriteResult>;
   onUpdateEvent: (id: string, eventData: Partial<CalendarEvent>) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
+  onCreateClient: (name: string) => Promise<Client>;
 }
 
 const GREETING: UiMessage = {
   role: "assistant",
   content:
-    "¡Hola! Soy tu asistente y soy uno con tu agenda. Puedo responder (\"¿cuántas sesiones tuvo Laura y en qué fechas?\") y también actuar: \"agéndame una sesión con Laura el martes a las 3 pm\", \"muévela a las 4\" o \"borra el evento de prueba\"."
+    "¡Hola! Soy uno con tu agenda. Pregúntame (\"¿cuántas sesiones lleva Catalina?\") o pídeme: \"agenda sesión coach con Catalina el martes a las 3\", \"crea a la persona Juan Pérez\", \"mueve la sesión de mañana a las 4\" o \"duplica el evento al jueves\"."
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -45,7 +49,7 @@ function evCreated(value: CalendarEvent["createdAt"]): string {
   return toDate(value).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
-export function AssistantWidget({ events, workspaceName, workspaceId, userName, onCreateEvent, onUpdateEvent, onDeleteEvent }: AssistantWidgetProps) {
+export function AssistantWidget({ events, clients, workspaceName, workspaceId, userName, onCreateEvent, onUpdateEvent, onDeleteEvent, onCreateClient }: AssistantWidgetProps) {
   const [open, setOpen] = useState(false);
   const [uiMessages, setUiMessages] = useState<UiMessage[]>([GREETING]);
   const [input, setInput] = useState("");
@@ -56,9 +60,24 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
   // Caché de eventos creados/duplicados en ESTE turno: permite mover/duplicar/borrar
   // algo recién creado, aunque el listener de Firestore todavía no haya refrescado "events".
   const localCacheRef = useRef<CalendarEvent[]>([]);
+  // Caché de personas creadas este turno (para agendar coach justo después de crearlas).
+  const localClientsRef = useRef<Client[]>([]);
 
   const findEvent = (id: string): CalendarEvent | undefined =>
     events.find((e) => e.id === id) || localCacheRef.current.find((e) => e.id === id);
+
+  const findClient = (codeOrName: { code?: number; name?: string }): Client | undefined => {
+    const all = [...clients, ...localClientsRef.current];
+    if (typeof codeOrName.code === "number") {
+      const byCode = all.find((c) => c.code === codeOrName.code);
+      if (byCode) return byCode;
+    }
+    if (codeOrName.name) {
+      const q = normalizeText(codeOrName.name);
+      return all.find((c) => c.nameLower === q) || all.find((c) => c.nameLower.includes(q));
+    }
+    return undefined;
+  };
 
   useEffect(() => {
     if (open && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -151,6 +170,55 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
         return `OK: evento duplicado "${ev.title}" al ${date}. id=${r.id}`;
       }
 
+      if (name === "create_coach_session") {
+        if (!workspaceId) return "No hay agenda seleccionada.";
+        const client = findClient({ code: typeof args.clientCode === "number" ? args.clientCode : undefined, name: args.clientName });
+        if (!client) return "No encontré a esa persona en la base de datos. Si es nueva, créala primero con add_client.";
+        const date = String(args.date || "");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "La fecha no es válida (formato YYYY-MM-DD).";
+        const allDay = !!args.allDay;
+        const start = allDay ? buildDate(date, "00:00") : buildDate(date, args.startTime || "09:00");
+        const end = allDay
+          ? buildDate(date, "23:59")
+          : args.endTime
+            ? buildDate(date, args.endTime)
+            : new Date(start.getTime() + 60 * 60 * 1000);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "Fecha u hora inválida.";
+        const ev: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt"> = {
+          workspaceId,
+          title: client.name,
+          startAt: start,
+          endAt: end,
+          allDay,
+          color: args.color || DEFAULT_EVENT_COLOR,
+          modality: args.modality === "presencial" || args.modality === "virtual" ? args.modality : "otro",
+          kind: "coach",
+          clientCode: client.code,
+          clientName: client.name,
+          reminderMinutes: typeof args.reminderMinutes === "number" ? args.reminderMinutes : 30,
+          totalAmount: typeof args.totalAmount === "number" ? args.totalAmount : null,
+          paidAmount: typeof args.paidAmount === "number" ? args.paidAmount : null,
+          attachments: [],
+          done: false,
+          createdBy: auth.currentUser?.uid || "",
+          createdByName: userName || ""
+        };
+        const r = await onCreateEvent(ev);
+        localCacheRef.current.push({ ...ev, id: r.id, createdAt: new Date(), updatedAt: new Date() });
+        return `OK: sesión coach creada para ${client.name} (#${client.code}) el ${date}${allDay ? " (todo el día)" : " a las " + (args.startTime || "09:00")}. id=${r.id}`;
+      }
+
+      if (name === "add_client") {
+        if (!workspaceId) return "No hay agenda seleccionada.";
+        const nm = String(args.name || "").trim();
+        if (!nm) return "Falta el nombre de la persona.";
+        const existing = findClient({ name: nm });
+        if (existing && existing.nameLower === normalizeText(nm)) return `Esa persona ya existe: ${existing.name} (#${existing.code}).`;
+        const created = await onCreateClient(nm);
+        localClientsRef.current.push(created);
+        return `OK: persona creada ${created.name} con código #${created.code}.`;
+      }
+
       if (name === "delete_event") {
         const ok = window.confirm(`¿Eliminar "${args.title || "este evento"}"? No se puede deshacer.`);
         if (!ok) return "El usuario canceló la eliminación.";
@@ -174,15 +242,22 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
     setLoading(true);
     setStatus("Pensando...");
     localCacheRef.current = [];
+    localClientsRef.current = [];
 
     try {
       const idToken = await auth.currentUser?.getIdToken();
       const payload = events.slice(0, 800).map((e) => {
         const item: Record<string, unknown> = { id: e.id, t: e.title, f: evDate(e.startAt), h: e.allDay ? "todo el día" : ev24(e.startAt), m: e.modality, creado: evCreated(e.createdAt) };
+        if (e.kind === "coach") {
+          item.coach = true;
+          if (e.clientName) item.cn = e.clientName;
+          if (typeof e.clientCode === "number") item.cc = e.clientCode;
+        }
         if (typeof e.totalAmount === "number") item.vt = e.totalAmount;
         if (typeof e.paidAmount === "number") item.va = e.paidAmount;
         return item;
       });
+      const clientsPayload = clients.slice(0, 1000).map((c) => ({ code: c.code, name: c.name }));
       const today = new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
       let answered = false;
@@ -190,7 +265,7 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
         const res = await fetch("/api/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idToken, messages: convoRef.current, events: payload, today, workspaceName: workspaceName || "", userName: userName || "" })
+          body: JSON.stringify({ idToken, messages: convoRef.current, events: payload, clients: clientsPayload, today, workspaceName: workspaceName || "", userName: userName || "" })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -206,7 +281,21 @@ export function AssistantWidget({ events, workspaceName, workspaceId, userName, 
         if (toolCalls.length > 0) {
           for (const tc of toolCalls) {
             const name = tc.function?.name || "";
-            setStatus(name === "create_event" ? "Creando evento..." : name === "update_event" ? "Moviendo evento..." : name === "duplicate_event" ? "Duplicando evento..." : name === "delete_event" ? "Eliminando evento..." : "Trabajando...");
+            setStatus(
+              name === "create_event"
+                ? "Creando evento..."
+                : name === "create_coach_session"
+                  ? "Agendando sesión coach..."
+                  : name === "add_client"
+                    ? "Creando persona..."
+                    : name === "update_event"
+                      ? "Moviendo evento..."
+                      : name === "duplicate_event"
+                        ? "Duplicando evento..."
+                        : name === "delete_event"
+                          ? "Eliminando evento..."
+                          : "Trabajando..."
+            );
             let parsed: any = {};
             try {
               parsed = JSON.parse(tc.function?.arguments || "{}");

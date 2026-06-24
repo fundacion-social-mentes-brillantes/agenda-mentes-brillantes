@@ -5,6 +5,7 @@ import {
   Calendar,
   Check,
   ChevronDown,
+  HeartHandshake,
   Home,
   ListChecks,
   Lock,
@@ -24,7 +25,7 @@ import { authService } from "../../services/authService";
 import type { AppTheme } from "../../types/theme";
 import type { WorkspaceWithRole } from "../../types/workspace";
 
-export type PageType = "dashboard" | "calendar" | "day" | "event-form" | "settings" | "workspaces";
+export type PageType = "dashboard" | "calendar" | "coach" | "day" | "event-form" | "settings" | "workspaces";
 
 interface LayoutProps {
   children: ReactNode;
@@ -45,6 +46,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: "dashboard", label: "Hoy", icon: Home },
   { id: "calendar", label: "Calendario", icon: Calendar },
+  { id: "coach", label: "Sesiones coach", icon: HeartHandshake },
   { id: "day", label: "Agenda", icon: ListChecks },
   { id: "workspaces", label: "Agendas", icon: Users },
   { id: "settings", label: "Ajustes", icon: Settings }
@@ -53,8 +55,8 @@ const navItems: NavItem[] = [
 const mobileNavItems: NavItem[] = [
   { id: "dashboard", label: "Hoy", icon: Home },
   { id: "calendar", label: "Calendario", icon: Calendar },
-  { id: "day", label: "Agenda", icon: ListChecks },
-  { id: "workspaces", label: "Agendas", icon: Users }
+  { id: "coach", label: "Coach", icon: HeartHandshake },
+  { id: "day", label: "Agenda", icon: ListChecks }
 ];
 
 export function Layout({ children, activePage, setActivePage, onCreate, workspaces, activeWorkspace, onSelectWorkspace }: LayoutProps) {

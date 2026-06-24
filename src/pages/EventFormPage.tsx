@@ -1,15 +1,20 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   CalendarDays,
+  CalendarRange,
   CheckCircle2,
   FileText,
+  HeartHandshake,
   Image as ImageIcon,
   Paperclip,
+  Plus,
   RotateCcw,
   Save,
+  Search,
   Trash2,
   Upload,
+  UserRound,
   X
 } from "lucide-react";
 import { Card } from "../components/ui/Card";
@@ -17,8 +22,10 @@ import { Spinner } from "../components/ui/Spinner";
 import { COLOR_PRESETS, DEFAULT_EVENT_COLOR, MODALITY_OPTIONS, REMINDER_OPTIONS } from "../lib/eventMeta";
 import { auth } from "../lib/firebase";
 import { storageService } from "../services/storageService";
+import { normalizeText } from "../services/clientsService";
 import type { EventWriteResult } from "../services/eventsService";
-import type { CalendarEvent, EventAttachment, EventModality } from "../types/event";
+import type { CalendarEvent, EventAttachment, EventKind, EventModality } from "../types/event";
+import type { Client } from "../types/client";
 import type { UserProfile } from "../types/user";
 
 interface PendingFile {
@@ -33,6 +40,10 @@ interface EventFormPageProps {
   workspaceId: string | null;
   workspaceName?: string;
   profile: UserProfile | null;
+  clients: Client[];
+  initialKind?: EventKind;
+  initialClient?: { code: number; name: string } | null;
+  onCreateClient: (name: string) => Promise<Client>;
   setActivePage: (page: string) => void;
   onCreateEvent: (eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">) => Promise<EventWriteResult>;
   onUpdateEvent: (id: string, eventData: Partial<CalendarEvent>) => Promise<void>;
@@ -44,12 +55,18 @@ export default function EventFormPage({
   workspaceId,
   workspaceName,
   profile,
+  clients,
+  initialKind,
+  initialClient,
+  onCreateClient,
   setActivePage,
   onCreateEvent,
   onUpdateEvent
 }: EventFormPageProps) {
   const isEdit = !!editingEvent;
 
+  const [kind, setKind] = useState<EventKind>("normal");
+  const [client, setClient] = useState<{ code: number; name: string } | null>(null);
   const [title, setTitle] = useState("");
   const [dateStr, setDateStr] = useState("");
   const [startTimeStr, setStartTimeStr] = useState("09:00");
@@ -78,6 +95,10 @@ export default function EventFormPage({
   const submitLabel = getSubmitLabel(submitPhase);
   const submitDisabled = isBusy || submitPhase === "saved";
   const attachmentsEnabled = storageService.isConfigured();
+  const modeBtnClass = (active: boolean) =>
+    `flex items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-sm font-black transition ${
+      active ? "border-app-strong bg-app-soft text-app-accent" : "border-app-soft bg-app-panel text-app-muted hover:bg-app-soft"
+    }`;
 
   useEffect(() => {
     return () => {
@@ -101,6 +122,13 @@ export default function EventFormPage({
     if (isEdit && editingEvent) {
       const start = new Date(editingEvent.startAt as Date);
       const end = new Date(editingEvent.endAt as Date);
+      const evKind = editingEvent.kind === "coach" ? "coach" : "normal";
+      setKind(evKind);
+      setClient(
+        evKind === "coach" && typeof editingEvent.clientCode === "number"
+          ? { code: editingEvent.clientCode, name: editingEvent.clientName || editingEvent.title || "" }
+          : null
+      );
       setTitle(editingEvent.title || "");
       setDateStr(formatDate(start));
       setStartTimeStr(formatTime(start));
@@ -115,6 +143,8 @@ export default function EventFormPage({
       setSavedEventId(editingEvent.id || null);
     } else {
       const baseDate = selectedDate ? new Date(selectedDate) : new Date();
+      setKind(initialKind === "coach" ? "coach" : "normal");
+      setClient(initialKind === "coach" && initialClient ? initialClient : null);
       setTitle("");
       setDateStr(formatDate(baseDate));
       setStartTimeStr("09:00");
@@ -134,7 +164,7 @@ export default function EventFormPage({
     setSuccessMessage(null);
     setWarningMessage(null);
     setError(null);
-  }, [editingEvent, isEdit, selectedDate]);
+  }, [editingEvent, isEdit, selectedDate, initialKind, initialClient?.code]);
 
   const handleAddFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -184,7 +214,9 @@ export default function EventFormPage({
       const uid = auth.currentUser?.uid;
       if (!uid) throw new Error("Debes iniciar sesión para crear eventos.");
       if (!workspaceId) throw new Error("Selecciona una agenda antes de crear el evento.");
-      if (!title.trim()) throw new Error("Escribe un título para el evento.");
+      if (kind === "coach" && !client) throw new Error("Elige o crea la persona de la sesión coach.");
+      const finalTitle = kind === "coach" ? (client?.name || "").trim() : title.trim();
+      if (!finalTitle) throw new Error("Escribe un título para el evento.");
 
       const startAt = allDay ? new Date(`${dateStr}T00:00`) : new Date(`${dateStr}T${startTimeStr}`);
       const endAt = allDay ? new Date(`${dateStr}T23:59`) : new Date(`${dateStr}T${endTimeStr}`);
@@ -198,12 +230,15 @@ export default function EventFormPage({
 
       const baseData = {
         workspaceId,
-        title: title.trim(),
+        title: finalTitle,
         startAt,
         endAt,
         allDay,
         color,
         modality,
+        kind,
+        clientCode: kind === "coach" ? client?.code ?? null : null,
+        clientName: kind === "coach" ? client?.name ?? null : null,
         reminderMinutes: Number(reminderMinutes) || null,
         totalAmount: parseMoneyInput(totalAmount),
         paidAmount: parseMoneyInput(paidAmount),
@@ -317,10 +352,29 @@ export default function EventFormPage({
         <div className="space-y-5">
           <FormSection title="Datos del evento" icon={<CalendarDays size={18} />}>
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="md:col-span-2">
-                <span className="section-label mb-2 block">Título</span>
-                <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Reunión, Recordatorio, Sesión Coach…" required autoFocus />
-              </label>
+              <div className="md:col-span-2">
+                <span className="section-label mb-2 block">Tipo</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setKind("normal")} className={modeBtnClass(kind === "normal")}>
+                    <CalendarRange size={16} /> Evento normal
+                  </button>
+                  <button type="button" onClick={() => setKind("coach")} className={modeBtnClass(kind === "coach")}>
+                    <HeartHandshake size={16} /> Sesión coach
+                  </button>
+                </div>
+              </div>
+
+              {kind === "normal" ? (
+                <label className="md:col-span-2">
+                  <span className="section-label mb-2 block">Título</span>
+                  <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Reunión, Recordatorio…" autoFocus />
+                </label>
+              ) : (
+                <div className="md:col-span-2">
+                  <span className="section-label mb-2 block">Persona de la sesión</span>
+                  <ClientPicker clients={clients} value={client} onSelect={setClient} onCreate={onCreateClient} />
+                </div>
+              )}
 
               <div className="md:col-span-2">
                 <span className="section-label mb-2 block">Color</span>
@@ -535,6 +589,111 @@ function FormSection({ title, icon, children }: { title: string; icon?: React.Re
       </div>
       {children}
     </Card>
+  );
+}
+
+function ClientPicker({
+  clients,
+  value,
+  onSelect,
+  onCreate
+}: {
+  clients: Client[];
+  value: { code: number; name: string } | null;
+  onSelect: (c: { code: number; name: string } | null) => void;
+  onCreate: (name: string) => Promise<Client>;
+}) {
+  const [query, setQuery] = useState(value?.name || "");
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setQuery(value?.name || "");
+  }, [value?.code]);
+
+  const q = normalizeText(query);
+  const matches = useMemo(() => {
+    if (!q) return clients.slice(0, 8);
+    return clients.filter((c) => c.nameLower.includes(q)).slice(0, 8);
+  }, [clients, q]);
+  const exact = clients.some((c) => normalizeText(c.name) === q);
+
+  const handleCreate = async () => {
+    const name = query.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    setErr(null);
+    try {
+      const created = await onCreate(name);
+      onSelect({ code: created.code, name: created.name });
+      setQuery(created.name);
+      setOpen(false);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo crear la persona.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-0 top-3.5 flex items-center pl-4 text-app-faint">
+        <Search size={16} />
+      </span>
+      <input
+        className="input-field pl-11"
+        value={query}
+        placeholder="Escribe el nombre de la persona..."
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+          if (value) onSelect(null);
+        }}
+      />
+      {value && (
+        <p className="m-0 mt-2 inline-flex items-center gap-2 rounded-full border border-app-soft bg-app-soft px-3 py-1 text-xs font-black text-app-accent">
+          <UserRound size={13} /> {value.name} · #{value.code}
+        </p>
+      )}
+      {err && <p className="m-0 mt-2 text-xs font-bold text-red-500">{err}</p>}
+      {open && (
+        <div className="glass-panel absolute left-0 right-0 z-50 mt-2 max-h-64 overflow-y-auto rounded-2xl p-1.5">
+          {matches.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onSelect({ code: c.code, name: c.name });
+                setQuery(c.name);
+                setOpen(false);
+              }}
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-bold text-app-muted hover:bg-app-soft hover:text-app-strong"
+            >
+              <span className="truncate">{c.name}</span>
+              <span className="ml-auto shrink-0 text-xs text-app-faint">#{c.code}</span>
+            </button>
+          ))}
+          {query.trim() && !exact && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleCreate}
+              disabled={creating}
+              className="flex w-full items-center gap-2 rounded-xl border-t border-app-soft px-3 py-2 text-left text-sm font-black text-app-accent hover:bg-app-soft"
+            >
+              <Plus size={15} /> {creating ? "Creando..." : `Crear "${query.trim()}"`}
+            </button>
+          )}
+          {matches.length === 0 && !query.trim() && (
+            <p className="m-0 px-3 py-2 text-xs text-app-faint">Aún no hay personas. Escribe un nombre para crear la primera.</p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

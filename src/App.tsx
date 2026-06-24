@@ -4,17 +4,19 @@ import { ThemeProvider, useTheme } from "./hooks/useTheme";
 import { useEvents } from "./hooks/useEvents";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useEventReminders } from "./hooks/useEventReminders";
+import { useClients } from "./hooks/useClients";
 import { Layout } from "./components/layout/Layout";
 import type { PageType } from "./components/layout/Layout";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import CalendarPage from "./pages/CalendarPage";
+import CoachPage from "./pages/CoachPage";
 import DayPage from "./pages/DayPage";
 import EventFormPage from "./pages/EventFormPage";
 import SettingsPage from "./pages/SettingsPage";
 import WorkspacePage from "./pages/WorkspacePage";
 import { AssistantWidget } from "./components/AssistantWidget";
-import type { CalendarEvent } from "./types/event";
+import type { CalendarEvent, EventKind } from "./types/event";
 import { toDate } from "./lib/dateUtils";
 import { Spinner } from "./components/ui/Spinner";
 import { authService } from "./services/authService";
@@ -33,12 +35,15 @@ function AppContent() {
     error: workspacesError
   } = useWorkspaces(user);
   const { events, loading: eventsLoading, createEvent, updateEvent, deleteEvent } = useEvents(activeWorkspaceId);
+  const { clients, loading: clientsLoading, createClient, importClients } = useClients(activeWorkspaceId);
 
   useEventReminders(events);
 
   const [activePage, setActivePage] = useState<PageType>("calendar");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [formKind, setFormKind] = useState<EventKind>("normal");
+  const [formClient, setFormClient] = useState<{ code: number; name: string } | null>(null);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const inviteHandledRef = useRef(false);
 
@@ -80,8 +85,26 @@ function AppContent() {
   const handleCreate = () => {
     setEditingEvent(null);
     setSelectedDate(new Date());
+    setFormKind("normal");
+    setFormClient(null);
     setActivePage("event-form");
   };
+
+  const handleEditEvent = (event: CalendarEvent) => {
+    setEditingEvent(event);
+    setActivePage("event-form");
+  };
+
+  // Abre el formulario en modo "sesión coach", opcionalmente con la persona ya elegida.
+  const handleNewCoachSession = (client?: { code: number; name: string }) => {
+    setEditingEvent(null);
+    setSelectedDate(new Date());
+    setFormKind("coach");
+    setFormClient(client || null);
+    setActivePage("event-form");
+  };
+
+  const handleCreateClient = async (name: string) => createClient(name);
 
   const handleDuplicate = async (event: CalendarEvent) => {
     if (!activeWorkspaceId) return;
@@ -94,6 +117,9 @@ function AppContent() {
         allDay: event.allDay,
         color: event.color,
         modality: event.modality,
+        kind: event.kind === "coach" ? "coach" : "normal",
+        clientCode: event.kind === "coach" ? event.clientCode ?? null : null,
+        clientName: event.kind === "coach" ? event.clientName ?? null : null,
         reminderMinutes: event.reminderMinutes ?? 30,
         totalAmount: event.totalAmount ?? null,
         paidAmount: event.paidAmount ?? null,
@@ -204,6 +230,18 @@ function AppContent() {
             onDeleteEvent={deleteEvent}
           />
         );
+      case "coach":
+        return (
+          <CoachPage
+            clients={clients}
+            events={events}
+            loadingClients={clientsLoading}
+            onImportClients={importClients}
+            onCreateClient={handleCreateClient}
+            onNewCoachSession={handleNewCoachSession}
+            onEditEvent={handleEditEvent}
+          />
+        );
       case "event-form":
         return (
           <EventFormPage
@@ -212,6 +250,10 @@ function AppContent() {
             workspaceId={activeWorkspaceId}
             workspaceName={activeWorkspace?.name}
             profile={profile}
+            clients={clients}
+            initialKind={formKind}
+            initialClient={formClient}
+            onCreateClient={handleCreateClient}
             setActivePage={(page) => handlePageChange(page as PageType)}
             onCreateEvent={createEvent}
             onUpdateEvent={updateEvent}
@@ -248,12 +290,14 @@ function AppContent() {
       {renderActivePage()}
       <AssistantWidget
         events={events}
+        clients={clients}
         workspaceName={activeWorkspace?.name}
         workspaceId={activeWorkspaceId}
         userName={profile?.name}
         onCreateEvent={createEvent}
         onUpdateEvent={updateEvent}
         onDeleteEvent={deleteEvent}
+        onCreateClient={handleCreateClient}
       />
     </Layout>
   );

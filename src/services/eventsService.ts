@@ -15,7 +15,7 @@ import { TimeoutError, withTimeout } from "../lib/asyncUtils";
 import { toDateSafe } from "../lib/dateUtils";
 import { DEFAULT_EVENT_COLOR } from "../lib/eventMeta";
 import { auth, db } from "../lib/firebase";
-import type { CalendarEvent, EventAttachment, EventModality } from "../types/event";
+import type { CalendarEvent, EventAttachment, EventKind, EventModality } from "../types/event";
 
 const EVENT_WRITE_TIMEOUT = 15_000;
 const PENDING_SYNC_MESSAGE = "El evento fue creado y se sincronizará automáticamente.";
@@ -90,6 +90,10 @@ function normalizeModality(value: unknown): EventModality {
   return "otro";
 }
 
+function normalizeKind(value: unknown): EventKind {
+  return value === "coach" ? "coach" : "normal";
+}
+
 function normalizeAttachments(value: unknown): EventAttachment[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -138,6 +142,9 @@ function mapDocToEvent(id: string, data: Record<string, any>): CalendarEvent {
     allDay: Boolean(data.allDay),
     color: data.color || DEFAULT_EVENT_COLOR,
     modality: normalizeModality(data.modality),
+    kind: normalizeKind(data.kind),
+    clientCode: typeof data.clientCode === "number" ? data.clientCode : null,
+    clientName: data.clientName || null,
     reminderMinutes: typeof data.reminderMinutes === "number" ? data.reminderMinutes : null,
     totalAmount: typeof data.totalAmount === "number" ? data.totalAmount : null,
     paidAmount: typeof data.paidAmount === "number" ? data.paidAmount : null,
@@ -169,6 +176,9 @@ function sanitizeNewEvent(eventData: Partial<CalendarEvent>, uid: string): Recor
     allDay: Boolean(eventData.allDay),
     color: eventData.color || DEFAULT_EVENT_COLOR,
     modality: normalizeModality(eventData.modality),
+    kind: normalizeKind(eventData.kind),
+    clientCode: eventData.kind === "coach" && typeof eventData.clientCode === "number" ? eventData.clientCode : null,
+    clientName: eventData.kind === "coach" && eventData.clientName ? eventData.clientName : null,
     reminderMinutes: typeof eventData.reminderMinutes === "number" ? eventData.reminderMinutes : null,
     totalAmount: normalizeMoney(eventData.totalAmount),
     paidAmount: normalizeMoney(eventData.paidAmount),
@@ -189,6 +199,16 @@ function sanitizeEventUpdate(eventData: Partial<CalendarEvent>): Record<string, 
   if (eventData.allDay !== undefined) data.allDay = Boolean(eventData.allDay);
   if (eventData.color !== undefined) data.color = eventData.color || DEFAULT_EVENT_COLOR;
   if (eventData.modality !== undefined) data.modality = normalizeModality(eventData.modality);
+  if (eventData.kind !== undefined) {
+    const kind = normalizeKind(eventData.kind);
+    data.kind = kind;
+    if (kind !== "coach") {
+      data.clientCode = null;
+      data.clientName = null;
+    }
+  }
+  if (eventData.clientCode !== undefined) data.clientCode = typeof eventData.clientCode === "number" ? eventData.clientCode : null;
+  if (eventData.clientName !== undefined) data.clientName = eventData.clientName || null;
   if (eventData.reminderMinutes !== undefined) {
     data.reminderMinutes = typeof eventData.reminderMinutes === "number" ? eventData.reminderMinutes : null;
   }
