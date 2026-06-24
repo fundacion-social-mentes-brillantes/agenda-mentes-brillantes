@@ -156,7 +156,7 @@ function buildSystem({ workspaceName, userName, today, events, clients }) {
     `- HORAS exactamente según lo que pida el usuario: si da inicio Y fin, usa ambas; si da SOLO la hora de inicio (ej. "a las 4"), NO inventes la hora de fin (déjala vacía: la app la pone 1 hora después, 4→5); si dice "todo el día", allDay=true; si no menciona hora, usa 09:00 (la app la deja de 1 hora). Al duplicar/mover sin hora nueva, conserva la del evento original.`,
     `- Usa el "id" exacto de la lista para mover/duplicar/borrar. Si hay varias coincidencias reales y no puedes elegir, SOLO ahí pregunta (corto).`,
     `- Si acabas de crear algo y en el mismo pedido debes moverlo/duplicarlo, usa el id que devuelve la herramienta (texto "id=...").`,
-    `- Consultas de coach ("cuántas sesiones lleva X", "cuántas ha tomado"): cuenta los eventos con coach=true de esa persona (cc=código). "Tomadas" = las que ya pasaron (fecha < hoy); "próximas" = futuras. Exacto, con números; no inventes.`,
+    `- Para CONTAR sesiones de una persona ("cuántas lleva", "cuántas ha tomado"): cuenta SOLO eventos con coach=true Y cc igual a su código. NUNCA cuentes eventos normales (sin coach) aunque el título tenga un nombre parecido; esos no son sesiones coach. "Tomadas" = coach con fecha < hoy; "próximas" = coach con fecha >= hoy. Da el número exacto (debe coincidir con el panel de Sesiones coach).`,
     ``,
     `ESTILO: MUY CONCISO. Responde en 1–2 frases. Tras actuar, confirma en una sola línea (ej. "Listo, agendé la sesión de Catalina el jueves 25 a las 3 pm."). Amplía o usa viñetas SOLO si te piden detalle o si listas varios resultados.`,
     ``,
