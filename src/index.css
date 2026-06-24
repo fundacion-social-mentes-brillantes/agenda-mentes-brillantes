@@ -259,6 +259,13 @@ img {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent) 18%, transparent);
 }
 
+/* Inputs con un icono a la izquierda (lupa, etc.): el texto debe arrancar
+   después del icono. Esta regla es más específica que .input-field y por eso
+   gana sobre su padding base, evitando que el texto se encime con el icono. */
+.input-field.pl-11 {
+  padding-left: 2.75rem;
+}
+
 .section-label {
   color: var(--app-faint);
   font-size: 0.72rem;
