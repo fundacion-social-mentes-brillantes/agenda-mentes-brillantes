@@ -257,7 +257,21 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
         if (typeof e.paidAmount === "number") item.va = e.paidAmount;
         return item;
       });
-      const clientsPayload = clients.slice(0, 1000).map((c) => ({ code: c.code, name: c.name }));
+      // Conteo de sesiones coach por persona, ya calculado (para que el bot no cuente por título).
+      const nowMs = Date.now();
+      const counts = new Map<number, { tomadas: number; proximas: number }>();
+      for (const e of events) {
+        if (e.kind === "coach" && typeof e.clientCode === "number") {
+          const k = counts.get(e.clientCode) || { tomadas: 0, proximas: 0 };
+          if (toDate(e.startAt).getTime() < nowMs) k.tomadas++;
+          else k.proximas++;
+          counts.set(e.clientCode, k);
+        }
+      }
+      const clientsPayload = clients.slice(0, 1000).map((c) => {
+        const k = counts.get(c.code) || { tomadas: 0, proximas: 0 };
+        return { code: c.code, name: c.name, tomadas: k.tomadas, proximas: k.proximas, total: k.tomadas + k.proximas };
+      });
       const today = new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
       let answered = false;
