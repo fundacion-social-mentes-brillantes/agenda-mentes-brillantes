@@ -77,6 +77,7 @@ export default function EventFormPage({
   const [reminderMinutes, setReminderMinutes] = useState<number>(30);
   const [totalAmount, setTotalAmount] = useState("");
   const [paidAmount, setPaidAmount] = useState("");
+  const [purchasedSessions, setPurchasedSessions] = useState("1");
 
   const [existingAttachments, setExistingAttachments] = useState<EventAttachment[]>([]);
   const [removedAttachments, setRemovedAttachments] = useState<EventAttachment[]>([]);
@@ -139,6 +140,7 @@ export default function EventFormPage({
       setReminderMinutes(editingEvent.reminderMinutes ?? 30);
       setTotalAmount(formatMoneyInput(editingEvent.totalAmount));
       setPaidAmount(formatMoneyInput(editingEvent.paidAmount));
+      setPurchasedSessions(String(editingEvent.purchasedSessions && editingEvent.purchasedSessions > 0 ? editingEvent.purchasedSessions : 1));
       setExistingAttachments(editingEvent.attachments || []);
       setSavedEventId(editingEvent.id || null);
     } else {
@@ -155,6 +157,7 @@ export default function EventFormPage({
       setReminderMinutes(30);
       setTotalAmount("");
       setPaidAmount("");
+      setPurchasedSessions("1");
       setExistingAttachments([]);
       setSavedEventId(null);
     }
@@ -239,6 +242,7 @@ export default function EventFormPage({
         kind,
         clientCode: kind === "coach" ? client?.code ?? null : null,
         clientName: kind === "coach" ? client?.name ?? null : null,
+        purchasedSessions: kind === "coach" ? Math.max(1, parseInt(purchasedSessions, 10) || 1) : null,
         reminderMinutes: Number(reminderMinutes) || null,
         totalAmount: parseMoneyInput(totalAmount),
         paidAmount: parseMoneyInput(paidAmount),
@@ -370,9 +374,25 @@ export default function EventFormPage({
                   <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Reunión, Recordatorio…" autoFocus />
                 </label>
               ) : (
-                <div className="md:col-span-2">
-                  <span className="section-label mb-2 block">Persona de la sesión</span>
-                  <ClientPicker clients={clients} value={client} onSelect={setClient} onCreate={onCreateClient} />
+                <div className="space-y-4 md:col-span-2">
+                  <div>
+                    <span className="section-label mb-2 block">Persona de la sesión</span>
+                    <ClientPicker clients={clients} value={client} onSelect={setClient} onCreate={onCreateClient} />
+                  </div>
+                  <label className="block sm:max-w-xs">
+                    <span className="section-label mb-2 block">Sesiones compradas</span>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      value={purchasedSessions}
+                      onChange={(e) => setPurchasedSessions(e.target.value)}
+                      placeholder="1"
+                    />
+                    <span className="mt-1 block text-xs text-app-faint">Cuántas sesiones compró (ej. 24 si es un paquete). Por defecto 1.</span>
+                  </label>
                 </div>
               )}
 
@@ -431,18 +451,20 @@ export default function EventFormPage({
             </div>
           </FormSection>
 
-          <FormSection title="Pagos (opcional)">
-            <div className="grid gap-4 md:grid-cols-2">
-              <label>
-                <span className="section-label mb-2 block">Valor total de lo que compró</span>
-                <input className="input-field" inputMode="numeric" min="0" step="1" type="number" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} placeholder="Ej. 278000" />
-              </label>
-              <label>
-                <span className="section-label mb-2 block">Valor abonado</span>
-                <input className="input-field" inputMode="numeric" min="0" step="1" type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} placeholder="Ej. 100000" />
-              </label>
-            </div>
-          </FormSection>
+          {kind === "coach" && (
+            <FormSection title="Pagos (opcional)">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label>
+                  <span className="section-label mb-2 block">Valor total de lo que compró</span>
+                  <input className="input-field" inputMode="numeric" min="0" step="1" type="number" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} placeholder="Ej. 278000" />
+                </label>
+                <label>
+                  <span className="section-label mb-2 block">Valor abonado</span>
+                  <input className="input-field" inputMode="numeric" min="0" step="1" type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} placeholder="Ej. 100000" />
+                </label>
+              </div>
+            </FormSection>
+          )}
 
           <FormSection title="Imágenes y documentos" icon={<Paperclip size={18} />}>
             <div className="space-y-3">

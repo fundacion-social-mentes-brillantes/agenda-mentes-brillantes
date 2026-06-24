@@ -78,6 +78,11 @@ function AppContent() {
     if (page !== "event-form") {
       setEditingEvent(null);
       setSelectedDate(null);
+    } else {
+      // Crear un evento desde calendario/hoy/día arranca como "evento normal".
+      // (Editar un evento coach mantiene su modo: el formulario usa el evento que se edita.)
+      setFormKind("normal");
+      setFormClient(null);
     }
     setActivePage(page);
   };
@@ -85,7 +90,8 @@ function AppContent() {
   const handleCreate = () => {
     setEditingEvent(null);
     setSelectedDate(new Date());
-    setFormKind("normal");
+    // Si estás en la página de Sesiones coach, el nuevo evento arranca en modo coach; si no, normal.
+    setFormKind(activePage === "coach" ? "coach" : "normal");
     setFormClient(null);
     setActivePage("event-form");
   };
@@ -120,6 +126,7 @@ function AppContent() {
         kind: event.kind === "coach" ? "coach" : "normal",
         clientCode: event.kind === "coach" ? event.clientCode ?? null : null,
         clientName: event.kind === "coach" ? event.clientName ?? null : null,
+        purchasedSessions: event.kind === "coach" ? event.purchasedSessions ?? 1 : null,
         reminderMinutes: event.reminderMinutes ?? 30,
         totalAmount: event.totalAmount ?? null,
         paidAmount: event.paidAmount ?? null,

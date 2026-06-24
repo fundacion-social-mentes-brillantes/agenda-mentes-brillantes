@@ -58,7 +58,8 @@ export default function CoachPage({
   const countsFor = (code: number) => {
     const list = byCode.get(code) || [];
     const tomadas = list.filter((e) => toDate(e.startAt).getTime() < now.getTime()).length;
-    return { total: list.length, tomadas, proximas: list.length - tomadas };
+    const compradas = list.reduce((s, e) => s + (typeof e.purchasedSessions === "number" && e.purchasedSessions > 0 ? e.purchasedSessions : 1), 0);
+    return { total: list.length, tomadas, proximas: list.length - tomadas, compradas };
   };
 
   const sessionsFor = (code: number) =>
@@ -186,7 +187,7 @@ export default function CoachPage({
                   <div className="hidden gap-2 sm:flex">
                     <Badge label="Tomadas" value={counts.tomadas} tone="done" />
                     <Badge label="Próximas" value={counts.proximas} tone="next" />
-                    <Badge label="Total" value={counts.total} tone="total" />
+                    <Badge label="Compradas" value={counts.compradas} tone="total" />
                   </div>
                   <ChevronDown size={18} className={`shrink-0 text-app-faint transition ${isOpen ? "rotate-180" : ""}`} />
                 </button>
@@ -194,7 +195,7 @@ export default function CoachPage({
                 <div className="flex gap-2 px-4 pb-3 sm:hidden">
                   <Badge label="Tomadas" value={counts.tomadas} tone="done" />
                   <Badge label="Próximas" value={counts.proximas} tone="next" />
-                  <Badge label="Total" value={counts.total} tone="total" />
+                  <Badge label="Compradas" value={counts.compradas} tone="total" />
                 </div>
 
                 {isOpen && (

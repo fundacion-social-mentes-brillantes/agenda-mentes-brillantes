@@ -7,6 +7,7 @@ import {
   ExternalLink,
   FileText,
   History,
+  Layers,
   MapPin,
   MonitorSmartphone,
   Trash2,
@@ -85,6 +86,9 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onDuplicate, 
             label="Modalidad"
             value={getModalityLabel(event.modality)}
           />
+          {event.kind === "coach" && (
+            <InfoItem icon={<Layers size={16} />} label="Sesiones compradas" value={String(event.purchasedSessions && event.purchasedSessions > 0 ? event.purchasedSessions : 1)} />
+          )}
           {event.createdByName && <InfoItem icon={<UserRound size={16} />} label="Creado por" value={event.createdByName} />}
         </div>
 

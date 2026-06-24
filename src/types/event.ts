@@ -32,6 +32,8 @@ export interface CalendarEvent {
   clientCode?: number | null;
   /** Nombre de la persona (solo en sesiones coach; se guarda denormalizado). */
   clientName?: string | null;
+  /** Sesiones compradas en esta compra (solo coach; por defecto 1, ej. 24 si es un paquete). */
+  purchasedSessions?: number | null;
   reminderMinutes?: number | null;
   totalAmount?: number | null;
   paidAmount?: number | null;

@@ -145,6 +145,8 @@ function mapDocToEvent(id: string, data: Record<string, any>): CalendarEvent {
     kind: normalizeKind(data.kind),
     clientCode: typeof data.clientCode === "number" ? data.clientCode : null,
     clientName: data.clientName || null,
+    purchasedSessions:
+      typeof data.purchasedSessions === "number" ? data.purchasedSessions : normalizeKind(data.kind) === "coach" ? 1 : null,
     reminderMinutes: typeof data.reminderMinutes === "number" ? data.reminderMinutes : null,
     totalAmount: typeof data.totalAmount === "number" ? data.totalAmount : null,
     paidAmount: typeof data.paidAmount === "number" ? data.paidAmount : null,
@@ -179,6 +181,8 @@ function sanitizeNewEvent(eventData: Partial<CalendarEvent>, uid: string): Recor
     kind: normalizeKind(eventData.kind),
     clientCode: eventData.kind === "coach" && typeof eventData.clientCode === "number" ? eventData.clientCode : null,
     clientName: eventData.kind === "coach" && eventData.clientName ? eventData.clientName : null,
+    purchasedSessions:
+      eventData.kind === "coach" ? (typeof eventData.purchasedSessions === "number" && eventData.purchasedSessions > 0 ? Math.floor(eventData.purchasedSessions) : 1) : null,
     reminderMinutes: typeof eventData.reminderMinutes === "number" ? eventData.reminderMinutes : null,
     totalAmount: normalizeMoney(eventData.totalAmount),
     paidAmount: normalizeMoney(eventData.paidAmount),
@@ -205,10 +209,14 @@ function sanitizeEventUpdate(eventData: Partial<CalendarEvent>): Record<string, 
     if (kind !== "coach") {
       data.clientCode = null;
       data.clientName = null;
+      data.purchasedSessions = null;
     }
   }
   if (eventData.clientCode !== undefined) data.clientCode = typeof eventData.clientCode === "number" ? eventData.clientCode : null;
   if (eventData.clientName !== undefined) data.clientName = eventData.clientName || null;
+  if (eventData.purchasedSessions !== undefined) {
+    data.purchasedSessions = typeof eventData.purchasedSessions === "number" && eventData.purchasedSessions > 0 ? Math.floor(eventData.purchasedSessions) : 1;
+  }
   if (eventData.reminderMinutes !== undefined) {
     data.reminderMinutes = typeof eventData.reminderMinutes === "number" ? eventData.reminderMinutes : null;
   }
