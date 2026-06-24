@@ -50,9 +50,10 @@ export default function CoachPage({
   const totalSessions = useMemo(() => events.filter((e) => e.kind === "coach").length, [events]);
 
   const filtered = useMemo(() => {
-    const q = normalizeText(search);
-    const list = q ? clients.filter((c) => c.nameLower.includes(q) || String(c.code) === q) : clients;
-    return list;
+    const terms = normalizeText(search).split(/\s+/).filter(Boolean);
+    if (terms.length === 0) return clients;
+    // Cada palabra debe aparecer en el nombre (o coincidir con el código): "adriana acevedo" encuentra "Adriana Paola Acevedo".
+    return clients.filter((c) => terms.every((t) => c.nameLower.includes(t) || String(c.code) === t));
   }, [clients, search]);
 
   const countsFor = (code: number) => {

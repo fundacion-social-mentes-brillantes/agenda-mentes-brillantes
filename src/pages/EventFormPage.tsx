@@ -635,11 +635,16 @@ function ClientPicker({
   }, [value?.code]);
 
   const q = normalizeText(query);
+  // Búsqueda por palabras sueltas: "adriana acevedo" encuentra "Adriana Paola Acevedo".
+  // Cada palabra debe aparecer en el nombre (o coincidir con el código).
+  const terms = useMemo(() => q.split(/\s+/).filter(Boolean), [q]);
   const matches = useMemo(() => {
-    if (!q) return clients.slice(0, 8);
-    return clients.filter((c) => c.nameLower.includes(q)).slice(0, 8);
-  }, [clients, q]);
-  const exact = clients.some((c) => normalizeText(c.name) === q);
+    if (terms.length === 0) return clients.slice(0, 8);
+    return clients
+      .filter((c) => terms.every((t) => c.nameLower.includes(t) || String(c.code) === t))
+      .slice(0, 8);
+  }, [clients, terms]);
+  const exact = clients.some((c) => c.nameLower === q);
 
   const handleCreate = async () => {
     const name = query.trim();
@@ -660,21 +665,23 @@ function ClientPicker({
 
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-0 top-3.5 flex items-center pl-4 text-app-faint">
-        <Search size={16} />
-      </span>
-      <input
-        className="input-field pl-11"
-        value={query}
-        placeholder="Escribe el nombre de la persona..."
-        onFocus={() => setOpen(true)}
-        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-          if (value) onSelect(null);
-        }}
-      />
+      <div className="relative">
+        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-app-faint">
+          <Search size={16} />
+        </span>
+        <input
+          className="input-field pl-11"
+          value={query}
+          placeholder="Escribe el nombre de la persona..."
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+            if (value) onSelect(null);
+          }}
+        />
+      </div>
       {value && (
         <p className="m-0 mt-2 inline-flex items-center gap-2 rounded-full border border-app-soft bg-app-soft px-3 py-1 text-xs font-black text-app-accent">
           <UserRound size={13} /> {value.name} · #{value.code}
