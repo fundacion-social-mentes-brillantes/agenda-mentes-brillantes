@@ -242,6 +242,7 @@ export const eventsService = {
       q,
       (snapshot) => {
         const events = snapshot.docs
+          .filter((docSnap) => docSnap.data().recordType !== "client")
           .map((docSnap) => mapDocToEvent(docSnap.id, docSnap.data()))
           .sort((a, b) => toDateSafe(a.startAt).getTime() - toDateSafe(b.startAt).getTime());
         onUpdate(events);

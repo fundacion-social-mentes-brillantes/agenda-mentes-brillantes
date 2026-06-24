@@ -1,10 +1,13 @@
-import { doc, getDoc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { collection, doc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
+import { auth, db } from "../lib/firebase";
+import { toDateSafe } from "../lib/dateUtils";
 import type { Client } from "../types/client";
 
-// Las personas (asistentes para sesiones coach) se guardan como un arreglo "clients"
-// DENTRO del documento de la agenda (workspaces/{wsId}). Así reutilizamos los permisos
-// existentes (los miembros leen la agenda; el dueño la edita) sin reglas nuevas.
+// Las personas (asistentes para sesiones coach) se guardan como documentos en la
+// colección "events" con recordType: "client". Así reutilizamos las reglas de eventos
+// (cualquier MIEMBRO de la agenda puede crear/leer/editar) sin reglas nuevas ni ser dueño.
+// El calendario filtra estos documentos para no mostrarlos como eventos.
+const CLIENT_TYPE = "client";
 
 /** Normaliza para buscar: minúsculas y sin tildes. */
 export function normalizeText(value: string): string {
@@ -15,30 +18,35 @@ export function normalizeText(value: string): string {
     .trim();
 }
 
-interface StoredClient {
-  code: number;
-  name: string;
-  nameLower?: string;
-  active?: boolean;
-  createdAt?: number;
+function clientDocId(workspaceId: string, code: number): string {
+  return `client_${workspaceId}_${code}`;
 }
 
-function mapStored(c: StoredClient): Client {
+function mapDoc(id: string, data: Record<string, any>): Client {
+  const name = data.clientName || "";
   return {
-    id: String(c.code),
-    workspaceId: "",
-    code: typeof c.code === "number" ? c.code : Number(c.code) || 0,
-    name: c.name || "",
-    nameLower: c.nameLower || normalizeText(c.name || ""),
-    active: c.active !== false,
-    createdAt: typeof c.createdAt === "number" ? new Date(c.createdAt) : new Date()
+    id,
+    workspaceId: data.workspaceId || "",
+    code: typeof data.clientCode === "number" ? data.clientCode : Number(data.clientCode) || 0,
+    name,
+    nameLower: data.nameLower || normalizeText(name),
+    active: data.active !== false,
+    createdAt: toDateSafe(data.createdAt, new Date())
   };
 }
 
-async function readStored(workspaceId: string): Promise<StoredClient[]> {
-  const snap = await getDoc(doc(db, "workspaces", workspaceId));
-  const arr = snap.exists() ? (snap.data().clients as StoredClient[] | undefined) : undefined;
-  return Array.isArray(arr) ? arr : [];
+function buildDocData(workspaceId: string, code: number, name: string, active: boolean, uid: string) {
+  return {
+    workspaceId,
+    recordType: CLIENT_TYPE,
+    clientCode: code,
+    clientName: name,
+    nameLower: normalizeText(name),
+    active,
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
 }
 
 export const clientsService = {
@@ -51,11 +59,14 @@ export const clientsService = {
       onUpdate([]);
       return () => {};
     }
+    const q = query(collection(db, "events"), where("workspaceId", "==", workspaceId));
     return onSnapshot(
-      doc(db, "workspaces", workspaceId),
-      (snap) => {
-        const arr = snap.exists() ? (snap.data().clients as StoredClient[] | undefined) : undefined;
-        const list = (Array.isArray(arr) ? arr : []).map(mapStored).sort((a, b) => a.name.localeCompare(b.name, "es"));
+      q,
+      (snapshot) => {
+        const list = snapshot.docs
+          .filter((d) => d.data().recordType === CLIENT_TYPE)
+          .map((d) => mapDoc(d.id, d.data()))
+          .sort((a, b) => a.name.localeCompare(b.name, "es"));
         onUpdate(list);
       },
       (error) => {
@@ -68,30 +79,38 @@ export const clientsService = {
   /** Crea una persona con el siguiente código consecutivo. */
   async createClient(workspaceId: string, name: string): Promise<Client> {
     if (!workspaceId) throw new Error("Falta la agenda.");
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error("Debes iniciar sesión.");
     const clean = name.trim();
     if (!clean) throw new Error("El nombre no puede estar vacío.");
-    const current = await readStored(workspaceId);
-    const code = current.reduce((m, c) => (c.code > m ? c.code : m), 0) + 1;
-    const stored: StoredClient = { code, name: clean, nameLower: normalizeText(clean), active: true, createdAt: Date.now() };
-    await updateDoc(doc(db, "workspaces", workspaceId), { clients: [...current, stored], updatedAt: serverTimestamp() });
-    return mapStored(stored);
+
+    const snap = await getDocs(query(collection(db, "events"), where("workspaceId", "==", workspaceId)));
+    const code =
+      snap.docs
+        .filter((d) => d.data().recordType === CLIENT_TYPE)
+        .reduce((m, d) => {
+          const c = Number(d.data().clientCode) || 0;
+          return c > m ? c : m;
+        }, 0) + 1;
+
+    await setDoc(doc(db, "events", clientDocId(workspaceId, code)), buildDocData(workspaceId, code, clean, true, uid));
+    return { id: clientDocId(workspaceId, code), workspaceId, code, name: clean, nameLower: normalizeText(clean), active: true, createdAt: new Date() };
   },
 
-  /** Importación masiva (CSV). Combina por código (sobrescribe los repetidos). */
+  /** Importación masiva (CSV). Escribe en lotes de 450. Idempotente por (workspace, code). */
   async importClients(workspaceId: string, rows: { code: number; name: string; active?: boolean }[]): Promise<number> {
     if (!workspaceId) throw new Error("Falta la agenda.");
-    const current = await readStored(workspaceId);
-    const byCode = new Map<number, StoredClient>();
-    current.forEach((c) => byCode.set(c.code, c));
-    let count = 0;
-    for (const r of rows) {
-      if (!r || !r.name || !Number.isFinite(r.code)) continue;
-      const name = r.name.trim();
-      byCode.set(r.code, { code: r.code, name, nameLower: normalizeText(name), active: r.active !== false, createdAt: Date.now() });
-      count++;
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error("Debes iniciar sesión.");
+    const valid = rows.filter((r) => r && r.name && Number.isFinite(r.code));
+    const CHUNK = 450;
+    for (let i = 0; i < valid.length; i += CHUNK) {
+      const batch = writeBatch(db);
+      valid.slice(i, i + CHUNK).forEach((r) => {
+        batch.set(doc(db, "events", clientDocId(workspaceId, r.code)), buildDocData(workspaceId, r.code, r.name.trim(), r.active !== false, uid));
+      });
+      await batch.commit();
     }
-    const merged = [...byCode.values()].sort((a, b) => a.code - b.code);
-    await updateDoc(doc(db, "workspaces", workspaceId), { clients: merged, updatedAt: serverTimestamp() });
-    return count;
+    return valid.length;
   }
 };
