@@ -92,7 +92,7 @@ function AgendaCard({ event, onClick }: { event: CalendarEvent; onClick: () => v
 
   return (
     <button type="button" onClick={onClick} className="overflow-hidden rounded-3xl border border-app-soft bg-app-panel text-left transition hover:-translate-y-0.5 hover:bg-app-soft">
-      {firstImage && <img src={firstImage.url} alt={event.title} className="h-36 w-full object-cover" />}
+      {firstImage && <img src={firstImage.url} alt={event.title} referrerPolicy="no-referrer" className="h-36 w-full object-cover" />}
       <div className="space-y-3 p-4">
         <div className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-full" style={{ backgroundColor: event.color }} />

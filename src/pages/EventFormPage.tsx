@@ -584,7 +584,7 @@ function AttachmentRow({
     <li className="flex items-center gap-3 rounded-2xl border border-app-soft bg-app-panel p-2.5">
       <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-app-soft text-app-accent">
         {isImage && previewUrl ? (
-          <img src={previewUrl} alt={name} className="h-full w-full object-cover" />
+          <img src={previewUrl} alt={name} referrerPolicy="no-referrer" className="h-full w-full object-cover" />
         ) : isImage ? (
           <ImageIcon size={20} />
         ) : (

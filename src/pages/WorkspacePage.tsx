@@ -312,7 +312,7 @@ function WorkspaceCard({
               {members.map((member) => (
                 <div key={member.uid} className="flex items-center gap-3 rounded-2xl border border-app-soft bg-app-panel p-2.5">
                   {member.photoURL ? (
-                    <img src={member.photoURL} alt={member.name} className="h-9 w-9 rounded-full object-cover" />
+                    <img src={member.photoURL} alt={member.name} referrerPolicy="no-referrer" className="h-9 w-9 rounded-full object-cover" />
                   ) : (
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-app-soft text-app-accent">
                       <UserRound size={16} />

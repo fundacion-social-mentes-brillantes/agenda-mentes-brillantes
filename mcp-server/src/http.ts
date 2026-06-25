@@ -7,9 +7,14 @@ import { createServer } from "./tools.js";
 
 const PORT = Number(process.env.MCP_HTTP_PORT || 8787);
 const TOKEN = process.env.MCP_BEARER_TOKEN || "";
+const MIN_TOKEN_LENGTH = 32;
 
 if (!TOKEN) {
   console.error("Falta MCP_BEARER_TOKEN. Define un token secreto para proteger el servidor en la nube.");
+  process.exit(1);
+}
+if (TOKEN.length < MIN_TOKEN_LENGTH) {
+  console.error(`MCP_BEARER_TOKEN debe tener al menos ${MIN_TOKEN_LENGTH} caracteres.`);
   process.exit(1);
 }
 

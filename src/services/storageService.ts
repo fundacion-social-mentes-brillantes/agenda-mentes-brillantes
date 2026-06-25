@@ -25,7 +25,8 @@ const DOCUMENT_TYPES = [
 ];
 const ALLOWED_TYPES = [...IMAGE_TYPES, ...DOCUMENT_TYPES];
 
-// Valores de Cloudinary del proyecto (públicos: se usan en el navegador para subir sin firma).
+// Valores de Cloudinary del proyecto (públicos: se usan en el navegador para subir sin firma,
+// y de todas formas quedan visibles en la petición de subida, así que no son un secreto).
 // Se pueden sobrescribir con variables de entorno VITE_CLOUDINARY_* si algún día cambian.
 const CLOUD_NAME = (import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined) || "de9rr3tyi";
 const UPLOAD_PRESET = (import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined) || "idbafn4b";

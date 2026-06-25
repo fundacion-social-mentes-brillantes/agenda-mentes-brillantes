@@ -22,6 +22,31 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/workspaces/$(wsId)).data;
     }
 
+    function isEventWorkspaceMember(data) {
+      return data.get('workspaceId', '') != '' && isMember(data.workspaceId);
+    }
+
+    function isOwnLegacyEvent(data) {
+      return data.get('workspaceId', '') == '' && data.createdBy == request.auth.uid;
+    }
+
+    function isAllowedRecordType(data) {
+      return data.get('recordType', '') == '' || data.get('recordType', '') == 'client';
+    }
+
+    function keepsEventIdentity() {
+      return request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('recordType', '') == resource.data.get('recordType', '');
+    }
+
+    function migratesOwnLegacyEvent() {
+      return isOwnLegacyEvent(resource.data)
+        && request.resource.data.workspaceId == ('personal_' + request.auth.uid)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.get('recordType', '') == resource.data.get('recordType', '');
+    }
+
     // La agenda personal de cada usuario tiene id "personal_{uid}".
     // Esto permite leerla/crearla aunque todavia no exista (primer ingreso).
     function isOwnPersonal(wsId) {
@@ -30,8 +55,10 @@ service cloud.firestore {
 
     // Perfiles de usuario.
     match /users/{userId} {
-      allow read: if signedIn();
-      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == request.auth.uid;
       allow delete: if false;
     }
 
@@ -39,7 +66,10 @@ service cloud.firestore {
     match /workspaces/{wsId} {
       allow read: if isMember(wsId) || isOwnPersonal(wsId);
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.kind == resource.data.kind;
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
 
       // Miembros de la agenda.
@@ -51,8 +81,17 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.auth.uid == memberUid
           && (
-            wsDoc(wsId).ownerId == request.auth.uid
-            || (wsDoc(wsId).joinEnabled == true && wsDoc(wsId).joinCode == request.resource.data.joinCode)
+            (
+              wsDoc(wsId).ownerId == request.auth.uid
+              && request.resource.data.uid == request.auth.uid
+              && request.resource.data.role == 'owner'
+            )
+            || (
+              wsDoc(wsId).joinEnabled == true
+              && wsDoc(wsId).joinCode == request.resource.data.joinCode
+              && request.resource.data.uid == request.auth.uid
+              && request.resource.data.role == 'editor'
+            )
           );
 
         // Cada quien puede actualizar su propio doc, pero NO cambiar su rol ni su uid
@@ -73,17 +112,16 @@ service cloud.firestore {
     // Eventos. Pertenecen a una agenda (workspaceId).
     // Los eventos antiguos sin workspaceId solo los ve y migra su creador.
     match /events/{eventId} {
-      allow read: if (resource.data.get('workspaceId', '') != '' && isMember(resource.data.workspaceId))
-        || (resource.data.get('workspaceId', '') == '' && resource.data.createdBy == request.auth.uid);
+      allow read: if isEventWorkspaceMember(resource.data) || isOwnLegacyEvent(resource.data);
 
       allow create: if isMember(request.resource.data.workspaceId)
-        && request.resource.data.createdBy == request.auth.uid;
+        && request.resource.data.createdBy == request.auth.uid
+        && isAllowedRecordType(request.resource.data);
 
-      allow update: if (resource.data.get('workspaceId', '') != '' && isMember(resource.data.workspaceId))
-        || (resource.data.get('workspaceId', '') == '' && resource.data.createdBy == request.auth.uid);
+      allow update: if (isEventWorkspaceMember(resource.data) && keepsEventIdentity())
+        || migratesOwnLegacyEvent();
 
-      allow delete: if (resource.data.get('workspaceId', '') != '' && isMember(resource.data.workspaceId))
-        || (resource.data.get('workspaceId', '') == '' && resource.data.createdBy == request.auth.uid);
+      allow delete: if isEventWorkspaceMember(resource.data) || isOwnLegacyEvent(resource.data);
     }
   }
 }

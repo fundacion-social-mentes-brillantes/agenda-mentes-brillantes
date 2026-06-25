@@ -94,6 +94,17 @@ function normalizeKind(value: unknown): EventKind {
   return value === "coach" ? "coach" : "normal";
 }
 
+function normalizeAttachmentUrl(value: unknown): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "https:" ? parsed.href : "";
+  } catch {
+    return "";
+  }
+}
+
 function normalizeAttachments(value: unknown): EventAttachment[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -101,14 +112,15 @@ function normalizeAttachments(value: unknown): EventAttachment[] {
     .map((item) => {
       const att = item as Partial<EventAttachment>;
       return {
-        url: String(att.url || ""),
+        url: normalizeAttachmentUrl(att.url),
         path: String(att.path || ""),
         name: String(att.name || "archivo"),
         contentType: String(att.contentType || "application/octet-stream"),
         size: typeof att.size === "number" ? att.size : 0,
         kind: att.kind === "image" ? "image" : "file"
       } as EventAttachment;
-    });
+    })
+    .filter((att) => att.url);
 }
 
 /** Convierte un documento de Firestore (incluyendo eventos antiguos) al modelo actual. */
@@ -119,16 +131,17 @@ function mapDocToEvent(id: string, data: Record<string, any>): CalendarEvent {
 
   let attachments = normalizeAttachments(data.attachments);
   if (attachments.length === 0 && data.imageUrl) {
+    const imageUrl = normalizeAttachmentUrl(data.imageUrl);
     attachments = [
       {
-        url: String(data.imageUrl),
+        url: imageUrl,
         path: String(data.imagePath || ""),
         name: "Imagen",
         contentType: "image/*",
         size: 0,
         kind: "image"
-      }
-    ];
+      } as EventAttachment
+    ].filter((att) => att.url);
   }
 
   const done = data.done === true || data.status === "completed" || data.status === "cancelled";
@@ -228,7 +241,6 @@ function sanitizeEventUpdate(eventData: Partial<CalendarEvent>): Record<string, 
   }
   if (eventData.attachments !== undefined) data.attachments = normalizeAttachments(eventData.attachments);
   if (eventData.done !== undefined) data.done = Boolean(eventData.done);
-  if (eventData.workspaceId !== undefined) data.workspaceId = eventData.workspaceId;
 
   return cleanTopLevelData(data);
 }

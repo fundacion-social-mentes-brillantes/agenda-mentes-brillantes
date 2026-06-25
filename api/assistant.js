@@ -3,7 +3,30 @@
 // Las herramientas (crear/editar/eliminar) las EJECUTA el navegador en la sesión del usuario,
 // bajo las reglas de Firebase. El servidor solo conversa con DeepSeek y relé el mensaje.
 
-const FIREBASE_API_KEY = "AIzaSyAfijrkvPKyIgnyfkYEJvjmYqT77disxHI"; // clave web pública (solo valida sesión)
+const FIREBASE_API_KEY =
+  process.env.FIREBASE_API_KEY ||
+  process.env.VITE_FIREBASE_API_KEY ||
+  "AIzaSyAfijrkvPKyIgnyfkYEJvjmYqT77disxHI"; // clave web publica
+const FIREBASE_PROJECT_ID =
+  process.env.FIREBASE_PROJECT_ID ||
+  process.env.VITE_FIREBASE_PROJECT_ID ||
+  "calendario-5ae30";
+
+const MAX_BODY_BYTES = 120_000;
+const MAX_MESSAGES = 16;
+const MAX_MESSAGE_CHARS = 2_000;
+const MAX_TOOL_ARG_CHARS = 4_000;
+const MAX_EVENTS = 800;
+const MAX_CLIENTS = 1000;
+const ALLOWED_MESSAGE_ROLES = new Set(["user", "assistant", "tool"]);
+const ALLOWED_TOOL_NAMES = new Set([
+  "create_event",
+  "update_event",
+  "duplicate_event",
+  "create_coach_session",
+  "add_client",
+  "delete_event"
+]);
 
 async function verifyUser(idToken) {
   if (!idToken) return null;
@@ -19,6 +42,228 @@ async function verifyUser(idToken) {
   } catch {
     return null;
   }
+}
+
+function trimText(value, max = 200) {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function parseBody(body) {
+  if (typeof body !== "string") return body && typeof body === "object" ? body : {};
+  try {
+    return JSON.parse(body || "{}");
+  } catch {
+    return null;
+  }
+}
+
+function firestoreValue(value) {
+  if (!value || typeof value !== "object") return null;
+  if ("stringValue" in value) return value.stringValue;
+  if ("integerValue" in value) return Number(value.integerValue);
+  if ("doubleValue" in value) return Number(value.doubleValue);
+  if ("booleanValue" in value) return Boolean(value.booleanValue);
+  if ("timestampValue" in value) return value.timestampValue;
+  if ("nullValue" in value) return null;
+  if ("arrayValue" in value) return (value.arrayValue.values || []).map(firestoreValue);
+  if ("mapValue" in value) {
+    return Object.fromEntries(
+      Object.entries(value.mapValue.fields || {}).map(([key, child]) => [key, firestoreValue(child)])
+    );
+  }
+  return null;
+}
+
+function firestoreDoc(document) {
+  const fields = document?.fields || {};
+  const data = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, firestoreValue(value)]));
+  return {
+    id: String(document?.name || "").split("/").pop() || "",
+    data
+  };
+}
+
+function bogotaDate(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
+function bogotaTime(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Bogota",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
+function bogotaDateTime(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("es-CO", {
+    timeZone: "America/Bogota",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+}
+
+function todayInBogota() {
+  return new Date().toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+}
+
+async function firestoreFetch(idToken, pathOrSuffix, init = {}) {
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/${pathOrSuffix}`;
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+      ...(init.headers || {})
+    }
+  });
+  if (!response.ok) {
+    throw new Error("No se pudo verificar la agenda con Firebase.");
+  }
+  return response.json();
+}
+
+async function loadWorkspaceContext(idToken, workspaceId) {
+  const safeWorkspaceId = trimText(workspaceId, 160);
+  if (!safeWorkspaceId || safeWorkspaceId.includes("/")) {
+    throw new Error("Agenda no valida.");
+  }
+
+  const workspacePromise = firestoreFetch(idToken, `documents/workspaces/${encodeURIComponent(safeWorkspaceId)}`);
+  const eventsPromise = firestoreFetch(idToken, "documents:runQuery", {
+    method: "POST",
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: "events" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "workspaceId" },
+            op: "EQUAL",
+            value: { stringValue: safeWorkspaceId }
+          }
+        },
+        limit: MAX_EVENTS + MAX_CLIENTS
+      }
+    })
+  });
+
+  const [workspaceRaw, queryRows] = await Promise.all([workspacePromise, eventsPromise]);
+  const workspace = firestoreDoc(workspaceRaw).data;
+  const docs = (Array.isArray(queryRows) ? queryRows : [])
+    .map((row) => (row.document ? firestoreDoc(row.document) : null))
+    .filter(Boolean);
+
+  const eventDocs = docs.filter(({ data }) => data.recordType !== "client").slice(0, MAX_EVENTS);
+  const clientDocs = docs.filter(({ data }) => data.recordType === "client").slice(0, MAX_CLIENTS);
+
+  const counts = new Map();
+  const nowMs = Date.now();
+  for (const { data } of eventDocs) {
+    if (data.kind === "coach" && typeof data.clientCode === "number") {
+      const current = counts.get(data.clientCode) || { tomadas: 0, proximas: 0 };
+      const startMs = new Date(data.startAt || "").getTime();
+      if (Number.isFinite(startMs) && startMs < nowMs) current.tomadas++;
+      else current.proximas++;
+      counts.set(data.clientCode, current);
+    }
+  }
+
+  const events = eventDocs.map(({ id, data }) => {
+    const item = {
+      id,
+      t: trimText(data.title, 160),
+      f: bogotaDate(data.startAt),
+      h: data.allDay ? "todo el dia" : bogotaTime(data.startAt),
+      m: data.modality === "virtual" || data.modality === "presencial" ? data.modality : "otro",
+      creado: bogotaDateTime(data.createdAt)
+    };
+    if (data.kind === "coach") {
+      item.coach = true;
+      if (data.clientName) item.cn = trimText(data.clientName, 160);
+      if (typeof data.clientCode === "number") item.cc = data.clientCode;
+    }
+    if (typeof data.totalAmount === "number") item.vt = data.totalAmount;
+    if (typeof data.paidAmount === "number") item.va = data.paidAmount;
+    return item;
+  });
+
+  const clients = clientDocs.map(({ data }) => {
+    const code = typeof data.clientCode === "number" ? data.clientCode : Number(data.clientCode) || 0;
+    const k = counts.get(code) || { tomadas: 0, proximas: 0 };
+    return {
+      code,
+      name: trimText(data.clientName, 160),
+      tomadas: k.tomadas,
+      proximas: k.proximas,
+      total: k.tomadas + k.proximas
+    };
+  });
+
+  return {
+    workspaceName: trimText(workspace.name, 120) || "Tu agenda",
+    events,
+    clients
+  };
+}
+
+function sanitizeToolCalls(toolCalls) {
+  if (!Array.isArray(toolCalls)) return undefined;
+  const cleaned = toolCalls
+    .slice(0, 8)
+    .map((call) => {
+      const name = trimText(call?.function?.name, 80);
+      if (!ALLOWED_TOOL_NAMES.has(name)) return null;
+      return {
+        id: trimText(call?.id, 120),
+        type: "function",
+        function: {
+          name,
+          arguments: trimText(call?.function?.arguments, MAX_TOOL_ARG_CHARS)
+        }
+      };
+    })
+    .filter(Boolean);
+  return cleaned.length ? cleaned : undefined;
+}
+
+function sanitizeMessages(messages) {
+  if (!Array.isArray(messages)) return [];
+  return messages
+    .filter((m) => m && typeof m === "object" && ALLOWED_MESSAGE_ROLES.has(m.role))
+    .slice(-MAX_MESSAGES)
+    .map((m) => {
+      const msg = { role: m.role };
+      if (typeof m.content === "string") msg.content = m.content.slice(0, MAX_MESSAGE_CHARS);
+      if (m.role === "assistant") {
+        const toolCalls = sanitizeToolCalls(m.tool_calls);
+        if (toolCalls) msg.tool_calls = toolCalls;
+      }
+      if (m.role === "tool") msg.tool_call_id = trimText(m.tool_call_id, 120);
+      if (msg.content === undefined && !msg.tool_calls) msg.content = "";
+      return msg;
+    });
 }
 
 const TOOLS = [
@@ -178,11 +423,26 @@ export default async function handler(req, res) {
     return;
   }
 
-  const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
-  const { idToken, messages = [], events = [], clients = [], today = "", workspaceName = "", userName = "" } = body;
+  const contentLength = Number(req.headers["content-length"] || 0);
+  if (contentLength > MAX_BODY_BYTES) {
+    res.status(413).json({ error: "La solicitud es demasiado grande." });
+    return;
+  }
+
+  const body = parseBody(req.body);
+  if (!body) {
+    res.status(400).json({ error: "El cuerpo de la solicitud no es JSON valido." });
+    return;
+  }
+  const { idToken, messages = [], workspaceId = "" } = body;
 
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: "Faltan los mensajes de la conversación." });
+    return;
+  }
+
+  if (!trimText(workspaceId, 160)) {
+    res.status(400).json({ error: "Falta la agenda activa." });
     return;
   }
 
@@ -199,21 +459,24 @@ export default async function handler(req, res) {
   }
 
   const model = process.env.DEEPSEEK_MODEL || "deepseek-chat";
-  const safeEvents = Array.isArray(events) ? events.slice(0, 800) : [];
-  const safeClients = Array.isArray(clients) ? clients.slice(0, 1000) : [];
-  const system = buildSystem({ workspaceName, userName, today, events: safeEvents, clients: safeClients });
+  let context;
+  try {
+    context = await loadWorkspaceContext(idToken, workspaceId);
+  } catch {
+    res.status(403).json({ error: "No pudimos verificar que tengas acceso a esta agenda." });
+    return;
+  }
+
+  const system = buildSystem({
+    workspaceName: context.workspaceName,
+    userName: trimText(user.displayName || user.email || "", 120),
+    today: todayInBogota(),
+    events: context.events,
+    clients: context.clients
+  });
 
   // Mensajes válidos para la API (sin system; lo agregamos nosotros).
-  const convo = messages
-    .filter((m) => m && typeof m === "object" && m.role)
-    .map((m) => {
-      const msg = { role: m.role };
-      if (typeof m.content === "string") msg.content = m.content;
-      if (m.tool_calls) msg.tool_calls = m.tool_calls;
-      if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
-      if (msg.content === undefined && !msg.tool_calls) msg.content = "";
-      return msg;
-    });
+  const convo = sanitizeMessages(messages);
 
   try {
     const r = await fetch("https://api.deepseek.com/chat/completions", {

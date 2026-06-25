@@ -56,6 +56,15 @@ function tsToDate(value: unknown): Date | null {
   return null;
 }
 
+function toBogotaTime(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Bogota",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
 export interface EventView {
   id: string;
   title: string;
@@ -131,6 +140,27 @@ export async function resolveWorkspaceId(input?: string): Promise<string> {
   );
 }
 
+async function ownerWorkspaceIds(): Promise<Set<string>> {
+  const uid = getOwnerUid();
+  const ids = new Set((await listWorkspaces()).map((ws) => ws.id));
+  ids.add(personalWorkspaceId(uid));
+  return ids;
+}
+
+async function getOwnedEventSnapshot(id: string): Promise<FirebaseFirestore.DocumentSnapshot | null> {
+  const db = getDb();
+  const snap = await db.collection("events").doc(id).get();
+  if (!snap.exists) return null;
+
+  const workspaceId = String((snap.data() || {}).workspaceId || "");
+  const allowed = await ownerWorkspaceIds();
+  if (!workspaceId || !allowed.has(workspaceId)) {
+    throw new Error("No tienes permiso para acceder a ese evento desde esta agenda.");
+  }
+
+  return snap;
+}
+
 export async function listEvents(opts: {
   workspace?: string;
   from?: string;
@@ -167,9 +197,8 @@ export async function listEvents(opts: {
 }
 
 export async function getEvent(id: string): Promise<EventView | null> {
-  const db = getDb();
-  const snap = await db.collection("events").doc(id).get();
-  if (!snap.exists) return null;
+  const snap = await getOwnedEventSnapshot(id);
+  if (!snap) return null;
   return viewEvent(snap.id, snap.data() || {});
 }
 
@@ -220,8 +249,8 @@ export async function updateEvent(
 ): Promise<EventView> {
   const db = getDb();
   const ref = db.collection("events").doc(id);
-  const current = await ref.get();
-  if (!current.exists) throw new Error(`No existe un evento con id ${id}.`);
+  const current = await getOwnedEventSnapshot(id);
+  if (!current) throw new Error(`No existe un evento con id ${id}.`);
   const data = current.data() || {};
 
   const update: FirebaseFirestore.DocumentData = { updatedAt: FieldValue.serverTimestamp() };
@@ -235,11 +264,22 @@ export async function updateEvent(
 
   const allDay = patch.allDay !== undefined ? patch.allDay : Boolean(data.allDay);
   if (patch.date !== undefined || patch.startTime !== undefined || patch.endTime !== undefined || patch.allDay !== undefined) {
-    const baseDate = patch.date || (tsToDate(data.startAt) ? toIsoDate(tsToDate(data.startAt)!) : undefined);
+    const currentStart = tsToDate(data.startAt);
+    const currentEnd = tsToDate(data.endAt);
+    const baseDate = patch.date || (currentStart ? toIsoDate(currentStart) : undefined);
     if (!baseDate) throw new Error("No se pudo determinar la fecha del evento.");
     update.allDay = allDay;
-    update.startAt = Timestamp.fromDate(allDay ? toDate(baseDate, "00:00", "00:00") : toDate(baseDate, patch.startTime, "09:00"));
-    update.endAt = Timestamp.fromDate(allDay ? toDate(baseDate, "23:59", "23:59") : toDate(baseDate, patch.endTime, "10:00"));
+    const nextStart = allDay
+      ? toDate(baseDate, "00:00", "00:00")
+      : toDate(baseDate, patch.startTime || (currentStart ? toBogotaTime(currentStart) : undefined), "09:00");
+    const nextEnd = allDay
+      ? toDate(baseDate, "23:59", "23:59")
+      : toDate(baseDate, patch.endTime || (currentEnd ? toBogotaTime(currentEnd) : undefined), "10:00");
+    if (!allDay && nextEnd <= nextStart) {
+      throw new Error("La hora final debe ser posterior a la de inicio.");
+    }
+    update.startAt = Timestamp.fromDate(nextStart);
+    update.endAt = Timestamp.fromDate(nextEnd);
   }
 
   await ref.update(update);
@@ -249,6 +289,8 @@ export async function updateEvent(
 
 export async function deleteEvent(id: string): Promise<void> {
   const db = getDb();
+  const current = await getOwnedEventSnapshot(id);
+  if (!current) throw new Error(`No existe un evento con id ${id}.`);
   await db.collection("events").doc(id).delete();
 }
 

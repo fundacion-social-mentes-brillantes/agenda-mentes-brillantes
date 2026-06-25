@@ -60,7 +60,7 @@ export default function DashboardPage({
         <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
           <div className="flex items-center gap-4">
             {profile?.photoURL ? (
-              <img src={profile.photoURL} alt={profile.name} className="h-16 w-16 rounded-full object-cover shadow-lg" />
+              <img src={profile.photoURL} alt={profile.name} referrerPolicy="no-referrer" className="h-16 w-16 rounded-full object-cover shadow-lg" />
             ) : (
               <div className="flex h-16 w-16 items-center justify-center rounded-full text-xl font-black text-white shadow-lg" style={{ backgroundColor: profile?.color || "#d7b46a" }}>
                 {profile?.name ? profile.name.slice(0, 2).toUpperCase() : <UserRound size={24} />}
@@ -151,7 +151,7 @@ function EventRow({ event, onClick }: { event: CalendarEvent; onClick: () => voi
   return (
     <Card onClick={onClick} className="border-l-4 p-4 hover:-translate-y-0.5" style={{ borderLeftColor: event.color }}>
       <div className="flex gap-4">
-        {firstImage && <img src={firstImage.url} alt={event.title} className="hidden h-20 w-24 rounded-2xl object-cover sm:block" />}
+        {firstImage && <img src={firstImage.url} alt={event.title} referrerPolicy="no-referrer" className="hidden h-20 w-24 rounded-2xl object-cover sm:block" />}
         <div className="min-w-0 flex-1">
           <h3 className="m-0 truncate text-lg font-black text-app-strong">{event.title}</h3>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-bold text-app-muted">

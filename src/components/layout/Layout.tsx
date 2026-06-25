@@ -318,7 +318,7 @@ function UserSummary() {
   return (
     <div className="flex items-center gap-3 rounded-3xl border border-app-soft bg-app-soft p-3">
       {profile?.photoURL ? (
-        <img src={profile.photoURL} alt={profile.name} className="h-11 w-11 rounded-full object-cover" />
+        <img src={profile.photoURL} alt={profile.name} referrerPolicy="no-referrer" className="h-11 w-11 rounded-full object-cover" />
       ) : (
         <div className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-black text-white" style={{ backgroundColor: profile?.color || "#d7b46a" }}>
           {profile?.name || profile?.email ? initials : <UserRound size={18} />}

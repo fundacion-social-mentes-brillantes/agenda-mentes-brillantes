@@ -31,7 +31,7 @@ export default function SettingsPage({ profile, onThemeChange, onGoToWorkspaces 
         <h3 className="m-0 text-lg font-black text-app-strong">Mi perfil</h3>
         <div className="flex items-center gap-4">
           {profile.photoURL ? (
-            <img src={profile.photoURL} alt={profile.name} className="h-16 w-16 rounded-full object-cover" />
+            <img src={profile.photoURL} alt={profile.name} referrerPolicy="no-referrer" className="h-16 w-16 rounded-full object-cover" />
           ) : (
             <div className="flex h-16 w-16 items-center justify-center rounded-full text-xl font-black text-white" style={{ backgroundColor: profile.color || "#d7b46a" }}>
               {profile.name ? profile.name.slice(0, 2).toUpperCase() : <UserRound size={24} />}

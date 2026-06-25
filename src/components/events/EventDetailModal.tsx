@@ -65,7 +65,7 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onDuplicate, 
           <div className={`grid gap-2 ${images.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
             {images.map((img) => (
               <a key={img.path || img.url} href={img.url} target="_blank" rel="noreferrer" className="overflow-hidden rounded-2xl border border-app-soft bg-app-soft">
-                <img src={img.url} alt={img.name} className="h-44 w-full object-cover" />
+                <img src={img.url} alt={img.name} referrerPolicy="no-referrer" className="h-44 w-full object-cover" />
               </a>
             ))}
           </div>

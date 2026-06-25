@@ -45,10 +45,6 @@ function evDate(value: CalendarEvent["startAt"]): string {
   const d = toDate(value);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-function evCreated(value: CalendarEvent["createdAt"]): string {
-  return toDate(value).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
-}
-
 export function AssistantWidget({ events, clients, workspaceName, workspaceId, userName, onCreateEvent, onUpdateEvent, onDeleteEvent, onCreateClient }: AssistantWidgetProps) {
   const [open, setOpen] = useState(false);
   const [uiMessages, setUiMessages] = useState<UiMessage[]>([GREETING]);
@@ -246,40 +242,13 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
 
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const payload = events.slice(0, 800).map((e) => {
-        const item: Record<string, unknown> = { id: e.id, t: e.title, f: evDate(e.startAt), h: e.allDay ? "todo el día" : ev24(e.startAt), m: e.modality, creado: evCreated(e.createdAt) };
-        if (e.kind === "coach") {
-          item.coach = true;
-          if (e.clientName) item.cn = e.clientName;
-          if (typeof e.clientCode === "number") item.cc = e.clientCode;
-        }
-        if (typeof e.totalAmount === "number") item.vt = e.totalAmount;
-        if (typeof e.paidAmount === "number") item.va = e.paidAmount;
-        return item;
-      });
-      // Conteo de sesiones coach por persona, ya calculado (para que el bot no cuente por título).
-      const nowMs = Date.now();
-      const counts = new Map<number, { tomadas: number; proximas: number }>();
-      for (const e of events) {
-        if (e.kind === "coach" && typeof e.clientCode === "number") {
-          const k = counts.get(e.clientCode) || { tomadas: 0, proximas: 0 };
-          if (toDate(e.startAt).getTime() < nowMs) k.tomadas++;
-          else k.proximas++;
-          counts.set(e.clientCode, k);
-        }
-      }
-      const clientsPayload = clients.slice(0, 1000).map((c) => {
-        const k = counts.get(c.code) || { tomadas: 0, proximas: 0 };
-        return { code: c.code, name: c.name, tomadas: k.tomadas, proximas: k.proximas, total: k.tomadas + k.proximas };
-      });
-      const today = new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
       let answered = false;
       for (let i = 0; i < 6 && !answered; i++) {
         const res = await fetch("/api/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idToken, messages: convoRef.current, events: payload, clients: clientsPayload, today, workspaceName: workspaceName || "", userName: userName || "" })
+          body: JSON.stringify({ idToken, messages: convoRef.current, workspaceId })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
