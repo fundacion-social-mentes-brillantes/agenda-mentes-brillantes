@@ -232,6 +232,17 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
     const question = input.trim();
     if (!question || loading) return;
 
+    // La agenda activa aún no terminó de cargar: evita el error y pide reintentar.
+    if (!workspaceId) {
+      setUiMessages((prev) => [
+        ...prev,
+        { role: "user", content: question },
+        { role: "assistant", content: "Dame un momento: todavía estoy terminando de cargar tu agenda. Vuelve a intentarlo en unos segundos. 🙂" }
+      ]);
+      setInput("");
+      return;
+    }
+
     setUiMessages((prev) => [...prev, { role: "user", content: question }]);
     convoRef.current.push({ role: "user", content: question });
     setInput("");
