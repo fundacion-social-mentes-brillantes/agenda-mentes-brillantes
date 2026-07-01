@@ -62,7 +62,7 @@ export default function CoachPage({
     // "Compradas" = el paquete más grande registrado (no la suma), para que no se descuadre
     // al registrar el paquete (ej. 24) y además crear cada sesión.
     const compradas = list.reduce((m, e) => Math.max(m, typeof e.purchasedSessions === "number" && e.purchasedSessions >= 0 ? e.purchasedSessions : 1), 0);
-    return { total: list.length, tomadas, proximas: list.length - tomadas, compradas };
+    return { total: list.length, tomadas, proximas: list.length - tomadas, compradas, quedan: compradas - list.length };
   };
 
   const sessionsFor = (code: number) =>
@@ -191,14 +191,16 @@ export default function CoachPage({
                     <Badge label="Tomadas" value={counts.tomadas} tone="done" />
                     <Badge label="Próximas" value={counts.proximas} tone="next" />
                     <Badge label="Compradas" value={counts.compradas} tone="total" />
+                    <Badge label="Quedan" value={Math.max(0, counts.quedan)} tone={counts.quedan > 0 ? "left" : "warn"} />
                   </div>
                   <ChevronDown size={18} className={`shrink-0 text-app-faint transition ${isOpen ? "rotate-180" : ""}`} />
                 </button>
 
-                <div className="flex gap-2 px-4 pb-3 sm:hidden">
+                <div className="flex flex-wrap gap-2 px-4 pb-3 sm:hidden">
                   <Badge label="Tomadas" value={counts.tomadas} tone="done" />
                   <Badge label="Próximas" value={counts.proximas} tone="next" />
                   <Badge label="Compradas" value={counts.compradas} tone="total" />
+                  <Badge label="Quedan" value={Math.max(0, counts.quedan)} tone={counts.quedan > 0 ? "left" : "warn"} />
                 </div>
 
                 {isOpen && (
@@ -247,13 +249,17 @@ export default function CoachPage({
   );
 }
 
-function Badge({ label, value, tone }: { label: string; value: number; tone: "done" | "next" | "total" }) {
+function Badge({ label, value, tone }: { label: string; value: number; tone: "done" | "next" | "total" | "left" | "warn" }) {
   const toneClass =
     tone === "done"
       ? "border-app-soft bg-app-soft text-app-muted"
       : tone === "next"
         ? "border-app-accent/30 bg-app-soft text-app-accent"
-        : "border-app-soft bg-app-panel text-app-strong";
+        : tone === "left"
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
+          : tone === "warn"
+            ? "border-red-500/30 bg-red-500/10 text-red-500"
+            : "border-app-soft bg-app-panel text-app-strong";
   return (
     <span className={`flex flex-col items-center rounded-2xl border px-3 py-1 ${toneClass}`}>
       <span className="text-base font-black leading-none">{value}</span>

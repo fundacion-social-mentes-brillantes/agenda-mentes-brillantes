@@ -258,6 +258,7 @@ function AppContent() {
             workspaceName={activeWorkspace?.name}
             profile={profile}
             clients={clients}
+            events={events}
             initialKind={formKind}
             initialClient={formClient}
             onCreateClient={handleCreateClient}

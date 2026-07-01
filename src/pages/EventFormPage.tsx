@@ -41,6 +41,7 @@ interface EventFormPageProps {
   workspaceName?: string;
   profile: UserProfile | null;
   clients: Client[];
+  events: CalendarEvent[];
   initialKind?: EventKind;
   initialClient?: { code: number; name: string } | null;
   onCreateClient: (name: string) => Promise<Client>;
@@ -56,6 +57,7 @@ export default function EventFormPage({
   workspaceName,
   profile,
   clients,
+  events,
   initialKind,
   initialClient,
   onCreateClient,
@@ -100,6 +102,21 @@ export default function EventFormPage({
     `flex items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-sm font-black transition ${
       active ? "border-app-strong bg-app-soft text-app-accent" : "border-app-soft bg-app-panel text-app-muted hover:bg-app-soft"
     }`;
+
+  // Sesiones de la persona seleccionada (sin contar la que se está editando):
+  // compradas = paquete más grande registrado; agendadas = cuántas ya tiene; quedan = disponibles.
+  const parsedPurchased = parsePurchased(purchasedSessions);
+  const coachStats = useMemo(() => {
+    if (kind !== "coach" || !client) return null;
+    const others = events.filter((e) => e.kind === "coach" && e.clientCode === client.code && e.id !== editingEvent?.id);
+    const compradas = others.reduce(
+      (m, e) => Math.max(m, typeof e.purchasedSessions === "number" && e.purchasedSessions >= 0 ? e.purchasedSessions : 1),
+      0
+    );
+    const agendadas = others.length;
+    return { compradas, agendadas, quedan: compradas - agendadas };
+  }, [kind, client, events, editingEvent?.id]);
+  const noSessionsLeft = !!coachStats && parsedPurchased === 0 && coachStats.quedan <= 0;
 
   useEffect(() => {
     return () => {
@@ -206,6 +223,14 @@ export default function EventFormPage({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmittingRef.current) return;
+
+    // Aviso: si pone 0 sesiones compradas y la persona ya no tiene disponibles, confirmar.
+    if (noSessionsLeft) {
+      const ok = window.confirm(
+        `${client?.name || "Esta persona"} ya no tiene sesiones disponibles (compró ${coachStats?.compradas ?? 0}, ya tiene ${coachStats?.agendadas ?? 0} agendadas). ¿Agendar de todas formas?`
+      );
+      if (!ok) return;
+    }
 
     isSubmittingRef.current = true;
     setSubmitPhase("saving");
@@ -455,20 +480,33 @@ export default function EventFormPage({
               </div>
 
               {kind === "coach" && (
-                <label className="block md:col-span-2 sm:max-w-xs">
-                  <span className="section-label mb-2 block">Sesiones compradas</span>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min="0"
-                    step="1"
-                    inputMode="numeric"
-                    value={purchasedSessions}
-                    onChange={(e) => setPurchasedSessions(e.target.value)}
-                    placeholder="1"
-                  />
-                  <span className="mt-1 block text-xs text-app-faint">Cuántas sesiones compró (ej. 24 si es un paquete). Por defecto 1. Pon 0 si ya las había comprado antes, para que solo cuente como tomada.</span>
-                </label>
+                <div className="space-y-2 md:col-span-2 sm:max-w-xs">
+                  <label className="block">
+                    <span className="section-label mb-2 block">Sesiones compradas</span>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputMode="numeric"
+                      value={purchasedSessions}
+                      onChange={(e) => setPurchasedSessions(e.target.value)}
+                      placeholder="1"
+                    />
+                    <span className="mt-1 block text-xs text-app-faint">Cuántas sesiones compró (ej. 24 si es un paquete). Por defecto 1. Pon 0 si ya las había comprado antes, para que solo cuente como tomada.</span>
+                  </label>
+                  {coachStats && (coachStats.compradas > 0 || coachStats.agendadas > 0) && (
+                    <div className="rounded-2xl border border-app-soft bg-app-soft px-3 py-2 text-xs font-bold text-app-muted">
+                      Compradas: {coachStats.compradas} · Agendadas: {coachStats.agendadas} ·{" "}
+                      <span className={coachStats.quedan > 0 ? "text-app-accent" : "text-red-500"}>Quedan: {Math.max(0, coachStats.quedan)}</span>
+                    </div>
+                  )}
+                  {noSessionsLeft && (
+                    <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-500">
+                      ⚠️ {client?.name || "Esta persona"} ya no tiene sesiones disponibles (compró {coachStats?.compradas ?? 0}, ya tiene {coachStats?.agendadas ?? 0} agendadas).
+                    </div>
+                  )}
+                </div>
               )}
 
               <label className="flex items-center gap-3 rounded-2xl border border-app-soft bg-app-soft p-4 md:col-span-2">
