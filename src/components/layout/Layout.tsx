@@ -193,7 +193,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
           <button
             type="button"
             onClick={onCreate}
-            className="flex h-14 w-14 -translate-y-5 items-center justify-center rounded-full border-4 border-app bg-app-accent text-slate-950 shadow-xl transition active:scale-95"
+            className="fab-create relative flex h-14 w-14 -translate-y-5 items-center justify-center rounded-full transition active:scale-95"
             aria-label="Crear evento"
           >
             <Plus size={26} />

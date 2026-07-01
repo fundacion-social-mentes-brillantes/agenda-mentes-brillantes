@@ -206,7 +206,7 @@ export default function CalendarPage({
                 <span
                   className={`mb-0.5 flex items-center justify-center self-start rounded-full font-black ${
                     today
-                      ? "h-7 w-7 bg-app-accent text-sm text-slate-950 shadow-md"
+                      ? "accent-gradient h-7 w-7 text-sm shadow-md"
                       : `h-5 w-5 text-[11px] sm:h-6 sm:w-6 sm:text-xs ${currentMonth ? "text-app-strong" : "text-app-faint"}`
                   }`}
                 >

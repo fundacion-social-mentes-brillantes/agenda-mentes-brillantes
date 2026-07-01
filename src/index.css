@@ -24,6 +24,8 @@
   --app-faint: #748096;
   --app-accent: #d7b46a;
   --app-accent-strong: #f4d992;
+  --app-accent-gradient: linear-gradient(135deg, #d7b46a, #f4d992);
+  --app-on-accent: #0c1020;
   --app-danger: #ef4444;
   --app-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
 }
@@ -42,6 +44,8 @@ html.theme-pink {
   --app-faint: #a9849b;
   --app-accent: #c83ab8;
   --app-accent-strong: #ff9ef2;
+  --app-accent-gradient: linear-gradient(135deg, #c83ab8, #ff9ef2);
+  --app-on-accent: #ffffff;
   --app-danger: #dc2626;
   --app-shadow: 0 24px 80px rgba(200, 58, 184, 0.16);
 }
@@ -170,6 +174,40 @@ img {
 
 .border-app-accent {
   border-color: var(--app-accent);
+}
+
+/* Degradado del acento (dorado en tema oscuro, rosa en tema rosa) con su color de texto. */
+.accent-gradient {
+  background: var(--app-accent-gradient);
+  color: var(--app-on-accent);
+}
+
+/* Botón flotante "+": mismo degradado, sin borde, con un aro que late muy sutil. */
+.fab-create {
+  background: var(--app-accent-gradient);
+  color: var(--app-on-accent);
+  animation: fabPulse 2.6s ease-in-out infinite;
+}
+
+@keyframes fabPulse {
+  0% {
+    box-shadow:
+      0 8px 22px color-mix(in srgb, var(--app-accent) 42%, transparent),
+      0 0 0 0 color-mix(in srgb, var(--app-accent) 42%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow:
+      0 8px 22px color-mix(in srgb, var(--app-accent) 42%, transparent),
+      0 0 0 12px color-mix(in srgb, var(--app-accent) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fab-create {
+    animation: none;
+    box-shadow: 0 8px 22px color-mix(in srgb, var(--app-accent) 42%, transparent);
+  }
 }
 
 .btn-primary,
