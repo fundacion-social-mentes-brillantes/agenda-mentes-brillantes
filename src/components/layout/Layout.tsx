@@ -102,7 +102,10 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
 
   return (
     <div className="app-shell flex min-h-screen flex-col text-app-strong md:flex-row">
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-app-soft bg-app-panel px-4 py-3 backdrop-blur-xl md:hidden">
+      <header
+        className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-app-soft bg-app-panel px-4 pb-3 backdrop-blur-xl md:hidden"
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+      >
         <BrandBlock compact />
         <div className="flex items-center gap-2">
           <WorkspaceSwitcher workspaces={workspaces} activeWorkspace={activeWorkspace} onSelect={handleSelectWorkspace} onManage={() => goTo("workspaces")} compact />
@@ -115,6 +118,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
       {sidebarOpen && <button type="button" aria-label="Cerrar menu" className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <aside
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
         className={`fixed bottom-0 left-0 top-0 z-50 flex w-72 flex-col justify-between overflow-y-auto border-r border-app-soft bg-app-panel p-5 shadow-2xl backdrop-blur-xl transition-transform duration-300 md:sticky md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
