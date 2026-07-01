@@ -200,16 +200,14 @@ export default function CalendarPage({
                     ? "border-2 border-app-accent bg-app-soft ring-2 ring-app-accent"
                     : today
                       ? "border-2 border-app-accent bg-app-soft"
-                      : currentMonth
-                        ? "border-app-soft bg-app-panel hover:bg-app-soft"
-                        : "border-transparent opacity-45"
+                      : "border-app-soft bg-app-panel hover:bg-app-soft"
                 }`}
               >
                 <span
                   className={`mb-0.5 flex items-center justify-center self-start rounded-full font-black ${
                     today
                       ? "h-7 w-7 bg-app-accent text-sm text-slate-950 shadow-md"
-                      : "h-5 w-5 text-[11px] text-app-strong sm:h-6 sm:w-6 sm:text-xs"
+                      : `h-5 w-5 text-[11px] sm:h-6 sm:w-6 sm:text-xs ${currentMonth ? "text-app-strong" : "text-app-faint"}`
                   }`}
                 >
                   {date.getDate()}

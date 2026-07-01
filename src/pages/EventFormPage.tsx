@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Spinner } from "../components/ui/Spinner";
-import { COLOR_PRESETS, DEFAULT_EVENT_COLOR, MODALITY_OPTIONS, REMINDER_OPTIONS } from "../lib/eventMeta";
+import { COACH_EVENT_COLOR, COLOR_PRESETS, DEFAULT_EVENT_COLOR, MODALITY_OPTIONS, REMINDER_OPTIONS } from "../lib/eventMeta";
 import { auth } from "../lib/firebase";
 import { storageService } from "../services/storageService";
 import { normalizeText } from "../services/clientsService";
@@ -153,7 +153,7 @@ export default function EventFormPage({
       setEndTimeStr("10:00");
       setAllDay(false);
       setModality("otro");
-      setColor(DEFAULT_EVENT_COLOR);
+      setColor(initialKind === "coach" ? COACH_EVENT_COLOR : DEFAULT_EVENT_COLOR);
       setReminderMinutes(30);
       setTotalAmount("");
       setPaidAmount("");
@@ -359,10 +359,24 @@ export default function EventFormPage({
               <div className="md:col-span-2">
                 <span className="section-label mb-2 block">Tipo</span>
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setKind("normal")} className={modeBtnClass(kind === "normal")}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setKind("normal");
+                      setColor((c) => (c === COACH_EVENT_COLOR ? DEFAULT_EVENT_COLOR : c));
+                    }}
+                    className={modeBtnClass(kind === "normal")}
+                  >
                     <CalendarRange size={16} /> Evento normal
                   </button>
-                  <button type="button" onClick={() => setKind("coach")} className={modeBtnClass(kind === "coach")}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setKind("coach");
+                      setColor((c) => (c === DEFAULT_EVENT_COLOR ? COACH_EVENT_COLOR : c));
+                    }}
+                    className={modeBtnClass(kind === "coach")}
+                  >
                     <HeartHandshake size={16} /> Sesión coach
                   </button>
                 </div>
@@ -374,25 +388,9 @@ export default function EventFormPage({
                   <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Reunión, Recordatorio…" autoFocus />
                 </label>
               ) : (
-                <div className="space-y-4 md:col-span-2">
-                  <div>
-                    <span className="section-label mb-2 block">Persona de la sesión</span>
-                    <ClientPicker clients={clients} value={client} onSelect={setClient} onCreate={onCreateClient} />
-                  </div>
-                  <label className="block sm:max-w-xs">
-                    <span className="section-label mb-2 block">Sesiones compradas</span>
-                    <input
-                      className="input-field"
-                      type="number"
-                      min="1"
-                      step="1"
-                      inputMode="numeric"
-                      value={purchasedSessions}
-                      onChange={(e) => setPurchasedSessions(e.target.value)}
-                      placeholder="1"
-                    />
-                    <span className="mt-1 block text-xs text-app-faint">Cuántas sesiones compró (ej. 24 si es un paquete). Por defecto 1.</span>
-                  </label>
+                <div className="md:col-span-2">
+                  <span className="section-label mb-2 block">Persona de la sesión</span>
+                  <ClientPicker clients={clients} value={client} onSelect={setClient} onCreate={onCreateClient} />
                 </div>
               )}
 
@@ -436,13 +434,42 @@ export default function EventFormPage({
               <div className="grid grid-cols-2 gap-3 md:col-span-2">
                 <label>
                   <span className="section-label mb-2 block">Inicio</span>
-                  <input className="input-field" type="time" value={startTimeStr} onChange={(e) => setStartTimeStr(e.target.value)} disabled={allDay} required={!allDay} />
+                  <input
+                    className="input-field"
+                    type="time"
+                    value={startTimeStr}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setStartTimeStr(value);
+                      // Al poner la hora de inicio, la de fin se pone 1 hora después (editable).
+                      if (value) setEndTimeStr(addOneHour(value));
+                    }}
+                    disabled={allDay}
+                    required={!allDay}
+                  />
                 </label>
                 <label>
                   <span className="section-label mb-2 block">Final</span>
                   <input className="input-field" type="time" value={endTimeStr} onChange={(e) => setEndTimeStr(e.target.value)} disabled={allDay} required={!allDay} />
                 </label>
               </div>
+
+              {kind === "coach" && (
+                <label className="block md:col-span-2 sm:max-w-xs">
+                  <span className="section-label mb-2 block">Sesiones compradas</span>
+                  <input
+                    className="input-field"
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="numeric"
+                    value={purchasedSessions}
+                    onChange={(e) => setPurchasedSessions(e.target.value)}
+                    placeholder="1"
+                  />
+                  <span className="mt-1 block text-xs text-app-faint">Cuántas sesiones compró (ej. 24 si es un paquete). Por defecto 1.</span>
+                </label>
+              )}
 
               <label className="flex items-center gap-3 rounded-2xl border border-app-soft bg-app-soft p-4 md:col-span-2">
                 <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} className="h-5 w-5 accent-amber-500" />
@@ -732,6 +759,13 @@ function getSubmitLabel(phase: "idle" | "saving" | "uploading" | "saved" | "erro
   if (phase === "saved") return "Evento guardado";
   if (phase === "error") return "Intentar de nuevo";
   return "Guardar evento";
+}
+
+function addOneHour(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return time;
+  const total = (h * 60 + m + 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
 function parseMoneyInput(value: string): number | null {

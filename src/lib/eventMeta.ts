@@ -3,6 +3,9 @@ import type { EventModality } from "../types/event";
 /** Color por defecto para un evento nuevo (dorado de la marca). */
 export const DEFAULT_EVENT_COLOR = "#d7b46a";
 
+/** Color por defecto para una sesión coach (rosa). */
+export const COACH_EVENT_COLOR = "#ec4899";
+
 /** Paleta de colores suaves y bonitos para elegir rápido. */
 export const COLOR_PRESETS: { value: string; label: string }[] = [
   { value: "#d7b46a", label: "Dorado" },
