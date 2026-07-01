@@ -30,20 +30,20 @@
 
 html.theme-pink {
   color-scheme: light;
-  --app-bg: #fff8fc;
-  --app-bg-soft: #f7edff;
+  --app-bg: #fff2ff;
+  --app-bg-soft: #ffa1ff;
   --app-panel: rgba(255, 255, 255, 0.86);
   --app-panel-solid: #ffffff;
   --app-soft: rgba(232, 154, 194, 0.18);
   --app-border: rgba(202, 126, 170, 0.24);
-  --app-border-strong: rgba(214, 181, 106, 0.44);
+  --app-border-strong: rgba(200, 58, 184, 0.4);
   --app-strong: #362133;
   --app-muted: #74566e;
   --app-faint: #a9849b;
-  --app-accent: #b86f94;
-  --app-accent-strong: #d8b46a;
+  --app-accent: #c83ab8;
+  --app-accent-strong: #ff9ef2;
   --app-danger: #dc2626;
-  --app-shadow: 0 24px 80px rgba(190, 98, 150, 0.15);
+  --app-shadow: 0 24px 80px rgba(200, 58, 184, 0.16);
 }
 
 *,
@@ -71,10 +71,8 @@ body {
 
 .theme-pink body {
   background:
-    radial-gradient(circle at 10% 8%, rgba(255, 209, 232, 0.8), transparent 26rem),
-    radial-gradient(circle at 85% 0%, rgba(219, 205, 255, 0.78), transparent 30rem),
-    radial-gradient(circle at 50% 100%, rgba(216, 180, 106, 0.18), transparent 28rem),
-    linear-gradient(145deg, #fff9fc 0%, #f8edff 48%, #fff4f9 100%);
+    radial-gradient(circle at 74% 26%, rgba(255, 255, 255, 0.95), transparent 40rem),
+    linear-gradient(155deg, #ffa1ff 0%, #fff2ff 50%, #ffb2f6 100%);
 }
 
 button,
@@ -105,9 +103,8 @@ img {
 
 .theme-pink .app-shell {
   background:
-    radial-gradient(circle at 18% 8%, rgba(255, 210, 232, 0.7), transparent 24rem),
-    radial-gradient(circle at 88% 18%, rgba(221, 210, 255, 0.7), transparent 26rem),
-    linear-gradient(160deg, #fffafd 0%, #f8efff 52%, #fff7fb 100%);
+    radial-gradient(circle at 74% 22%, rgba(255, 255, 255, 0.92), transparent 42rem),
+    linear-gradient(155deg, #ffa1ff 0%, #fff2ff 52%, #ffb2f6 100%);
 }
 
 .glass-panel {
@@ -199,10 +196,11 @@ img {
 }
 
 .theme-pink .btn-primary {
-  border-color: rgba(216, 180, 106, 0.55);
-  background: linear-gradient(135deg, #edb7d2 0%, #d8b46a 100%);
-  color: #3a2334;
-  box-shadow: 0 16px 40px rgba(190, 98, 150, 0.2);
+  border-color: rgba(200, 58, 184, 0.5);
+  background: linear-gradient(135deg, #c83ab8 0%, #ff9ef2 100%);
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(120, 20, 90, 0.4);
+  box-shadow: 0 16px 40px rgba(200, 58, 184, 0.3);
 }
 
 .btn-secondary {
