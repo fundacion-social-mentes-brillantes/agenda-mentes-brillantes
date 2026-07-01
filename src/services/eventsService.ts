@@ -195,7 +195,7 @@ function sanitizeNewEvent(eventData: Partial<CalendarEvent>, uid: string): Recor
     clientCode: eventData.kind === "coach" && typeof eventData.clientCode === "number" ? eventData.clientCode : null,
     clientName: eventData.kind === "coach" && eventData.clientName ? eventData.clientName : null,
     purchasedSessions:
-      eventData.kind === "coach" ? (typeof eventData.purchasedSessions === "number" && eventData.purchasedSessions > 0 ? Math.floor(eventData.purchasedSessions) : 1) : null,
+      eventData.kind === "coach" ? (typeof eventData.purchasedSessions === "number" && eventData.purchasedSessions >= 0 ? Math.floor(eventData.purchasedSessions) : 1) : null,
     reminderMinutes: typeof eventData.reminderMinutes === "number" ? eventData.reminderMinutes : null,
     totalAmount: normalizeMoney(eventData.totalAmount),
     paidAmount: normalizeMoney(eventData.paidAmount),
@@ -228,7 +228,7 @@ function sanitizeEventUpdate(eventData: Partial<CalendarEvent>): Record<string, 
   if (eventData.clientCode !== undefined) data.clientCode = typeof eventData.clientCode === "number" ? eventData.clientCode : null;
   if (eventData.clientName !== undefined) data.clientName = eventData.clientName || null;
   if (eventData.purchasedSessions !== undefined) {
-    data.purchasedSessions = typeof eventData.purchasedSessions === "number" && eventData.purchasedSessions > 0 ? Math.floor(eventData.purchasedSessions) : 1;
+    data.purchasedSessions = typeof eventData.purchasedSessions === "number" && eventData.purchasedSessions >= 0 ? Math.floor(eventData.purchasedSessions) : 1;
   }
   if (eventData.reminderMinutes !== undefined) {
     data.reminderMinutes = typeof eventData.reminderMinutes === "number" ? eventData.reminderMinutes : null;

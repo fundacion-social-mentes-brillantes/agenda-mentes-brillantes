@@ -61,7 +61,7 @@ export default function CoachPage({
     const tomadas = list.filter((e) => toDate(e.startAt).getTime() < now.getTime()).length;
     // "Compradas" = el paquete más grande registrado (no la suma), para que no se descuadre
     // al registrar el paquete (ej. 24) y además crear cada sesión.
-    const compradas = list.reduce((m, e) => Math.max(m, typeof e.purchasedSessions === "number" && e.purchasedSessions > 0 ? e.purchasedSessions : 1), 0);
+    const compradas = list.reduce((m, e) => Math.max(m, typeof e.purchasedSessions === "number" && e.purchasedSessions >= 0 ? e.purchasedSessions : 1), 0);
     return { total: list.length, tomadas, proximas: list.length - tomadas, compradas };
   };
 

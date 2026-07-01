@@ -140,7 +140,7 @@ export default function EventFormPage({
       setReminderMinutes(editingEvent.reminderMinutes ?? 30);
       setTotalAmount(formatMoneyInput(editingEvent.totalAmount));
       setPaidAmount(formatMoneyInput(editingEvent.paidAmount));
-      setPurchasedSessions(String(editingEvent.purchasedSessions && editingEvent.purchasedSessions > 0 ? editingEvent.purchasedSessions : 1));
+      setPurchasedSessions(String(typeof editingEvent.purchasedSessions === "number" && editingEvent.purchasedSessions >= 0 ? editingEvent.purchasedSessions : 1));
       setExistingAttachments(editingEvent.attachments || []);
       setSavedEventId(editingEvent.id || null);
     } else {
@@ -242,7 +242,7 @@ export default function EventFormPage({
         kind,
         clientCode: kind === "coach" ? client?.code ?? null : null,
         clientName: kind === "coach" ? client?.name ?? null : null,
-        purchasedSessions: kind === "coach" ? Math.max(1, parseInt(purchasedSessions, 10) || 1) : null,
+        purchasedSessions: kind === "coach" ? parsePurchased(purchasedSessions) : null,
         reminderMinutes: Number(reminderMinutes) || null,
         totalAmount: parseMoneyInput(totalAmount),
         paidAmount: parseMoneyInput(paidAmount),
@@ -460,14 +460,14 @@ export default function EventFormPage({
                   <input
                     className="input-field"
                     type="number"
-                    min="1"
+                    min="0"
                     step="1"
                     inputMode="numeric"
                     value={purchasedSessions}
                     onChange={(e) => setPurchasedSessions(e.target.value)}
                     placeholder="1"
                   />
-                  <span className="mt-1 block text-xs text-app-faint">Cuántas sesiones compró (ej. 24 si es un paquete). Por defecto 1.</span>
+                  <span className="mt-1 block text-xs text-app-faint">Cuántas sesiones compró (ej. 24 si es un paquete). Por defecto 1. Pon 0 si ya las había comprado antes, para que solo cuente como tomada.</span>
                 </label>
               )}
 
@@ -759,6 +759,12 @@ function getSubmitLabel(phase: "idle" | "saving" | "uploading" | "saved" | "erro
   if (phase === "saved") return "Evento guardado";
   if (phase === "error") return "Intentar de nuevo";
   return "Guardar evento";
+}
+
+function parsePurchased(value: string): number {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) return 1; // vacío o inválido → 1 por defecto
+  return Math.max(0, n); // permite 0 (ej. ya las había comprado antes)
 }
 
 function addOneHour(time: string): string {
