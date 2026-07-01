@@ -187,7 +187,8 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
           endAt: end,
           allDay,
           color: args.color || DEFAULT_EVENT_COLOR,
-          modality: args.modality === "presencial" || args.modality === "virtual" ? args.modality : "otro",
+          // Las sesiones coach son virtuales por defecto (solo presencial si lo piden).
+          modality: args.modality === "presencial" ? "presencial" : "virtual",
           kind: "coach",
           clientCode: client.code,
           clientName: client.name,

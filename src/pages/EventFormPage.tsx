@@ -169,7 +169,7 @@ export default function EventFormPage({
       setStartTimeStr("09:00");
       setEndTimeStr("10:00");
       setAllDay(false);
-      setModality("otro");
+      setModality(initialKind === "coach" ? "virtual" : "otro");
       setColor(initialKind === "coach" ? COACH_EVENT_COLOR : DEFAULT_EVENT_COLOR);
       setReminderMinutes(30);
       setTotalAmount("");
@@ -399,6 +399,7 @@ export default function EventFormPage({
                     onClick={() => {
                       setKind("coach");
                       setColor((c) => (c === DEFAULT_EVENT_COLOR ? COACH_EVENT_COLOR : c));
+                      setModality((m) => (m === "otro" ? "virtual" : m));
                     }}
                     className={modeBtnClass(kind === "coach")}
                   >
@@ -448,7 +449,7 @@ export default function EventFormPage({
               <label>
                 <span className="section-label mb-2 block">Modalidad</span>
                 <select className="input-field" value={modality} onChange={(e) => setModality(e.target.value as EventModality)}>
-                  {MODALITY_OPTIONS.map((item) => (
+                  {MODALITY_OPTIONS.filter((item) => kind !== "coach" || item.value !== "otro" || modality === "otro").map((item) => (
                     <option key={item.value} value={item.value}>
                       {item.label}
                     </option>

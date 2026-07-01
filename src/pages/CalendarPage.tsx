@@ -181,7 +181,8 @@ export default function CalendarPage({
           ))}
         </div>
 
-        <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-7 grid-rows-6 gap-0.5 sm:gap-1">
+        {/* En celular: filas altas (estilo TimeTree) con scroll vertical. En sm+ (PC/tablet): la cuadrícula llena la pantalla como antes. */}
+        <div className="app-scrollbar grid min-h-0 flex-1 auto-rows-[minmax(6.5rem,auto)] grid-cols-7 gap-0.5 overflow-y-auto sm:auto-rows-fr sm:grid-rows-6 sm:gap-1 sm:overflow-visible">
           {gridCells.map(({ date, currentMonth }, index) => {
             const dayEvents = getEventsForDay(date);
             const today = isSameDay(date, new Date());
@@ -207,7 +208,7 @@ export default function CalendarPage({
                   className={`mb-0.5 flex items-center justify-center self-start rounded-full font-black ${
                     today
                       ? "accent-gradient h-7 w-7 text-sm shadow-md"
-                      : `h-5 w-5 text-[11px] sm:h-6 sm:w-6 sm:text-xs ${currentMonth ? "text-app-strong" : "text-app-faint"}`
+                      : `h-6 w-6 text-xs ${currentMonth ? "text-app-strong" : "text-app-faint"}`
                   }`}
                 >
                   {date.getDate()}
@@ -218,7 +219,7 @@ export default function CalendarPage({
                       key={event.id}
                       title={event.title}
                       onPointerDown={(e) => startChipDrag(e, event)}
-                      className={`block truncate rounded-[4px] px-1 text-[9px] font-semibold leading-[15px] text-white sm:text-[10px] sm:leading-4 ${
+                      className={`block truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-4 text-white sm:py-0 ${
                         drag?.event.id === event.id ? "opacity-40" : ""
                       }`}
                       style={{ backgroundColor: event.color, touchAction: "none" }}
@@ -227,7 +228,7 @@ export default function CalendarPage({
                     </span>
                   ))}
                   {dayEvents.length > 4 && (
-                    <span className="block px-1 text-[9px] font-black text-app-faint sm:text-[10px]">+{dayEvents.length - 4} más</span>
+                    <span className="block px-1 text-[10px] font-black text-app-faint">+{dayEvents.length - 4} más</span>
                   )}
                 </div>
               </button>
