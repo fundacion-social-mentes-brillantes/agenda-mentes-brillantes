@@ -191,7 +191,7 @@ export default function CoachPage({
                     <Badge label="Tomadas" value={counts.tomadas} tone="done" />
                     <Badge label="Próximas" value={counts.proximas} tone="next" />
                     <Badge label="Compradas" value={counts.compradas} tone="total" />
-                    <Badge label="Quedan" value={Math.max(0, counts.quedan)} tone={counts.quedan > 0 ? "left" : "warn"} />
+                    <Badge label="Quedan" value={Math.max(0, counts.quedan)} tone={counts.compradas === 0 ? "total" : counts.quedan > 0 ? "left" : "warn"} />
                   </div>
                   <ChevronDown size={18} className={`shrink-0 text-app-faint transition ${isOpen ? "rotate-180" : ""}`} />
                 </button>
@@ -200,7 +200,7 @@ export default function CoachPage({
                   <Badge label="Tomadas" value={counts.tomadas} tone="done" />
                   <Badge label="Próximas" value={counts.proximas} tone="next" />
                   <Badge label="Compradas" value={counts.compradas} tone="total" />
-                  <Badge label="Quedan" value={Math.max(0, counts.quedan)} tone={counts.quedan > 0 ? "left" : "warn"} />
+                  <Badge label="Quedan" value={Math.max(0, counts.quedan)} tone={counts.compradas === 0 ? "total" : counts.quedan > 0 ? "left" : "warn"} />
                 </div>
 
                 {isOpen && (
