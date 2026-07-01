@@ -24,7 +24,7 @@
   --app-faint: #748096;
   --app-accent: #d7b46a;
   --app-accent-strong: #f4d992;
-  --app-accent-gradient: linear-gradient(135deg, #d7b46a, #f4d992);
+  --app-accent-gradient: linear-gradient(135deg, #b8934a 0%, #d7b46a 45%, #f6e0a0 100%);
   --app-on-accent: #0c1020;
   --app-danger: #ef4444;
   --app-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
@@ -325,4 +325,51 @@ img {
 ::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--app-accent) 28%, transparent);
   border-radius: 999px;
+}
+
+/* ============================================================
+   Modo oscuro PREMIUM (solo aplica cuando NO es el tema rosa).
+   Fondos profundos con aura dorada, tarjetas con degradado y
+   dorado metálico. El tema rosa (.theme-pink) queda intacto.
+   ============================================================ */
+html:not(.theme-pink) body {
+  background:
+    radial-gradient(120% 78% at 50% -12%, rgba(215, 180, 106, 0.20), transparent 55%),
+    radial-gradient(90% 70% at 100% 108%, rgba(124, 96, 190, 0.10), transparent 60%),
+    linear-gradient(160deg, #05070e 0%, #090e1c 48%, #0c1222 100%);
+}
+
+html:not(.theme-pink) .app-shell {
+  background:
+    radial-gradient(120% 66% at 50% -10%, rgba(215, 180, 106, 0.16), transparent 55%),
+    linear-gradient(160deg, #06080f 0%, #0a1020 55%, #0b1120 100%);
+}
+
+/* Todas las tarjetas y paneles: degradado sutil con brillo arriba. */
+html:not(.theme-pink) .bg-app-panel {
+  background: linear-gradient(158deg, rgba(28, 37, 62, 0.82) 0%, rgba(12, 17, 32, 0.86) 100%);
+}
+
+html:not(.theme-pink) .glass-panel {
+  background: linear-gradient(158deg, rgba(30, 40, 68, 0.8) 0%, rgba(11, 16, 30, 0.84) 100%);
+  border: 1px solid rgba(215, 180, 106, 0.26);
+  box-shadow:
+    0 26px 80px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Botón primario: dorado metálico de 3 tonos con brillo superior. */
+html:not(.theme-pink) .btn-primary {
+  background: linear-gradient(135deg, #b8934a 0%, #d7b46a 45%, #f6e0a0 100%);
+  color: #0c1020;
+  border: 1px solid rgba(246, 224, 160, 0.65);
+  box-shadow:
+    0 16px 40px rgba(215, 180, 106, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+html:not(.theme-pink) .btn-primary:hover {
+  box-shadow:
+    0 20px 48px rgba(215, 180, 106, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
