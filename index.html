@@ -11,10 +11,72 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Agenda MB" />
+    <!-- Abrir la conexión con Firebase desde el primer instante (ahorra ~100-300ms por host en celular) -->
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin />
     <title>Agenda Mentes Brillantes</title>
+    <script>
+      // Aplica el tema guardado ANTES de pintar, para que el splash y la app
+      // salgan del color correcto (sin destello oscuro en el tema rosa).
+      try {
+        var t = localStorage.getItem("theme");
+        var d = document.documentElement;
+        d.dataset.theme = t === "pink" ? "pink" : "dark";
+        d.classList.add(t === "pink" ? "theme-pink" : "dark");
+      } catch (e) {}
+    </script>
+    <style>
+      /* Splash instantáneo mientras carga el código (React lo reemplaza al montar). */
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background:
+          radial-gradient(120% 78% at 50% -12%, rgba(215, 180, 106, 0.2), transparent 55%),
+          linear-gradient(160deg, #05070e 0%, #090e1c 48%, #0c1222 100%);
+      }
+      html.theme-pink #boot-splash {
+        background:
+          radial-gradient(circle at 74% 26%, rgba(255, 255, 255, 0.95), transparent 40rem),
+          linear-gradient(155deg, #ffa1ff 0%, #fff2ff 50%, #ffb2f6 100%);
+      }
+      #boot-splash img {
+        width: 84px;
+        height: 84px;
+        border-radius: 22px;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+      }
+      #boot-splash .ring {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 3px solid rgba(215, 180, 106, 0.25);
+        border-top-color: #d7b46a;
+        animation: bootspin 0.9s linear infinite;
+      }
+      html.theme-pink #boot-splash .ring {
+        border-color: rgba(200, 58, 184, 0.2);
+        border-top-color: #c83ab8;
+      }
+      @keyframes bootspin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="boot-splash">
+        <img src="/icons/icon-192.png" alt="Agenda Mentes Brillantes" />
+        <div class="ring"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

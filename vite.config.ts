@@ -63,4 +63,20 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Paquetes separados: se descargan en paralelo y el navegador los
+        // conserva en caché entre versiones (React y Firebase casi no cambian).
+        manualChunks(id: string) {
+          if (id.includes('node_modules')) {
+            // Analytics se queda fuera: se carga con import() dinámico después del arranque.
+            if (/[\\/]node_modules[\\/](@firebase|firebase)[\\/]analytics/.test(id)) return
+            if (/[\\/]node_modules[\\/]@?firebase[\\/]/.test(id)) return 'firebase'
+            if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react'
+          }
+        }
+      }
+    }
+  },
 })

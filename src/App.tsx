@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
 import { useEvents } from "./hooks/useEvents";
@@ -8,14 +8,18 @@ import { useClients } from "./hooks/useClients";
 import { Layout } from "./components/layout/Layout";
 import type { PageType } from "./components/layout/Layout";
 import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage";
 import CalendarPage from "./pages/CalendarPage";
-import CoachPage from "./pages/CoachPage";
-import DayPage from "./pages/DayPage";
-import EventFormPage from "./pages/EventFormPage";
-import SettingsPage from "./pages/SettingsPage";
-import WorkspacePage from "./pages/WorkspacePage";
 import { AssistantWidget } from "./components/AssistantWidget";
+
+// Páginas que solo se ven tras navegar: se cargan aparte (carga diferida)
+// para que el arranque en celular sea liviano. Calendario (página inicial)
+// y Login van en el paquete principal.
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const CoachPage = lazy(() => import("./pages/CoachPage"));
+const DayPage = lazy(() => import("./pages/DayPage"));
+const EventFormPage = lazy(() => import("./pages/EventFormPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const WorkspacePage = lazy(() => import("./pages/WorkspacePage"));
 import type { CalendarEvent, EventKind } from "./types/event";
 import { toDate } from "./lib/dateUtils";
 import { Spinner } from "./components/ui/Spinner";
@@ -301,7 +305,15 @@ function AppContent() {
       {inviteNotice && (
         <div className="mb-5 rounded-3xl border border-app-accent bg-app-soft px-4 py-3 text-sm font-bold text-app-accent shadow-sm">{inviteNotice}</div>
       )}
-      {renderActivePage()}
+      <Suspense
+        fallback={
+          <div className="flex min-h-64 items-center justify-center">
+            <Spinner className="h-8 w-8 text-app-accent" />
+          </div>
+        }
+      >
+        {renderActivePage()}
+      </Suspense>
       <AssistantWidget
         events={events}
         clients={clients}

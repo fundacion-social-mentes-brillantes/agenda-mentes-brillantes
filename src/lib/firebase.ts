@@ -1,7 +1,12 @@
 import { initializeApp } from "firebase/app";
-import { getAnalytics, isSupported } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -16,9 +21,24 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Cache local persistente (IndexedDB): la agenda abre al instante con los datos
+// ya conocidos en el dispositivo y sincroniza en segundo plano. Clave para que
+// la PWA no re-descargue cientos de documentos en cada arranque (iPhone lento).
+// Si el navegador no lo soporta (p. ej. modo privado), cae a memoria como antes.
+let firestore: Firestore;
+try {
+  firestore = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
+} catch {
+  firestore = getFirestore(app);
+}
+export const db = firestore;
+
 export const storage = getStorage(app);
 
-export const analyticsPromise = isSupported().then((supported) =>
-  supported ? getAnalytics(app) : null
-);
+// Analytics se carga aparte (import dinámico) para no engordar el arranque.
+export const analyticsPromise = import("firebase/analytics")
+  .then(({ isSupported, getAnalytics }) => isSupported().then((ok) => (ok ? getAnalytics(app) : null)))
+  .catch(() => null);
