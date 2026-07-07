@@ -12,7 +12,7 @@ interface CalendarPageProps {
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
   setSelectedDate: (date: Date) => void;
-  onDuplicate: (event: CalendarEvent) => void;
+  onDuplicate: (event: CalendarEvent, dates: string[]) => Promise<void>;
   onUpdateEvent: (id: string, eventData: Partial<CalendarEvent>) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
 }

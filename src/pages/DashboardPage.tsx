@@ -13,7 +13,7 @@ interface DashboardPageProps {
   workspaceName?: string;
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
-  onDuplicate: (event: CalendarEvent) => void;
+  onDuplicate: (event: CalendarEvent, dates: string[]) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 

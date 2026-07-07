@@ -9,7 +9,7 @@ interface DayPageProps {
   events: CalendarEvent[];
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
-  onDuplicate: (event: CalendarEvent) => void;
+  onDuplicate: (event: CalendarEvent, dates: string[]) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
 }
 

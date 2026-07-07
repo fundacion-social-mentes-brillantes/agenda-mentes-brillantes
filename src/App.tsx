@@ -112,21 +112,29 @@ function AppContent() {
 
   const handleCreateClient = async (name: string) => createClient(name);
 
-  const handleDuplicate = async (event: CalendarEvent) => {
-    if (!activeWorkspaceId) return;
-    try {
+  // Duplica el evento en una o varias fechas nuevas, conservando la hora y la duración.
+  const handleDuplicate = async (event: CalendarEvent, dates: string[]) => {
+    if (!activeWorkspaceId || dates.length === 0) return;
+    const start = toDate(event.startAt);
+    const end = toDate(event.endAt);
+    const durationMs = Math.max(0, end.getTime() - start.getTime());
+    for (const ymd of dates) {
+      const [y, m, d] = ymd.split("-").map(Number);
+      const startAt = new Date(y, (m || 1) - 1, d || 1, start.getHours(), start.getMinutes(), 0, 0);
+      const endAt = new Date(startAt.getTime() + durationMs);
       await createEvent({
         workspaceId: activeWorkspaceId,
-        title: `${event.title} (copia)`,
-        startAt: toDate(event.startAt),
-        endAt: toDate(event.endAt),
+        title: event.title,
+        startAt,
+        endAt,
         allDay: event.allDay,
         color: event.color,
         modality: event.modality,
         kind: event.kind === "coach" ? "coach" : "normal",
         clientCode: event.kind === "coach" ? event.clientCode ?? null : null,
         clientName: event.kind === "coach" ? event.clientName ?? null : null,
-        purchasedSessions: event.kind === "coach" ? event.purchasedSessions ?? 1 : null,
+        // Las copias de una sesión coach no vuelven a "comprar": cuentan como tomadas (0).
+        purchasedSessions: event.kind === "coach" ? 0 : null,
         reminderMinutes: event.reminderMinutes ?? 30,
         totalAmount: event.totalAmount ?? null,
         paidAmount: event.paidAmount ?? null,
@@ -135,8 +143,6 @@ function AppContent() {
         createdBy: "",
         createdByName: profile?.name || ""
       });
-    } catch (error) {
-      console.error("No se pudo duplicar el evento", error);
     }
   };
 
