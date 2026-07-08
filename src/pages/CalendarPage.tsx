@@ -194,7 +194,7 @@ export default function CalendarPage({
       {/* En celular: plano y de borde a borde (estilo TimeTree), fijo sin scroll, con swipe para cambiar de mes.
           En sm+ (PC/tablet) conserva exactamente la tarjeta y cuadrícula de siempre. */}
       <div
-        className="flex min-h-0 flex-1 flex-col sm:rounded-2xl sm:border sm:border-app-soft sm:bg-app-panel sm:p-3 sm:shadow-sm"
+        className="cal-wrap flex min-h-0 flex-1 flex-col rounded-2xl border border-app-soft bg-app-panel p-1.5 shadow-sm sm:p-3"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -206,11 +206,7 @@ export default function CalendarPage({
           ))}
         </div>
 
-        <div
-          className={`grid min-h-0 flex-1 auto-rows-fr grid-cols-7 gap-px bg-app-soft sm:grid-rows-6 sm:gap-1 sm:bg-transparent ${
-            weeks === 4 ? "grid-rows-4" : weeks === 5 ? "grid-rows-5" : "grid-rows-6"
-          }`}
-        >
+        <div data-weeks={weeks} className="cal-grid grid min-h-0 flex-1 auto-rows-fr grid-cols-7 grid-rows-6 gap-0.5 sm:gap-1">
           {gridCells.map(({ date, currentMonth }, index) => {
             const dayEvents = getEventsForDay(date);
             const today = isSameDay(date, new Date());
@@ -226,12 +222,12 @@ export default function CalendarPage({
                   if (didDragRef.current) return;
                   setDayModal(date);
                 }}
-                className={`${beyondMonth ? "hidden sm:flex" : "flex"} min-h-0 flex-col overflow-hidden p-0.5 text-left transition sm:rounded-xl sm:p-1 ${
+                className={`cal-cell ${beyondMonth ? "cal-cell-extra " : ""}flex min-h-0 flex-col overflow-hidden rounded-xl border p-1 text-left transition ${
                   drag && drag.overKey === dateKey(date)
-                    ? "bg-app-soft ring-2 ring-inset ring-app-accent sm:border-2 sm:border-app-accent"
+                    ? "cal-cell--over border-2 border-app-accent bg-app-soft ring-2 ring-app-accent"
                     : today
-                      ? "bg-app sm:border-2 sm:border-app-accent sm:bg-app-soft"
-                      : "bg-app sm:border sm:border-app-soft sm:bg-app-panel sm:hover:bg-app-soft"
+                      ? "border-2 border-app-accent bg-app-soft"
+                      : "border-app-soft bg-app-panel hover:bg-app-soft"
                 }`}
               >
                 <span
