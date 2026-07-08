@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type React from "react";
 import { Bell, CalendarPlus, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
-import { Card } from "../components/ui/Card";
 import { Modal } from "../components/ui/Modal";
 import { EventDetailModal } from "../components/events/EventDetailModal";
 import { formatCOP, isSameDay, toDate } from "../lib/dateUtils";
@@ -102,7 +101,7 @@ export default function CalendarPage({
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  const gridCells = useMemo(() => {
+  const { gridCells, weeks } = useMemo(() => {
     const firstDay = new Date(year, month, 1);
     let startIndex = firstDay.getDay() - 1;
     if (startIndex === -1) startIndex = 6;
@@ -119,8 +118,28 @@ export default function CalendarPage({
     while (cells.length < 42) {
       cells.push({ date: new Date(year, month + 1, cells.length - startIndex - currentMonthDays + 1), currentMonth: false });
     }
-    return cells;
+    // Semanas reales del mes (5 casi siempre): en celular solo se muestran esas,
+    // como TimeTree, para que cada cuadro sea más alto. En PC se ven las 6 filas.
+    return { gridCells: cells, weeks: Math.ceil((startIndex + currentMonthDays) / 7) };
   }, [month, year]);
+
+  // Deslizar a los lados (solo táctil) para cambiar de mes, estilo TimeTree.
+  const touchSwipeRef = useRef<{ x: number; y: number } | null>(null);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchSwipeRef.current = { x: t.clientX, y: t.clientY };
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const start = touchSwipeRef.current;
+    touchSwipeRef.current = null;
+    if (!start || drag || didDragRef.current) return; // no cambiar de mes si se estaba arrastrando un evento
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 1.8 * Math.abs(dy)) {
+      setCurrentDate(new Date(year, month + (dx < 0 ? 1 : -1), 1));
+    }
+  };
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -154,8 +173,8 @@ export default function CalendarPage({
   };
 
   return (
-    <div className="flex h-[calc(100dvh-10.5rem)] flex-col gap-3 md:h-[calc(100dvh-6rem)]">
-      <div className="flex shrink-0 items-center justify-between gap-3">
+    <div className="-mx-4 flex h-[calc(100dvh-10.5rem)] flex-col gap-2 sm:mx-0 sm:gap-3 md:h-[calc(100dvh-6rem)]">
+      <div className="flex shrink-0 items-center justify-between gap-3 px-3 sm:px-0">
         <h2 className="m-0 text-xl font-black tracking-tight text-app-strong sm:text-2xl">
           {MONTHS[month]} {year}
         </h2>
@@ -172,8 +191,14 @@ export default function CalendarPage({
         </div>
       </div>
 
-      <Card className="flex min-h-0 flex-1 flex-col p-1.5 sm:p-3">
-        <div className="mb-1 grid grid-cols-7">
+      {/* En celular: plano y de borde a borde (estilo TimeTree), fijo sin scroll, con swipe para cambiar de mes.
+          En sm+ (PC/tablet) conserva exactamente la tarjeta y cuadrícula de siempre. */}
+      <div
+        className="flex min-h-0 flex-1 flex-col sm:rounded-2xl sm:border sm:border-app-soft sm:bg-app-panel sm:p-3 sm:shadow-sm"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="mb-0.5 grid grid-cols-7 sm:mb-1">
           {DAYS.map((day) => (
             <span key={day} className="py-1 text-center text-[10px] font-black uppercase text-app-faint sm:text-xs">
               {day}
@@ -181,11 +206,16 @@ export default function CalendarPage({
           ))}
         </div>
 
-        {/* En celular: filas altas (estilo TimeTree) con scroll vertical. En sm+ (PC/tablet): la cuadrícula llena la pantalla como antes. */}
-        <div className="app-scrollbar grid min-h-0 flex-1 auto-rows-[minmax(6.5rem,auto)] grid-cols-7 gap-0.5 overflow-y-auto sm:auto-rows-fr sm:grid-rows-6 sm:gap-1 sm:overflow-visible">
+        <div
+          className={`grid min-h-0 flex-1 auto-rows-fr grid-cols-7 gap-px bg-app-soft sm:grid-rows-6 sm:gap-1 sm:bg-transparent ${
+            weeks === 4 ? "grid-rows-4" : weeks === 5 ? "grid-rows-5" : "grid-rows-6"
+          }`}
+        >
           {gridCells.map(({ date, currentMonth }, index) => {
             const dayEvents = getEventsForDay(date);
             const today = isSameDay(date, new Date());
+            // En celular solo se muestran las semanas del mes (como TimeTree); en sm+ siempre 6 filas.
+            const beyondMonth = index >= weeks * 7;
 
             return (
               <button
@@ -196,12 +226,12 @@ export default function CalendarPage({
                   if (didDragRef.current) return;
                   setDayModal(date);
                 }}
-                className={`flex min-h-0 flex-col overflow-hidden rounded-xl border p-1 text-left transition ${
+                className={`${beyondMonth ? "hidden sm:flex" : "flex"} min-h-0 flex-col overflow-hidden p-0.5 text-left transition sm:rounded-xl sm:p-1 ${
                   drag && drag.overKey === dateKey(date)
-                    ? "border-2 border-app-accent bg-app-soft ring-2 ring-app-accent"
+                    ? "bg-app-soft ring-2 ring-inset ring-app-accent sm:border-2 sm:border-app-accent"
                     : today
-                      ? "border-2 border-app-accent bg-app-soft"
-                      : "border-app-soft bg-app-panel hover:bg-app-soft"
+                      ? "bg-app sm:border-2 sm:border-app-accent sm:bg-app-soft"
+                      : "bg-app sm:border sm:border-app-soft sm:bg-app-panel sm:hover:bg-app-soft"
                 }`}
               >
                 <span
@@ -235,7 +265,7 @@ export default function CalendarPage({
             );
           })}
         </div>
-      </Card>
+      </div>
 
       <Modal
         isOpen={!!dayModal}
