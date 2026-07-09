@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
+import { collection, doc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toDateSafe } from "../lib/dateUtils";
 import type { Client } from "../types/client";
@@ -124,16 +124,23 @@ export const clientsService = {
       return { id: client.id, workspaceId, code: client.code, name: client.name, nameLower: normalizeText(client.name), active, createdAt: new Date() };
     }
 
+    // Una sola lectura de la agenda: sirve para verificar que el código no se repita
+    // y para reasignar las sesiones coach de esta persona. (Leer un doc que NO existe
+    // lo bloquean las reglas, por eso NO usamos getDoc para comprobar el código libre.)
+    const snap = await getDocs(query(collection(db, "events"), where("workspaceId", "==", workspaceId)));
+
+    if (codeChanged) {
+      const taken = snap.docs.some((d) => {
+        const data = d.data();
+        return data.recordType === CLIENT_TYPE && Number(data.clientCode) === newCode && d.id !== client.id;
+      });
+      if (taken) throw new Error(`Ya existe una persona con el código ${newCode}. Elige otro número.`);
+    }
+
     const batch = writeBatch(db);
 
     if (codeChanged) {
-      // El nuevo código no puede estar ocupado por OTRA persona.
-      const targetId = clientDocId(workspaceId, newCode);
-      const target = await getDoc(doc(db, "events", targetId));
-      if (target.exists() && target.data()?.recordType === CLIENT_TYPE) {
-        throw new Error(`Ya existe una persona con el código ${newCode}. Elige otro número.`);
-      }
-      batch.set(doc(db, "events", targetId), buildDocData(workspaceId, newCode, newName, active, uid));
+      batch.set(doc(db, "events", clientDocId(workspaceId, newCode)), buildDocData(workspaceId, newCode, newName, active, uid));
       batch.delete(doc(db, "events", client.id));
     } else {
       batch.update(doc(db, "events", client.id), {
@@ -144,8 +151,7 @@ export const clientsService = {
     }
 
     // Reasignar las sesiones coach de esta persona (código viejo) al nuevo código/nombre.
-    const evSnap = await getDocs(query(collection(db, "events"), where("workspaceId", "==", workspaceId)));
-    evSnap.docs
+    snap.docs
       .filter((d) => {
         const data = d.data();
         return data.recordType !== CLIENT_TYPE && data.kind === "coach" && Number(data.clientCode) === client.code;
