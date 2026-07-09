@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toDateSafe } from "../lib/dateUtils";
 import type { Client } from "../types/client";
@@ -95,6 +95,67 @@ export const clientsService = {
 
     await setDoc(doc(db, "events", clientDocId(workspaceId, code)), buildDocData(workspaceId, code, clean, true, uid));
     return { id: clientDocId(workspaceId, code), workspaceId, code, name: clean, nameLower: normalizeText(clean), active: true, createdAt: new Date() };
+  },
+
+  /**
+   * Edita una persona: nombre y/o código. El código NO se puede repetir.
+   * Como el código está en el id del documento, cambiarlo crea un documento nuevo
+   * (con el código correcto) y borra el viejo; además reasigna las sesiones coach
+   * que apuntaban al código anterior para no perder el historial. Todo en un batch.
+   */
+  async updateClient(
+    workspaceId: string,
+    client: { id: string; code: number; name: string; active?: boolean },
+    updates: { code: number; name: string }
+  ): Promise<Client> {
+    if (!workspaceId) throw new Error("Falta la agenda.");
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error("Debes iniciar sesión.");
+
+    const newName = (updates.name || "").trim();
+    if (!newName) throw new Error("El nombre no puede estar vacío.");
+    const newCode = Math.floor(Number(updates.code));
+    if (!Number.isFinite(newCode) || newCode < 1) throw new Error("El código debe ser un número entero mayor que 0.");
+
+    const active = client.active !== false;
+    const codeChanged = newCode !== client.code;
+    const nameChanged = newName !== client.name;
+    if (!codeChanged && !nameChanged) {
+      return { id: client.id, workspaceId, code: client.code, name: client.name, nameLower: normalizeText(client.name), active, createdAt: new Date() };
+    }
+
+    const batch = writeBatch(db);
+
+    if (codeChanged) {
+      // El nuevo código no puede estar ocupado por OTRA persona.
+      const targetId = clientDocId(workspaceId, newCode);
+      const target = await getDoc(doc(db, "events", targetId));
+      if (target.exists() && target.data()?.recordType === CLIENT_TYPE) {
+        throw new Error(`Ya existe una persona con el código ${newCode}. Elige otro número.`);
+      }
+      batch.set(doc(db, "events", targetId), buildDocData(workspaceId, newCode, newName, active, uid));
+      batch.delete(doc(db, "events", client.id));
+    } else {
+      batch.update(doc(db, "events", client.id), {
+        clientName: newName,
+        nameLower: normalizeText(newName),
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    // Reasignar las sesiones coach de esta persona (código viejo) al nuevo código/nombre.
+    const evSnap = await getDocs(query(collection(db, "events"), where("workspaceId", "==", workspaceId)));
+    evSnap.docs
+      .filter((d) => {
+        const data = d.data();
+        return data.recordType !== CLIENT_TYPE && data.kind === "coach" && Number(data.clientCode) === client.code;
+      })
+      .forEach((d) => batch.update(d.ref, { clientCode: newCode, clientName: newName, updatedAt: serverTimestamp() }));
+
+    await batch.commit();
+
+    const finalId = codeChanged ? clientDocId(workspaceId, newCode) : client.id;
+    return { id: finalId, workspaceId, code: newCode, name: newName, nameLower: normalizeText(newName), active, createdAt: new Date() };
   },
 
   /** Importación masiva (CSV). Escribe en lotes de 450. Idempotente por (workspace, code). */

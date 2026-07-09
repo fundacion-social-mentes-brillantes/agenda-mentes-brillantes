@@ -46,5 +46,16 @@ export function useClients(workspaceId: string | null) {
     [workspaceId]
   );
 
-  return { clients, loading, error, createClient, importClients };
+  const updateClient = useCallback(
+    async (
+      client: { id: string; code: number; name: string; active?: boolean },
+      updates: { code: number; name: string }
+    ): Promise<Client> => {
+      if (!workspaceId) throw new Error("Selecciona una agenda.");
+      return clientsService.updateClient(workspaceId, client, updates);
+    },
+    [workspaceId]
+  );
+
+  return { clients, loading, error, createClient, importClients, updateClient };
 }

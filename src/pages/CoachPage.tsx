@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { CheckCircle2, ChevronDown, HeartHandshake, Plus, Search, Upload, UserPlus, UserRound } from "lucide-react";
+import { CheckCircle2, ChevronDown, HeartHandshake, Pencil, Plus, Search, Upload, UserPlus, UserRound } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Spinner } from "../components/ui/Spinner";
 import { formatEventTime, toDate } from "../lib/dateUtils";
@@ -14,6 +14,10 @@ interface CoachPageProps {
   loadingClients: boolean;
   onImportClients: (rows: { code: number; name: string; active?: boolean }[]) => Promise<number>;
   onCreateClient: (name: string) => Promise<Client>;
+  onUpdateClient: (
+    client: { id: string; code: number; name: string; active?: boolean },
+    updates: { code: number; name: string }
+  ) => Promise<Client>;
   onNewCoachSession: (client?: { code: number; name: string }) => void;
   onEditEvent: (event: CalendarEvent) => void;
 }
@@ -24,6 +28,7 @@ export default function CoachPage({
   loadingClients,
   onImportClients,
   onCreateClient,
+  onUpdateClient,
   onNewCoachSession,
   onEditEvent
 }: CoachPageProps) {
@@ -34,6 +39,13 @@ export default function CoachPage({
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const now = new Date();
+
+  // Edición de una persona (nombre y/o código).
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editCode, setEditCode] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Sesiones coach agrupadas por código de persona.
   const byCode = useMemo(() => {
@@ -98,6 +110,53 @@ export default function CoachPage({
       setSearch(c.name);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo crear la persona.");
+    }
+  };
+
+  const startEdit = (c: Client) => {
+    if (!c.id) return;
+    setEditingId(c.id);
+    setEditName(c.name);
+    setEditCode(String(c.code));
+    setEditError(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditError(null);
+    setEditBusy(false);
+  };
+
+  const saveEdit = async (c: Client) => {
+    if (editBusy || !c.id) return;
+    const name = editName.trim();
+    const code = parseInt(editCode, 10);
+    if (!name) {
+      setEditError("El nombre no puede estar vacío.");
+      return;
+    }
+    if (!Number.isFinite(code) || code < 1) {
+      setEditError("El código debe ser un número entero mayor que 0.");
+      return;
+    }
+    // Aviso temprano de duplicado (además de la validación del servidor).
+    if (code !== c.code && clients.some((other) => other.code === code)) {
+      setEditError(`El código ${code} ya lo tiene otra persona. Elige otro número.`);
+      return;
+    }
+    setEditBusy(true);
+    setEditError(null);
+    setNotice(null);
+    setError(null);
+    try {
+      const updated = await onUpdateClient({ id: c.id!, code: c.code, name: c.name, active: c.active }, { code, name });
+      setEditingId(null);
+      setExpanded(updated.code);
+      setNotice(`Persona actualizada: ${updated.name} · #${updated.code}`);
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : "No se pudo guardar el cambio.");
+    } finally {
+      setEditBusy(false);
     }
   };
 
@@ -204,7 +263,38 @@ export default function CoachPage({
                 </div>
 
                 {isOpen && (
-                  <div className="space-y-2 border-t border-app-soft p-4">
+                  <div className="space-y-3 border-t border-app-soft p-4">
+                    {editingId === c.id ? (
+                      <div className="space-y-2 rounded-2xl border border-app-soft bg-app-soft p-3">
+                        <p className="m-0 section-label">Editar persona</p>
+                        <div className="grid gap-2 sm:grid-cols-[1fr_130px]">
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-bold text-app-faint">Nombre</span>
+                            <input className="input-field" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nombre completo" />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-bold text-app-faint">Código</span>
+                            <input className="input-field" type="number" min="1" step="1" inputMode="numeric" value={editCode} onChange={(e) => setEditCode(e.target.value)} />
+                          </label>
+                        </div>
+                        {editError && <p className="m-0 text-xs font-bold text-red-500">{editError}</p>}
+                        <p className="m-0 text-xs text-app-faint">El código no se puede repetir. Si esta persona tiene sesiones, se conservan.</p>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => saveEdit(c)} disabled={editBusy} className="btn-primary min-h-9 flex-1 px-3 py-1.5 text-xs">
+                            {editBusy ? <Spinner className="h-4 w-4" /> : <CheckCircle2 size={14} />}
+                            Guardar
+                          </button>
+                          <button type="button" onClick={cancelEdit} disabled={editBusy} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => startEdit(c)} className="btn-secondary min-h-9 w-full px-3 py-1.5 text-xs sm:w-auto">
+                        <Pencil size={14} />
+                        Editar nombre o código
+                      </button>
+                    )}
                     <div className="flex items-center justify-between">
                       <p className="m-0 section-label">Sesiones</p>
                       <button type="button" onClick={() => onNewCoachSession({ code: c.code, name: c.name })} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">

@@ -39,7 +39,7 @@ function AppContent() {
     error: workspacesError
   } = useWorkspaces(user);
   const { events, loading: eventsLoading, createEvent, updateEvent, deleteEvent } = useEvents(activeWorkspaceId);
-  const { clients, loading: clientsLoading, createClient, importClients } = useClients(activeWorkspaceId);
+  const { clients, loading: clientsLoading, createClient, importClients, updateClient } = useClients(activeWorkspaceId);
 
   useEventReminders(events);
 
@@ -255,6 +255,7 @@ function AppContent() {
             loadingClients={clientsLoading}
             onImportClients={importClients}
             onCreateClient={handleCreateClient}
+            onUpdateClient={updateClient}
             onNewCoachSession={handleNewCoachSession}
             onEditEvent={handleEditEvent}
           />
