@@ -1,6 +1,22 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getDb, getOwnerUid, getTzOffset } from "./firebase.js";
 
+const FIXED_MEETINGS = {
+  ego_room: "https://meet.google.com/pgk-svvh-brp",
+  steps: "https://meet.google.com/zrt-matj-dwe"
+} as const;
+
+function fixedMeetingForTitle(title: string): { meetingLinkType: "ego_room" | "steps"; meetingUrl: string } | null {
+  const normalized = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (normalized.includes("sala de reduccion del ego")) {
+    return { meetingLinkType: "ego_room", meetingUrl: FIXED_MEETINGS.ego_room };
+  }
+  if (normalized.includes("entrega de pasos")) {
+    return { meetingLinkType: "steps", meetingUrl: FIXED_MEETINGS.steps };
+  }
+  return null;
+}
+
 export function personalWorkspaceId(uid: string): string {
   return `personal_${uid}`;
 }
@@ -77,6 +93,8 @@ export interface EventView {
   reminderMinutes: number | null;
   totalAmount: number | null;
   paidAmount: number | null;
+  meetingLinkType: string;
+  meetingUrl: string;
   done: boolean;
   workspaceId: string;
 }
@@ -84,6 +102,7 @@ export interface EventView {
 function viewEvent(id: string, data: FirebaseFirestore.DocumentData): EventView {
   const start = tsToDate(data.startAt);
   const end = tsToDate(data.endAt);
+  const fixedMeeting = fixedMeetingForTitle(data.title || "");
   return {
     id,
     title: data.title || "",
@@ -96,6 +115,8 @@ function viewEvent(id: string, data: FirebaseFirestore.DocumentData): EventView 
     reminderMinutes: typeof data.reminderMinutes === "number" ? data.reminderMinutes : null,
     totalAmount: typeof data.totalAmount === "number" ? data.totalAmount : null,
     paidAmount: typeof data.paidAmount === "number" ? data.paidAmount : null,
+    meetingLinkType: fixedMeeting?.meetingLinkType || data.meetingLinkType || "none",
+    meetingUrl: fixedMeeting?.meetingUrl || data.meetingUrl || "",
     done: data.done === true,
     workspaceId: data.workspaceId || ""
   };
@@ -218,6 +239,7 @@ export async function createEvent(input: EventInput): Promise<EventView> {
   }
 
   const hasMoney = typeof input.totalAmount === "number" || typeof input.paidAmount === "number";
+  const fixedMeeting = fixedMeetingForTitle(input.title);
   const data: FirebaseFirestore.DocumentData = {
     workspaceId,
     title: input.title.trim(),
@@ -229,6 +251,8 @@ export async function createEvent(input: EventInput): Promise<EventView> {
     reminderMinutes: typeof input.reminderMinutes === "number" ? input.reminderMinutes : 30,
     totalAmount: typeof input.totalAmount === "number" ? input.totalAmount : null,
     paidAmount: typeof input.paidAmount === "number" ? input.paidAmount : null,
+    meetingLinkType: fixedMeeting?.meetingLinkType || "none",
+    meetingUrl: fixedMeeting?.meetingUrl || "",
     currency: hasMoney ? "COP" : null,
     attachments: [],
     done: false,
@@ -254,7 +278,11 @@ export async function updateEvent(
   const data = current.data() || {};
 
   const update: FirebaseFirestore.DocumentData = { updatedAt: FieldValue.serverTimestamp() };
-  if (patch.title !== undefined) update.title = patch.title.trim();
+  if (patch.title !== undefined) {
+    update.title = patch.title.trim();
+    const fixedMeeting = fixedMeetingForTitle(update.title);
+    if (fixedMeeting) Object.assign(update, fixedMeeting);
+  }
   if (patch.modality !== undefined) update.modality = patch.modality === "virtual" ? "virtual" : "presencial";
   if (patch.color !== undefined) update.color = patch.color;
   if (patch.reminderMinutes !== undefined) update.reminderMinutes = patch.reminderMinutes;

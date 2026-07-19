@@ -5,6 +5,8 @@ export type EventModality = "presencial" | "virtual" | "otro";
 /** Tipo de evento: normal o sesión coach (ligada a una persona de la base de datos). */
 export type EventKind = "normal" | "coach";
 
+export type MeetingLinkType = "none" | "custom" | "ego_room" | "steps" | "coach";
+
 export type AttachmentKind = "image" | "file";
 
 export interface EventAttachment {
@@ -23,6 +25,9 @@ export interface CalendarEvent {
   title: string;
   /** Texto libre del evento. Los enlaces se muestran como clicables en el detalle. */
   description?: string;
+  /** Tipo de enlace de reunión; los tipos fijos siempre usan su URL institucional. */
+  meetingLinkType?: MeetingLinkType;
+  meetingUrl?: string;
   startAt: Date | Timestamp;
   endAt: Date | Timestamp;
   allDay: boolean;

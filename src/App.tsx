@@ -130,6 +130,8 @@ function AppContent() {
         workspaceId: activeWorkspaceId,
         title: event.title,
         description: event.description || "",
+        meetingLinkType: event.meetingLinkType,
+        meetingUrl: event.meetingUrl || "",
         startAt,
         endAt,
         allDay: event.allDay,

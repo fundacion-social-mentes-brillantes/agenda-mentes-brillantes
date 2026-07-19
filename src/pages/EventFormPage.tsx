@@ -4,9 +4,12 @@ import {
   CalendarDays,
   CalendarRange,
   CheckCircle2,
+  ExternalLink,
   FileText,
   HeartHandshake,
   Image as ImageIcon,
+  Link2,
+  LockKeyhole,
   Paperclip,
   Plus,
   RotateCcw,
@@ -15,16 +18,18 @@ import {
   Trash2,
   Upload,
   UserRound,
+  Video,
   X
 } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Spinner } from "../components/ui/Spinner";
 import { COACH_EVENT_COLOR, COLOR_PRESETS, DEFAULT_EVENT_COLOR, MODALITY_OPTIONS, REMINDER_OPTIONS } from "../lib/eventMeta";
+import { FIXED_MEETING_LINKS, getFixedMeetingTypeForTitle, resolveMeetingLink } from "../lib/meetingLinks";
 import { auth } from "../lib/firebase";
 import { storageService } from "../services/storageService";
 import { normalizeText } from "../services/clientsService";
 import type { EventWriteResult } from "../services/eventsService";
-import type { CalendarEvent, EventAttachment, EventKind, EventModality } from "../types/event";
+import type { CalendarEvent, EventAttachment, EventKind, EventModality, MeetingLinkType } from "../types/event";
 import type { Client } from "../types/client";
 import type { UserProfile } from "../types/user";
 
@@ -71,6 +76,8 @@ export default function EventFormPage({
   const [client, setClient] = useState<{ code: number; name: string } | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [meetingLinkType, setMeetingLinkType] = useState<MeetingLinkType>("none");
+  const [customMeetingUrl, setCustomMeetingUrl] = useState("");
   const [dateStr, setDateStr] = useState("");
   const [startTimeStr, setStartTimeStr] = useState("09:00");
   const [endTimeStr, setEndTimeStr] = useState("10:00");
@@ -118,6 +125,18 @@ export default function EventFormPage({
     return { compradas, agendadas, quedan: compradas - agendadas };
   }, [kind, client, events, editingEvent?.id]);
   const noSessionsLeft = !!coachStats && parsedPurchased === 0 && coachStats.quedan <= 0;
+  const meetingPreview = useMemo(
+    () => resolveMeetingLink({ kind, modality, title, meetingLinkType, meetingUrl: customMeetingUrl }),
+    [kind, modality, title, meetingLinkType, customMeetingUrl]
+  );
+  const titleFixedMeetingType = kind === "normal" ? getFixedMeetingTypeForTitle(title) : null;
+
+  const selectNormalMeetingType = (type: MeetingLinkType) => {
+    setMeetingLinkType(type);
+    if (type !== "custom") setCustomMeetingUrl("");
+    if (!title.trim() && type === "ego_room") setTitle("Sala de reducción del ego");
+    if (!title.trim() && type === "steps") setTitle("Entrega de pasos");
+  };
 
   useEffect(() => {
     return () => {
@@ -150,6 +169,15 @@ export default function EventFormPage({
       );
       setTitle(editingEvent.title || "");
       setDescription(editingEvent.description || "");
+      const editingMeeting = resolveMeetingLink({
+        kind: evKind,
+        modality: editingEvent.modality,
+        title: editingEvent.title,
+        meetingLinkType: editingEvent.meetingLinkType,
+        meetingUrl: editingEvent.meetingUrl
+      });
+      setMeetingLinkType(editingMeeting.meetingLinkType);
+      setCustomMeetingUrl(editingMeeting.meetingLinkType === "custom" ? editingMeeting.meetingUrl : "");
       setDateStr(formatDate(start));
       setStartTimeStr(formatTime(start));
       setEndTimeStr(formatTime(end));
@@ -168,6 +196,8 @@ export default function EventFormPage({
       setClient(initialKind === "coach" && initialClient ? initialClient : null);
       setTitle("");
       setDescription("");
+      setMeetingLinkType(initialKind === "coach" ? "coach" : "none");
+      setCustomMeetingUrl("");
       setDateStr(formatDate(baseDate));
       setStartTimeStr("09:00");
       setEndTimeStr("10:00");
@@ -248,6 +278,10 @@ export default function EventFormPage({
       if (kind === "coach" && !client) throw new Error("Elige o crea la persona de la sesión coach.");
       const finalTitle = kind === "coach" ? (client?.name || "").trim() : title.trim();
       if (!finalTitle) throw new Error("Escribe un título para el evento.");
+      const finalMeeting = resolveMeetingLink({ kind, modality, title: finalTitle, meetingLinkType, meetingUrl: customMeetingUrl });
+      if (kind === "normal" && meetingLinkType === "custom" && !finalMeeting.meetingUrl) {
+        throw new Error("Escribe un enlace de reunión válido que comience por https://");
+      }
 
       const startAt = allDay ? new Date(`${dateStr}T00:00`) : new Date(`${dateStr}T${startTimeStr}`);
       const endAt = allDay ? new Date(`${dateStr}T23:59`) : new Date(`${dateStr}T${endTimeStr}`);
@@ -263,6 +297,7 @@ export default function EventFormPage({
         workspaceId,
         title: finalTitle,
         description: kind === "normal" ? description : editingEvent?.description || "",
+        ...finalMeeting,
         startAt,
         endAt,
         allDay,
@@ -534,6 +569,77 @@ export default function EventFormPage({
             </div>
           </FormSection>
 
+          <FormSection title="Enlace de reunión" icon={<Video size={18} />}>
+            {kind === "coach" ? (
+              modality === "virtual" ? (
+                <FixedMeetingLinkCard type="coach" url={meetingPreview.meetingUrl} />
+              ) : (
+                <div className="rounded-2xl border border-app-soft bg-app-soft p-4 text-sm font-bold text-app-muted">
+                  Las sesiones coach presenciales no llevan enlace de reunión. Al elegir modalidad virtual se asignará automáticamente el enlace fijo.
+                </div>
+              )
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <MeetingTypeButton
+                    active={meetingPreview.meetingLinkType === "none"}
+                    disabled={titleFixedMeetingType !== null}
+                    icon={<X size={16} />}
+                    label="Sin enlace"
+                    onClick={() => selectNormalMeetingType("none")}
+                  />
+                  <MeetingTypeButton
+                    active={meetingPreview.meetingLinkType === "ego_room"}
+                    disabled={titleFixedMeetingType !== null}
+                    icon={<LockKeyhole size={16} />}
+                    label="Sala de reducción"
+                    onClick={() => selectNormalMeetingType("ego_room")}
+                  />
+                  <MeetingTypeButton
+                    active={meetingPreview.meetingLinkType === "steps"}
+                    disabled={titleFixedMeetingType !== null}
+                    icon={<LockKeyhole size={16} />}
+                    label="Entrega de pasos"
+                    onClick={() => selectNormalMeetingType("steps")}
+                  />
+                  <MeetingTypeButton
+                    active={meetingPreview.meetingLinkType === "custom"}
+                    disabled={titleFixedMeetingType !== null}
+                    icon={<Link2 size={16} />}
+                    label="Otro enlace"
+                    onClick={() => selectNormalMeetingType("custom")}
+                  />
+                </div>
+
+                {titleFixedMeetingType && (
+                  <p className="m-0 text-xs font-bold text-app-accent">
+                    Este título usa siempre su enlace institucional fijo y no se puede cambiar.
+                  </p>
+                )}
+
+                {meetingPreview.meetingLinkType === "custom" && (
+                  <label className="block">
+                    <span className="section-label mb-2 block">Enlace personalizado</span>
+                    <input
+                      className="input-field"
+                      type="url"
+                      inputMode="url"
+                      value={customMeetingUrl}
+                      onChange={(e) => setCustomMeetingUrl(e.target.value)}
+                      placeholder="https://meet.google.com/..."
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                    />
+                  </label>
+                )}
+
+                {(meetingPreview.meetingLinkType === "ego_room" || meetingPreview.meetingLinkType === "steps") && (
+                  <FixedMeetingLinkCard type={meetingPreview.meetingLinkType} url={meetingPreview.meetingUrl} />
+                )}
+              </div>
+            )}
+          </FormSection>
+
           {kind === "coach" && (
             <FormSection title="Pagos (opcional)">
               <div className="grid gap-4 md:grid-cols-2">
@@ -646,6 +752,60 @@ export default function EventFormPage({
           </div>
         </div>
       </form>
+    </div>
+  );
+}
+
+function MeetingTypeButton({
+  active,
+  disabled,
+  icon,
+  label,
+  onClick
+}: {
+  active: boolean;
+  disabled: boolean;
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex min-h-12 items-center gap-2 rounded-2xl border px-3 text-left text-sm font-black transition ${
+        active ? "border-app-strong bg-app-soft text-app-accent" : "border-app-soft bg-app-panel text-app-muted hover:bg-app-soft"
+      } disabled:cursor-not-allowed disabled:opacity-60`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function FixedMeetingLinkCard({ type, url }: { type: "ego_room" | "steps" | "coach"; url: string }) {
+  const item = FIXED_MEETING_LINKS[type];
+  return (
+    <div className="rounded-2xl border border-app-soft bg-app-soft p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-app-panel text-app-accent">
+          <LockKeyhole size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="m-0 text-sm font-black text-app-strong">{item.label}</p>
+          <p className="m-0 mt-1 text-xs font-bold text-app-faint">Enlace fijo · no se puede cambiar</p>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex max-w-full items-center gap-2 break-all rounded-xl border border-app-soft bg-app-panel px-3 py-2 text-sm font-bold text-app-accent hover:bg-app-soft"
+          >
+            {url.replace(/^https:\/\//, "")}
+            <ExternalLink size={14} className="shrink-0" />
+          </a>
+        </div>
+      </div>
     </div>
   );
 }

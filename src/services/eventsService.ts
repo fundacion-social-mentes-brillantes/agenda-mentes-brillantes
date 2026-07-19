@@ -14,6 +14,7 @@ import {
 import { TimeoutError, withTimeout } from "../lib/asyncUtils";
 import { toDateSafe } from "../lib/dateUtils";
 import { DEFAULT_EVENT_COLOR } from "../lib/eventMeta";
+import { getFixedMeetingTypeForTitle, resolveMeetingLink } from "../lib/meetingLinks";
 import { auth, db } from "../lib/firebase";
 import type { CalendarEvent, EventAttachment, EventKind, EventModality } from "../types/event";
 
@@ -149,12 +150,20 @@ function mapDocToEvent(id: string, data: Record<string, any>): CalendarEvent {
   }
 
   const done = data.done === true || data.status === "completed" || data.status === "cancelled";
+  const meeting = resolveMeetingLink({
+    kind: normalizeKind(data.kind),
+    modality: normalizeModality(data.modality),
+    title: data.title,
+    meetingLinkType: data.meetingLinkType,
+    meetingUrl: data.meetingUrl
+  });
 
   return {
     id,
     workspaceId: data.workspaceId || "",
     title: data.title || "",
     description: normalizeDescription(data.description),
+    ...meeting,
     startAt,
     endAt,
     allDay: Boolean(data.allDay),
@@ -187,10 +196,13 @@ function sanitizeNewEvent(eventData: Partial<CalendarEvent>, uid: string): Recor
     throw new Error("Falta la agenda del evento.");
   }
 
+  const meeting = resolveMeetingLink(eventData);
+
   return cleanTopLevelData({
     workspaceId: eventData.workspaceId,
     title: eventData.title?.trim() || "",
     description: normalizeDescription(eventData.description),
+    ...meeting,
     startAt,
     endAt,
     allDay: Boolean(eventData.allDay),
@@ -217,6 +229,10 @@ function sanitizeEventUpdate(eventData: Partial<CalendarEvent>): Record<string, 
 
   if (eventData.title !== undefined) data.title = eventData.title.trim();
   if (eventData.description !== undefined) data.description = normalizeDescription(eventData.description);
+  const titleRequiresFixedLink = eventData.title !== undefined && getFixedMeetingTypeForTitle(eventData.title) !== null;
+  if (eventData.meetingLinkType !== undefined || eventData.meetingUrl !== undefined || eventData.kind !== undefined || titleRequiresFixedLink) {
+    Object.assign(data, resolveMeetingLink(eventData));
+  }
   if (eventData.startAt !== undefined) data.startAt = assertValidDate(eventData.startAt, "La fecha de inicio");
   if (eventData.endAt !== undefined) data.endAt = assertValidDate(eventData.endAt, "La fecha final");
   if (eventData.allDay !== undefined) data.allDay = Boolean(eventData.allDay);

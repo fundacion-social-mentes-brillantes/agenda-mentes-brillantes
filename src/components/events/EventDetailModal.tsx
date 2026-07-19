@@ -15,6 +15,7 @@ import {
   MonitorSmartphone,
   Trash2,
   UserRound,
+  Video,
   X
 } from "lucide-react";
 import { Modal } from "../ui/Modal";
@@ -22,6 +23,7 @@ import { Spinner } from "../ui/Spinner";
 import type { CalendarEvent } from "../../types/event";
 import { formatCOP, formatEventDate, formatEventTime, toDate } from "../../lib/dateUtils";
 import { getModalityLabel } from "../../lib/eventMeta";
+import { getMeetingLinkLabel } from "../../lib/meetingLinks";
 
 interface EventDetailModalProps {
   event: CalendarEvent | null;
@@ -186,6 +188,38 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onDuplicate, 
             )}
             {event.createdByName && <InfoItem icon={<UserRound size={16} />} label="Creado por" value={event.createdByName} />}
           </div>
+
+          {event.meetingUrl && (
+            <div className="rounded-2xl border border-app-soft bg-app-soft p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-app-panel text-app-accent">
+                  <Video size={20} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="m-0 text-xs font-bold uppercase tracking-wide text-app-faint">Enlace de reunión</p>
+                  <p className="m-0 mt-1 text-sm font-black text-app-strong">{getMeetingLinkLabel(event.meetingLinkType)}</p>
+                  <a
+                    href={event.meetingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary mt-3 w-full sm:w-auto"
+                  >
+                    <Video size={17} />
+                    Entrar a la reunión
+                    <ExternalLink size={15} />
+                  </a>
+                  <a
+                    href={event.meetingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 block break-all text-xs font-bold text-app-accent underline decoration-current/40 underline-offset-2"
+                  >
+                    {event.meetingUrl.replace(/^https:\/\//, "")}
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
 
           {hasAmounts && (
             <div className="rounded-2xl border border-app-soft bg-app-soft p-4">

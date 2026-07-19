@@ -3,6 +3,7 @@ import { Bot, Send, Sparkles, X } from "lucide-react";
 import { auth } from "../lib/firebase";
 import { toDate } from "../lib/dateUtils";
 import { DEFAULT_EVENT_COLOR } from "../lib/eventMeta";
+import { resolveMeetingLink } from "../lib/meetingLinks";
 import { Spinner } from "./ui/Spinner";
 import { normalizeText } from "../services/clientsService";
 import type { EventWriteResult } from "../services/eventsService";
@@ -133,6 +134,18 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
           patch.startAt = allDay ? buildDate(base, "00:00") : buildDate(base, args.startTime || (ev ? ev24(ev.startAt) : "09:00"));
           patch.endAt = allDay ? buildDate(base, "23:59") : buildDate(base, args.endTime || (ev ? ev24(ev.endAt) : "10:00"));
         }
+        if (ev && (args.title != null || args.modality != null)) {
+          Object.assign(
+            patch,
+            resolveMeetingLink({
+              kind: ev.kind,
+              modality: patch.modality || ev.modality,
+              title: patch.title || ev.title,
+              meetingLinkType: ev.meetingLinkType,
+              meetingUrl: ev.meetingUrl
+            })
+          );
+        }
         await onUpdateEvent(args.id, patch);
         return `OK: evento actualizado (id=${args.id}).`;
       }
@@ -148,6 +161,8 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
         const dup: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt"> = {
           workspaceId,
           title: ev.title,
+          meetingLinkType: ev.meetingLinkType,
+          meetingUrl: ev.meetingUrl || "",
           startAt: start,
           endAt: end,
           allDay,
