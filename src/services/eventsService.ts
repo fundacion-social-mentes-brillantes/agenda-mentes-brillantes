@@ -229,7 +229,10 @@ function sanitizeEventUpdate(eventData: Partial<CalendarEvent>): Record<string, 
 
   if (eventData.title !== undefined) data.title = eventData.title.trim();
   if (eventData.description !== undefined) data.description = normalizeDescription(eventData.description);
-  const titleRequiresFixedLink = eventData.title !== undefined && getFixedMeetingTypeForTitle(eventData.title) !== null;
+  const titleRequiresFixedLink =
+    eventData.title !== undefined &&
+    eventData.modality === "virtual" &&
+    getFixedMeetingTypeForTitle(eventData.title) !== null;
   if (eventData.meetingLinkType !== undefined || eventData.meetingUrl !== undefined || eventData.kind !== undefined || titleRequiresFixedLink) {
     Object.assign(data, resolveMeetingLink(eventData));
   }

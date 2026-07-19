@@ -34,8 +34,8 @@ function normalizeTitle(value: string): string {
 
 export function getFixedMeetingTypeForTitle(title = ""): "ego_room" | "steps" | null {
   const normalized = normalizeTitle(title);
-  if (normalized.includes("sala de reduccion del ego")) return "ego_room";
-  if (normalized.includes("entrega de pasos")) return "steps";
+  if (normalized.includes("reduccion del ego")) return "ego_room";
+  if (normalized.includes("entrega de pasos") || normalized.includes("pasos virtual")) return "steps";
   return null;
 }
 
@@ -63,14 +63,16 @@ export function resolveMeetingLink(input: MeetingLinkInput): ResolvedMeetingLink
     return { meetingLinkType: "none", meetingUrl: "" };
   }
 
-  const titleType = getFixedMeetingTypeForTitle(input.title);
+  // Los enlaces institucionales solo corresponden a sus eventos virtuales.
+  // Derivarlos del título hace que también aparezcan en los eventos antiguos.
+  const titleType = input.modality === "virtual" ? getFixedMeetingTypeForTitle(input.title) : null;
   const requestedType = isMeetingLinkType(input.meetingLinkType) ? input.meetingLinkType : "none";
-  const fixedType = titleType || (requestedType === "ego_room" || requestedType === "steps" ? requestedType : null);
-
-  if (fixedType) {
-    return { meetingLinkType: fixedType, meetingUrl: FIXED_MEETING_LINKS[fixedType].url };
+  if (titleType) {
+    return { meetingLinkType: titleType, meetingUrl: FIXED_MEETING_LINKS[titleType].url };
   }
-  if (requestedType === "custom") {
+  // Los enlaces fijos ya no son opciones del formulario. Los demás eventos
+  // normales sí pueden guardar cualquier URL HTTPS escrita por la persona.
+  if (requestedType === "custom" || (!input.meetingLinkType && input.meetingUrl)) {
     return { meetingLinkType: "custom", meetingUrl: normalizeMeetingUrl(input.meetingUrl) };
   }
   return { meetingLinkType: "none", meetingUrl: "" };

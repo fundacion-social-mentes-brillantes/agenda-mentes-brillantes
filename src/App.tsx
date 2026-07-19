@@ -39,11 +39,14 @@ function AppContent() {
     error: workspacesError
   } = useWorkspaces(user);
   const { events, loading: eventsLoading, createEvent, updateEvent, deleteEvent } = useEvents(activeWorkspaceId);
-  const { clients, loading: clientsLoading, createClient, importClients, updateClient } = useClients(activeWorkspaceId);
+
+  const [activePage, setActivePage] = useState<PageType>("calendar");
+  const [assistantHasOpened, setAssistantHasOpened] = useState(false);
+  const clientsNeeded = activePage === "coach" || activePage === "event-form" || assistantHasOpened;
+  const { clients, loading: clientsLoading, createClient, importClients, updateClient } = useClients(activeWorkspaceId, clientsNeeded);
 
   useEventReminders(events);
 
-  const [activePage, setActivePage] = useState<PageType>("calendar");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [formKind, setFormKind] = useState<EventKind>("normal");
@@ -328,6 +331,7 @@ function AppContent() {
         onUpdateEvent={updateEvent}
         onDeleteEvent={deleteEvent}
         onCreateClient={handleCreateClient}
+        onOpen={() => setAssistantHasOpened(true)}
       />
     </Layout>
   );

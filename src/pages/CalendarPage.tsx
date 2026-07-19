@@ -143,8 +143,18 @@ export default function CalendarPage({
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
+    const firstVisible = gridCells[0]?.date;
+    const lastVisible = gridCells[gridCells.length - 1]?.date;
+    const firstTime = firstVisible
+      ? new Date(firstVisible.getFullYear(), firstVisible.getMonth(), firstVisible.getDate()).getTime()
+      : Number.NEGATIVE_INFINITY;
+    const lastTime = lastVisible
+      ? new Date(lastVisible.getFullYear(), lastVisible.getMonth(), lastVisible.getDate(), 23, 59, 59, 999).getTime()
+      : Number.POSITIVE_INFINITY;
     for (const event of events) {
       const d = toDate(event.startAt);
+      const time = d.getTime();
+      if (time < firstTime || time > lastTime) continue;
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
       const list = map.get(key) || [];
       list.push(event);
@@ -152,7 +162,7 @@ export default function CalendarPage({
     }
     for (const list of map.values()) list.sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime());
     return map;
-  }, [events]);
+  }, [events, gridCells]);
 
   const getEventsForDay = (date: Date) => eventsByDay.get(`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`) || [];
 

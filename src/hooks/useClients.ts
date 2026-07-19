@@ -2,33 +2,27 @@ import { useCallback, useEffect, useState } from "react";
 import { clientsService } from "../services/clientsService";
 import type { Client } from "../types/client";
 
-export function useClients(workspaceId: string | null) {
+export function useClients(workspaceId: string | null, enabled = true) {
   const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!workspaceId) {
-      setClients([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    setLoading(true);
+    if (!workspaceId || !enabled) return;
     const unsubscribe = clientsService.subscribeToClients(
       workspaceId,
       (list) => {
         setClients(list);
-        setLoading(false);
+        setLoadedWorkspaceId(workspaceId);
         setError(null);
       },
       (err) => {
         setError(err instanceof Error ? err.message : "No se pudieron cargar las personas.");
-        setLoading(false);
+        setLoadedWorkspaceId(workspaceId);
       }
     );
     return () => unsubscribe();
-  }, [workspaceId]);
+  }, [workspaceId, enabled]);
 
   const createClient = useCallback(
     async (name: string): Promise<Client> => {
@@ -57,5 +51,14 @@ export function useClients(workspaceId: string | null) {
     [workspaceId]
   );
 
-  return { clients, loading, error, createClient, importClients, updateClient };
+  const hasActiveSnapshot = enabled && !!workspaceId && loadedWorkspaceId === workspaceId;
+
+  return {
+    clients: hasActiveSnapshot ? clients : [],
+    loading: enabled && !!workspaceId && !hasActiveSnapshot,
+    error: hasActiveSnapshot ? error : null,
+    createClient,
+    importClients,
+    updateClient
+  };
 }

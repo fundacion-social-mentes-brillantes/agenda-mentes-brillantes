@@ -7,7 +7,6 @@ import {
   persistentMultipleTabManager,
   type Firestore
 } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -35,10 +34,3 @@ try {
   firestore = getFirestore(app);
 }
 export const db = firestore;
-
-export const storage = getStorage(app);
-
-// Analytics se carga aparte (import dinámico) para no engordar el arranque.
-export const analyticsPromise = import("firebase/analytics")
-  .then(({ isSupported, getAnalytics }) => isSupported().then((ok) => (ok ? getAnalytics(app) : null)))
-  .catch(() => null);

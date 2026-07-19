@@ -6,12 +6,16 @@ const FIXED_MEETINGS = {
   steps: "https://meet.google.com/zrt-matj-dwe"
 } as const;
 
-function fixedMeetingForTitle(title: string): { meetingLinkType: "ego_room" | "steps"; meetingUrl: string } | null {
+function fixedMeetingForTitle(
+  title: string,
+  modality: unknown
+): { meetingLinkType: "ego_room" | "steps"; meetingUrl: string } | null {
+  if (modality !== "virtual") return null;
   const normalized = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
-  if (normalized.includes("sala de reduccion del ego")) {
+  if (normalized.includes("reduccion del ego")) {
     return { meetingLinkType: "ego_room", meetingUrl: FIXED_MEETINGS.ego_room };
   }
-  if (normalized.includes("entrega de pasos")) {
+  if (normalized.includes("entrega de pasos") || normalized.includes("pasos virtual")) {
     return { meetingLinkType: "steps", meetingUrl: FIXED_MEETINGS.steps };
   }
   return null;
@@ -102,7 +106,7 @@ export interface EventView {
 function viewEvent(id: string, data: FirebaseFirestore.DocumentData): EventView {
   const start = tsToDate(data.startAt);
   const end = tsToDate(data.endAt);
-  const fixedMeeting = fixedMeetingForTitle(data.title || "");
+  const fixedMeeting = fixedMeetingForTitle(data.title || "", data.modality);
   return {
     id,
     title: data.title || "",
@@ -239,7 +243,7 @@ export async function createEvent(input: EventInput): Promise<EventView> {
   }
 
   const hasMoney = typeof input.totalAmount === "number" || typeof input.paidAmount === "number";
-  const fixedMeeting = fixedMeetingForTitle(input.title);
+  const fixedMeeting = fixedMeetingForTitle(input.title, input.modality);
   const data: FirebaseFirestore.DocumentData = {
     workspaceId,
     title: input.title.trim(),
@@ -278,12 +282,19 @@ export async function updateEvent(
   const data = current.data() || {};
 
   const update: FirebaseFirestore.DocumentData = { updatedAt: FieldValue.serverTimestamp() };
-  if (patch.title !== undefined) {
-    update.title = patch.title.trim();
-    const fixedMeeting = fixedMeetingForTitle(update.title);
-    if (fixedMeeting) Object.assign(update, fixedMeeting);
-  }
+  if (patch.title !== undefined) update.title = patch.title.trim();
   if (patch.modality !== undefined) update.modality = patch.modality === "virtual" ? "virtual" : "presencial";
+  if (patch.title !== undefined || patch.modality !== undefined) {
+    const nextTitle = String(update.title ?? data.title ?? "");
+    const nextModality = update.modality ?? data.modality;
+    const fixedMeeting = fixedMeetingForTitle(nextTitle, nextModality);
+    if (fixedMeeting) {
+      Object.assign(update, fixedMeeting);
+    } else if (data.meetingLinkType === "ego_room" || data.meetingLinkType === "steps") {
+      update.meetingLinkType = "none";
+      update.meetingUrl = "";
+    }
+  }
   if (patch.color !== undefined) update.color = patch.color;
   if (patch.reminderMinutes !== undefined) update.reminderMinutes = patch.reminderMinutes;
   if (patch.totalAmount !== undefined) update.totalAmount = patch.totalAmount;

@@ -25,6 +25,7 @@ interface AssistantWidgetProps {
   onUpdateEvent: (id: string, eventData: Partial<CalendarEvent>) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
   onCreateClient: (name: string) => Promise<Client>;
+  onOpen?: () => void;
 }
 
 const GREETING: UiMessage = {
@@ -46,7 +47,7 @@ function evDate(value: CalendarEvent["startAt"]): string {
   const d = toDate(value);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-export function AssistantWidget({ events, clients, workspaceName, workspaceId, userName, onCreateEvent, onUpdateEvent, onDeleteEvent, onCreateClient }: AssistantWidgetProps) {
+export function AssistantWidget({ events, clients, workspaceName, workspaceId, userName, onCreateEvent, onUpdateEvent, onDeleteEvent, onCreateClient, onOpen }: AssistantWidgetProps) {
   const [open, setOpen] = useState(false);
   const [uiMessages, setUiMessages] = useState<UiMessage[]>([GREETING]);
   const [input, setInput] = useState("");
@@ -337,7 +338,10 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
       {!open && (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            onOpen?.();
+            setOpen(true);
+          }}
           aria-label="Abrir asistente"
           className="btn-primary fixed bottom-24 right-4 z-50 h-14 w-14 rounded-full p-0 shadow-2xl md:bottom-6 md:right-6"
         >
