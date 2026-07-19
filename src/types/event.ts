@@ -21,6 +21,8 @@ export interface CalendarEvent {
   /** Agenda (workspace) a la que pertenece el evento. */
   workspaceId: string;
   title: string;
+  /** Texto libre del evento. Los enlaces se muestran como clicables en el detalle. */
+  description?: string;
   startAt: Date | Timestamp;
   endAt: Date | Timestamp;
   allDay: boolean;
@@ -49,8 +51,6 @@ export interface CalendarEvent {
   // --- Campos heredados (solo lectura, por compatibilidad con eventos antiguos) ---
   /** @deprecated ya no se edita; se conserva para leer eventos creados antes. */
   notes?: string;
-  /** @deprecated ya no se edita; se conserva para leer eventos creados antes. */
-  description?: string;
   /** @deprecated imagen única antigua; ahora se usa attachments. */
   imageUrl?: string | null;
   /** @deprecated ruta de imagen única antigua. */

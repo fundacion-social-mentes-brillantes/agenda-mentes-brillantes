@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ArrowLeft,
@@ -218,6 +218,13 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onDuplicate, 
             </div>
           )}
 
+          {event.description && (
+            <div className="rounded-2xl border border-app-soft bg-app-soft p-4">
+              <p className="m-0 mb-2 text-xs font-bold uppercase tracking-wide text-app-faint">Descripción</p>
+              <LinkifiedText text={event.description} />
+            </div>
+          )}
+
           {event.notes && (
             <div className="rounded-2xl border border-app-soft bg-app-soft p-4">
               <p className="m-0 mb-1 text-xs font-bold uppercase tracking-wide text-app-faint">Nota</p>
@@ -259,6 +266,37 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onDuplicate, 
         </div>
       )}
     </Modal>
+  );
+}
+
+const LINK_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?)/gi;
+const TRAILING_PUNCTUATION = /[),.;!?]+$/;
+
+function LinkifiedText({ text }: { text: string }) {
+  return (
+    <p className="m-0 whitespace-pre-wrap break-words text-sm leading-relaxed text-app-muted">
+      {text.split(LINK_PATTERN).map((part, index) => {
+        if (!/^(https?:\/\/|www\.|(?:[a-z0-9-]+\.)+[a-z]{2,})/i.test(part)) return part;
+
+        const trailing = part.match(TRAILING_PUNCTUATION)?.[0] || "";
+        const linkText = trailing ? part.slice(0, -trailing.length) : part;
+        const href = /^https?:\/\//i.test(linkText) ? linkText : `https://${linkText}`;
+
+        return (
+          <Fragment key={`${index}-${part}`}>
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="break-all font-bold text-app-accent underline decoration-current/40 underline-offset-2 hover:decoration-current"
+            >
+              {linkText}
+            </a>
+            {trailing}
+          </Fragment>
+        );
+      })}
+    </p>
   );
 }
 

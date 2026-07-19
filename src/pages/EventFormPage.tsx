@@ -70,6 +70,7 @@ export default function EventFormPage({
   const [kind, setKind] = useState<EventKind>("normal");
   const [client, setClient] = useState<{ code: number; name: string } | null>(null);
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [dateStr, setDateStr] = useState("");
   const [startTimeStr, setStartTimeStr] = useState("09:00");
   const [endTimeStr, setEndTimeStr] = useState("10:00");
@@ -148,6 +149,7 @@ export default function EventFormPage({
           : null
       );
       setTitle(editingEvent.title || "");
+      setDescription(editingEvent.description || "");
       setDateStr(formatDate(start));
       setStartTimeStr(formatTime(start));
       setEndTimeStr(formatTime(end));
@@ -165,6 +167,7 @@ export default function EventFormPage({
       setKind(initialKind === "coach" ? "coach" : "normal");
       setClient(initialKind === "coach" && initialClient ? initialClient : null);
       setTitle("");
+      setDescription("");
       setDateStr(formatDate(baseDate));
       setStartTimeStr("09:00");
       setEndTimeStr("10:00");
@@ -259,6 +262,7 @@ export default function EventFormPage({
       const baseData = {
         workspaceId,
         title: finalTitle,
+        description: kind === "normal" ? description : editingEvent?.description || "",
         startAt,
         endAt,
         allDay,
@@ -409,10 +413,23 @@ export default function EventFormPage({
               </div>
 
               {kind === "normal" ? (
-                <label className="md:col-span-2">
-                  <span className="section-label mb-2 block">Título</span>
-                  <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Reunión, Recordatorio…" autoFocus />
-                </label>
+                <>
+                  <label className="md:col-span-2">
+                    <span className="section-label mb-2 block">Título</span>
+                    <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Reunión, Recordatorio…" autoFocus />
+                  </label>
+                  <label className="md:col-span-2">
+                    <span className="section-label mb-2 block">Descripción (opcional)</span>
+                    <textarea
+                      className="input-field min-h-32 resize-y"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder={"Escribe los detalles de la reunión y pega aquí el enlace para ingresar.\nEj. https://meet.google.com/..."}
+                      maxLength={5000}
+                    />
+                    <span className="mt-1 block text-xs text-app-faint">Los enlaces se podrán abrir con un toque desde computador o celular.</span>
+                  </label>
+                </>
               ) : (
                 <div className="md:col-span-2">
                   <span className="section-label mb-2 block">Persona de la sesión</span>

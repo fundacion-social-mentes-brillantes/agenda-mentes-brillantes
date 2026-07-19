@@ -129,6 +129,7 @@ function AppContent() {
       await createEvent({
         workspaceId: activeWorkspaceId,
         title: event.title,
+        description: event.description || "",
         startAt,
         endAt,
         allDay: event.allDay,

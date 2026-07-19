@@ -78,6 +78,10 @@ function cleanTopLevelData<T extends Record<string, unknown>>(data: T): Record<s
   return Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined));
 }
 
+function normalizeDescription(value: unknown): string {
+  return typeof value === "string" ? value.trim().slice(0, 5000) : "";
+}
+
 function normalizeMoney(value: unknown): number | null {
   if (value === "" || value === null || value === undefined) return null;
   const parsed = typeof value === "number" ? value : Number(value);
@@ -150,6 +154,7 @@ function mapDocToEvent(id: string, data: Record<string, any>): CalendarEvent {
     id,
     workspaceId: data.workspaceId || "",
     title: data.title || "",
+    description: normalizeDescription(data.description),
     startAt,
     endAt,
     allDay: Boolean(data.allDay),
@@ -170,8 +175,7 @@ function mapDocToEvent(id: string, data: Record<string, any>): CalendarEvent {
     createdByName: data.createdByName || "",
     createdAt: toDateSafe(data.createdAt, now),
     updatedAt: toDateSafe(data.updatedAt, now),
-    notes: data.notes || "",
-    description: data.description || ""
+    notes: data.notes || ""
   };
 }
 
@@ -186,6 +190,7 @@ function sanitizeNewEvent(eventData: Partial<CalendarEvent>, uid: string): Recor
   return cleanTopLevelData({
     workspaceId: eventData.workspaceId,
     title: eventData.title?.trim() || "",
+    description: normalizeDescription(eventData.description),
     startAt,
     endAt,
     allDay: Boolean(eventData.allDay),
@@ -211,6 +216,7 @@ function sanitizeEventUpdate(eventData: Partial<CalendarEvent>): Record<string, 
   const data: Record<string, unknown> = {};
 
   if (eventData.title !== undefined) data.title = eventData.title.trim();
+  if (eventData.description !== undefined) data.description = normalizeDescription(eventData.description);
   if (eventData.startAt !== undefined) data.startAt = assertValidDate(eventData.startAt, "La fecha de inicio");
   if (eventData.endAt !== undefined) data.endAt = assertValidDate(eventData.endAt, "La fecha final");
   if (eventData.allDay !== undefined) data.allDay = Boolean(eventData.allDay);
