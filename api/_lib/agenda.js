@@ -265,14 +265,22 @@ export async function updateEvent(fs, uid, id, patch) {
   if (patch.date !== undefined || patch.startTime !== undefined || patch.endTime !== undefined || patch.allDay !== undefined) {
     const curStart = parseTs(data.startAt);
     const curEnd = parseTs(data.endAt);
+    // Duración original (para conservarla al mover, como Google Calendar). Por defecto 1 hora.
+    const durationMs = curStart && curEnd ? Math.max(0, curEnd.getTime() - curStart.getTime()) : 60 * 60 * 1000;
     const base = patch.date || (curStart ? isoDate(curStart) : undefined);
     if (!base) throw new Error("No se pudo determinar la fecha del evento.");
     update.allDay = allDay;
-    const nextStart = allDay ? toDate(base, "00:00", "00:00") : toDate(base, patch.startTime || (curStart ? hhmm(curStart) : undefined), "09:00");
-    const nextEnd = allDay ? toDate(base, "23:59", "23:59") : toDate(base, patch.endTime || (curEnd ? hhmm(curEnd) : undefined), "10:00");
-    if (!allDay && nextEnd <= nextStart) throw new Error("La hora final debe ser posterior a la de inicio.");
-    update.startAt = new Ts(nextStart);
-    update.endAt = new Ts(nextEnd);
+    if (allDay) {
+      update.startAt = new Ts(toDate(base, "00:00", "00:00"));
+      update.endAt = new Ts(toDate(base, "23:59", "23:59"));
+    } else {
+      const nextStart = toDate(base, patch.startTime || (curStart ? hhmm(curStart) : undefined), "09:00");
+      // Si NO dan hora de fin, se conserva la duración original a partir del nuevo inicio.
+      const nextEnd = patch.endTime ? toDate(base, patch.endTime, "10:00") : new Date(nextStart.getTime() + durationMs);
+      if (nextEnd <= nextStart) throw new Error("La hora final debe ser posterior a la de inicio.");
+      update.startAt = new Ts(nextStart);
+      update.endAt = new Ts(nextEnd);
+    }
   }
 
   await fs.patchDoc(`events/${id}`, update);
