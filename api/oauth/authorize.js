@@ -85,8 +85,10 @@ export default function handler(req, res) {
   var st = document.getElementById('status');
   var btn = document.getElementById('go');
   function status(m){ st.textContent = m || ''; }
-  firebase.initializeApp(CFG);
-  var auth = firebase.auth();
+  // Instancia de Firebase AISLADA (nombre propio) para NO tocar la sesión del app
+  // que el usuario pueda tener abierta en el mismo navegador/origen.
+  var fbApp = firebase.initializeApp(CFG, 'mcpOAuth');
+  var auth = firebase.auth(fbApp);
   auth.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(function(){});
   var provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
