@@ -139,10 +139,31 @@ async function resolveSession(bearer) {
     return { fs: new UserFirestore(refreshed.idToken), uid: refreshed.uid || session.uid, name: session.name || "" };
   }
 
-  // 2) Si no, tratamos el Bearer como un idToken de Firebase (modo directo / pruebas).
-  const user = await verifyIdToken(bearer);
-  if (!user) return null;
-  return { fs: new UserFirestore(bearer), uid: user.localId, name: user.displayName || user.email || "" };
+  // 2) ¿Es un idToken de Firebase? (JWT: 3 segmentos separados por punto). Modo directo.
+  if (bearer.split(".").length === 3) {
+    const user = await verifyIdToken(bearer);
+    if (user) {
+      return { fs: new UserFirestore(bearer), uid: user.localId, name: user.displayName || user.email || "" };
+    }
+    // Si no valida (p. ej. idToken caducado), caemos a intentarlo como refresh token.
+  }
+
+  // 3) Si no, lo tratamos como un REFRESH TOKEN de Firebase (modo estable de escritorio:
+  //    el cliente guarda el refresh token en su config y aquí se canjea por un idToken
+  //    fresco en cada llamada. No depende de credenciales de Google Cloud ni de gcloud,
+  //    así que no caduca por políticas de reautenticación del Workspace).
+  try {
+    const refreshed = await refreshIdToken(bearer);
+    if (!refreshed?.idToken) return null;
+    const user = await verifyIdToken(refreshed.idToken);
+    return {
+      fs: new UserFirestore(refreshed.idToken),
+      uid: refreshed.uid || user?.localId || "",
+      name: user?.displayName || user?.email || ""
+    };
+  } catch {
+    return null;
+  }
 }
 
 // Resuelve un access token OAuth del MCP -> { uid, name, firebaseRefreshToken }.
