@@ -145,11 +145,11 @@ async function resolveSession(bearer) {
   return { fs: new UserFirestore(bearer), uid: user.localId, name: user.displayName || user.email || "" };
 }
 
-// Placeholder: lo implementa el módulo OAuth (api/oauth/*). Por ahora null.
-async function resolveOAuthToken(_accessToken) {
+// Resuelve un access token OAuth del MCP -> { uid, name, firebaseRefreshToken }.
+async function resolveOAuthToken(accessToken) {
   try {
-    const mod = await import("./oauth/_store.js");
-    return mod.getAccessToken ? mod.getAccessToken(_accessToken) : null;
+    const mod = await import("./oauth/_tokens.js");
+    return mod.readAccessToken(accessToken);
   } catch {
     return null;
   }
