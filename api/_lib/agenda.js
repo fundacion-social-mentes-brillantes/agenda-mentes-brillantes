@@ -116,14 +116,19 @@ export async function listWorkspaces(fs, uid) {
 }
 
 export async function resolveWorkspaceId(fs, uid, input) {
-  const fallback = process.env.AGENDA_DEFAULT_WORKSPACE || personalWorkspaceId(uid);
-  if (!input || !input.trim()) return fallback;
+  if (input && input.trim()) {
+    const workspaces = await listWorkspaces(fs, uid);
+    const byId = workspaces.find((w) => w.id === input);
+    if (byId) return byId.id;
+    const byName = workspaces.find((w) => w.name.toLowerCase() === input.trim().toLowerCase());
+    if (byName) return byName.id;
+    throw new Error(`No encontré una agenda llamada "${input}". Usa list_workspaces para ver las disponibles.`);
+  }
+  // Sin agenda indicada: por defecto la del EQUIPO (primera compartida), no la personal.
+  if (process.env.AGENDA_DEFAULT_WORKSPACE) return process.env.AGENDA_DEFAULT_WORKSPACE;
   const workspaces = await listWorkspaces(fs, uid);
-  const byId = workspaces.find((w) => w.id === input);
-  if (byId) return byId.id;
-  const byName = workspaces.find((w) => w.name.toLowerCase() === input.trim().toLowerCase());
-  if (byName) return byName.id;
-  throw new Error(`No encontré una agenda llamada "${input}". Usa list_workspaces para ver las disponibles.`);
+  const shared = workspaces.find((w) => w.kind === "shared");
+  return shared ? shared.id : personalWorkspaceId(uid);
 }
 
 async function allWorkspaceDocs(fs, workspaceId) {
