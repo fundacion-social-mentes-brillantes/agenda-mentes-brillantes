@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
 import { useEvents } from "./hooks/useEvents";
@@ -38,12 +38,65 @@ function AppContent() {
     loading: workspacesLoading,
     error: workspacesError
   } = useWorkspaces(user);
-  const { events, loading: eventsLoading, createEvent, updateEvent, deleteEvent } = useEvents(activeWorkspaceId);
+
+  // Filtro multi-agenda (estilo TimeTree): qué agendas se ven a la vez.
+  const [visibleWorkspaceIds, setVisibleWorkspaceIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!user || workspaces.length === 0) return;
+    setVisibleWorkspaceIds((prev) => {
+      const valid = prev.filter((id) => workspaces.some((w) => w.id === id));
+      if (valid.length) return valid;
+      try {
+        const stored = JSON.parse(localStorage.getItem(`visibleWorkspaces_${user.uid}`) || "[]");
+        const ok = Array.isArray(stored) ? stored.filter((id: string) => workspaces.some((w) => w.id === id)) : [];
+        if (ok.length) return ok;
+      } catch {
+        /* ignore */
+      }
+      return workspaces.map((w) => w.id); // por defecto: todas visibles
+    });
+  }, [user, workspaces]);
+
+  const toggleWorkspace = useCallback(
+    (id: string) => {
+      setVisibleWorkspaceIds((prev) => {
+        const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+        const final = next.length ? next : prev; // nunca dejar cero agendas visibles
+        if (user) {
+          try {
+            localStorage.setItem(`visibleWorkspaces_${user.uid}`, JSON.stringify(final));
+          } catch {
+            /* ignore */
+          }
+        }
+        return final;
+      });
+    },
+    [user]
+  );
+
+  // Agenda del EQUIPO (primera compartida): para sesiones coach y el asistente.
+  const coachWorkspaceId = useMemo(() => {
+    const shared = workspaces.find((w) => w.kind === "shared");
+    return shared?.id || activeWorkspaceId;
+  }, [workspaces, activeWorkspaceId]);
+  const coachWorkspaceName = useMemo(() => workspaces.find((w) => w.id === coachWorkspaceId)?.name, [workspaces, coachWorkspaceId]);
+
+  // Agenda destino al crear un evento normal: la compartida visible; si no, la primera visible.
+  const createTargetId = useMemo(() => {
+    const sharedVisible = workspaces.find((w) => w.kind === "shared" && visibleWorkspaceIds.includes(w.id));
+    if (sharedVisible) return sharedVisible.id;
+    if (visibleWorkspaceIds.length) return visibleWorkspaceIds[0];
+    return activeWorkspaceId;
+  }, [workspaces, visibleWorkspaceIds, activeWorkspaceId]);
+  const createTargetName = useMemo(() => workspaces.find((w) => w.id === createTargetId)?.name, [workspaces, createTargetId]);
+
+  const { events, loading: eventsLoading, createEvent, updateEvent, deleteEvent } = useEvents(visibleWorkspaceIds);
 
   const [activePage, setActivePage] = useState<PageType>("calendar");
   const [assistantHasOpened, setAssistantHasOpened] = useState(false);
   const clientsNeeded = activePage === "coach" || activePage === "event-form" || assistantHasOpened;
-  const { clients, loading: clientsLoading, createClient, importClients, updateClient } = useClients(activeWorkspaceId, clientsNeeded);
+  const { clients, loading: clientsLoading, createClient, importClients, updateClient } = useClients(coachWorkspaceId, clientsNeeded);
 
   useEventReminders(events);
 
@@ -67,6 +120,7 @@ function AppContent() {
       try {
         const ws = await workspaceService.joinWorkspace(user, wsId, code);
         setActiveWorkspaceId(ws.id);
+        setVisibleWorkspaceIds((p) => (p.includes(ws.id) ? p : [...p, ws.id]));
         setActivePage("dashboard");
         setInviteNotice(`Te uniste a la agenda "${ws.name}".`);
         // Limpiamos la URL solo si funcionó (así, si falla, recargar reintenta).
@@ -121,7 +175,9 @@ function AppContent() {
 
   // Duplica el evento en una o varias fechas nuevas, conservando la hora y la duración.
   const handleDuplicate = async (event: CalendarEvent, dates: string[]) => {
-    if (!activeWorkspaceId || dates.length === 0) return;
+    // La copia queda en la MISMA agenda del evento original.
+    const targetWorkspaceId = event.workspaceId || createTargetId;
+    if (!targetWorkspaceId || dates.length === 0) return;
     const start = toDate(event.startAt);
     const end = toDate(event.endAt);
     const durationMs = Math.max(0, end.getTime() - start.getTime());
@@ -130,7 +186,7 @@ function AppContent() {
       const startAt = new Date(y, (m || 1) - 1, d || 1, start.getHours(), start.getMinutes(), 0, 0);
       const endAt = new Date(startAt.getTime() + durationMs);
       await createEvent({
-        workspaceId: activeWorkspaceId,
+        workspaceId: targetWorkspaceId,
         title: event.title,
         description: event.description || "",
         meetingLinkType: event.meetingLinkType,
@@ -224,7 +280,7 @@ function AppContent() {
           <DashboardPage
             events={events}
             profile={profile}
-            workspaceName={activeWorkspace?.name}
+            workspaceName={createTargetName}
             setActivePage={(page) => handlePageChange(page as PageType)}
             setEditingEvent={setEditingEvent}
             onDuplicate={handleDuplicate}
@@ -271,8 +327,9 @@ function AppContent() {
           <EventFormPage
             editingEvent={editingEvent}
             selectedDate={selectedDate}
-            workspaceId={activeWorkspaceId}
-            workspaceName={activeWorkspace?.name}
+            workspaceId={createTargetId}
+            coachWorkspaceId={coachWorkspaceId}
+            workspaceName={createTargetName}
             profile={profile}
             clients={clients}
             events={events}
@@ -306,8 +363,8 @@ function AppContent() {
       setActivePage={handlePageChange}
       onCreate={handleCreate}
       workspaces={workspaces}
-      activeWorkspace={activeWorkspace}
-      onSelectWorkspace={setActiveWorkspaceId}
+      visibleWorkspaceIds={visibleWorkspaceIds}
+      onToggleWorkspace={toggleWorkspace}
     >
       {inviteNotice && (
         <div className="mb-5 rounded-3xl border border-app-accent bg-app-soft px-4 py-3 text-sm font-bold text-app-accent shadow-sm">{inviteNotice}</div>
@@ -324,8 +381,8 @@ function AppContent() {
       <AssistantWidget
         events={events}
         clients={clients}
-        workspaceName={activeWorkspace?.name}
-        workspaceId={activeWorkspaceId}
+        workspaceName={coachWorkspaceName}
+        workspaceId={coachWorkspaceId}
         userName={profile?.name}
         onCreateEvent={createEvent}
         onUpdateEvent={updateEvent}

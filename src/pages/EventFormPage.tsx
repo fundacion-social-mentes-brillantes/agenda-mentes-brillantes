@@ -39,6 +39,8 @@ interface EventFormPageProps {
   editingEvent: CalendarEvent | null;
   selectedDate: Date | null;
   workspaceId: string | null;
+  /** Agenda del equipo: destino de las sesiones coach. Si falta, se usa workspaceId. */
+  coachWorkspaceId?: string | null;
   workspaceName?: string;
   profile: UserProfile | null;
   clients: Client[];
@@ -55,6 +57,7 @@ export default function EventFormPage({
   editingEvent,
   selectedDate,
   workspaceId,
+  coachWorkspaceId,
   workspaceName,
   profile,
   clients,
@@ -260,7 +263,14 @@ export default function EventFormPage({
     try {
       const uid = auth.currentUser?.uid;
       if (!uid) throw new Error("Debes iniciar sesión para crear eventos.");
-      if (!workspaceId) throw new Error("Selecciona una agenda antes de crear el evento.");
+      // Agenda destino: al EDITAR se conserva la del evento (no se mueve);
+      // al CREAR, una sesión coach va a la agenda del equipo; lo demás a la agenda elegida.
+      const targetWorkspaceId = editingEvent?.workspaceId
+        ? editingEvent.workspaceId
+        : kind === "coach" && coachWorkspaceId
+          ? coachWorkspaceId
+          : workspaceId;
+      if (!targetWorkspaceId) throw new Error("Selecciona una agenda antes de crear el evento.");
       if (kind === "coach" && !client) throw new Error("Elige o crea la persona de la sesión coach.");
       const finalTitle = kind === "coach" ? (client?.name || "").trim() : title.trim();
       if (!finalTitle) throw new Error("Escribe un título para el evento.");
@@ -291,7 +301,7 @@ export default function EventFormPage({
       }
 
       const baseData = {
-        workspaceId,
+        workspaceId: targetWorkspaceId,
         title: finalTitle,
         description: kind === "normal" ? description : editingEvent?.description || "",
         ...finalMeeting,
@@ -339,7 +349,7 @@ export default function EventFormPage({
 
         try {
           for (const item of pendingFiles) {
-            const att = await storageService.uploadAttachment(item.file, workspaceId, eventId);
+            const att = await storageService.uploadAttachment(item.file, targetWorkspaceId, eventId);
             uploaded.push(att);
             const idx = remaining.findIndex((r) => r.id === item.id);
             if (idx >= 0) remaining.splice(idx, 1);

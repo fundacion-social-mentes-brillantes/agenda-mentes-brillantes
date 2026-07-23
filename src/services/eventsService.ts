@@ -299,6 +299,41 @@ export const eventsService = {
     );
   },
 
+  /**
+   * Suscripción a los eventos de VARIAS agendas a la vez (unión), para el filtro
+   * multi-agenda estilo TimeTree. Usa un where('workspaceId','in', ...) (Firestore
+   * admite hasta 30 valores; aquí son pocas agendas). Devuelve todos los eventos
+   * (no clientes) de las agendas indicadas, ordenados por fecha.
+   */
+  subscribeToEventsMulti(
+    workspaceIds: string[],
+    onUpdate: (events: CalendarEvent[]) => void,
+    onError?: (error: unknown) => void
+  ) {
+    const ids = Array.from(new Set((workspaceIds || []).filter(Boolean)));
+    if (ids.length === 0) {
+      onUpdate([]);
+      return () => {};
+    }
+
+    const q = query(collection(db, "events"), where("workspaceId", "in", ids.slice(0, 30)));
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const events = snapshot.docs
+          .filter((docSnap) => docSnap.data().recordType !== "client")
+          .map((docSnap) => mapDocToEvent(docSnap.id, docSnap.data()))
+          .sort((a, b) => toDateSafe(a.startAt).getTime() - toDateSafe(b.startAt).getTime());
+        onUpdate(events);
+      },
+      (error) => {
+        console.error("Subscribe events (multi) failed", getErrorDetails(error));
+        if (onError) onError(error);
+      }
+    );
+  },
+
   async createEvent(eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">): Promise<EventWriteResult> {
     const uid = auth.currentUser?.uid;
     if (!uid) {

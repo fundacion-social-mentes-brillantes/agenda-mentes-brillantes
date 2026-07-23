@@ -33,8 +33,8 @@ interface LayoutProps {
   setActivePage: (page: PageType) => void;
   onCreate: () => void;
   workspaces: WorkspaceWithRole[];
-  activeWorkspace: WorkspaceWithRole | null;
-  onSelectWorkspace: (id: string) => void;
+  visibleWorkspaceIds: string[];
+  onToggleWorkspace: (id: string) => void;
 }
 
 interface NavItem {
@@ -59,7 +59,7 @@ const mobileNavItems: NavItem[] = [
   { id: "day", label: "Agenda", icon: ListChecks }
 ];
 
-export function Layout({ children, activePage, setActivePage, onCreate, workspaces, activeWorkspace, onSelectWorkspace }: LayoutProps) {
+export function Layout({ children, activePage, setActivePage, onCreate, workspaces, visibleWorkspaceIds, onToggleWorkspace }: LayoutProps) {
   const { profile, profileSyncWarning, refreshProfile } = useAuth();
   const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -95,10 +95,6 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
     setSidebarOpen(false);
   };
 
-  const handleSelectWorkspace = (id: string) => {
-    onSelectWorkspace(id);
-    setSidebarOpen(false);
-  };
 
   return (
     <div className="app-shell flex min-h-screen flex-col text-app-strong md:flex-row">
@@ -108,7 +104,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
       >
         <BrandBlock compact />
         <div className="flex items-center gap-2">
-          <WorkspaceSwitcher workspaces={workspaces} activeWorkspace={activeWorkspace} onSelect={handleSelectWorkspace} onManage={() => goTo("workspaces")} compact />
+          <WorkspaceSwitcher workspaces={workspaces} visibleIds={visibleWorkspaceIds} onToggle={onToggleWorkspace} onManage={() => goTo("workspaces")} compact />
           <button type="button" onClick={() => setSidebarOpen((value) => !value)} className="rounded-xl border border-app-soft bg-app-soft p-2 text-app-muted">
             {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
@@ -127,7 +123,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
           <BrandBlock />
 
           <div className="hidden md:block">
-            <WorkspaceSwitcher workspaces={workspaces} activeWorkspace={activeWorkspace} onSelect={handleSelectWorkspace} onManage={() => goTo("workspaces")} />
+            <WorkspaceSwitcher workspaces={workspaces} visibleIds={visibleWorkspaceIds} onToggle={onToggleWorkspace} onManage={() => goTo("workspaces")} />
           </div>
 
           <nav className="space-y-2">
@@ -209,16 +205,18 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
   );
 }
 
+// Selector MULTI-agenda (estilo TimeTree): marca las agendas que quieres VER;
+// se muestran juntos los eventos de todas las marcadas.
 function WorkspaceSwitcher({
   workspaces,
-  activeWorkspace,
-  onSelect,
+  visibleIds,
+  onToggle,
   onManage,
   compact = false
 }: {
   workspaces: WorkspaceWithRole[];
-  activeWorkspace: WorkspaceWithRole | null;
-  onSelect: (id: string) => void;
+  visibleIds: string[];
+  onToggle: (id: string) => void;
   onManage: () => void;
   compact?: boolean;
 }) {
@@ -234,8 +232,17 @@ function WorkspaceSwitcher({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [open]);
 
-  const label = activeWorkspace?.name || "Mi agenda";
-  const dotColor = activeWorkspace?.color || "#d7b46a";
+  const selected = workspaces.filter((ws) => visibleIds.includes(ws.id));
+  const label =
+    selected.length === 0
+      ? "Ninguna agenda"
+      : selected.length === workspaces.length
+        ? "Todas las agendas"
+        : selected.length === 1
+          ? selected[0].name
+          : `${selected.length} agendas`;
+  const dotColor = selected.length === 1 ? selected[0].color || "#d7b46a" : "#d7b46a";
+  const onlyOneSelected = selected.length === 1;
 
   return (
     <div className="relative" ref={ref}>
@@ -251,24 +258,33 @@ function WorkspaceSwitcher({
 
       {open && (
         <div className={`glass-panel absolute z-50 mt-2 rounded-2xl p-2 ${compact ? "right-0 w-64" : "left-0 right-0"}`}>
-          <p className="section-label px-2 py-1">Tus agendas</p>
+          <p className="section-label px-2 py-1">Ver agendas</p>
           <div className="max-h-64 space-y-1 overflow-y-auto">
-            {workspaces.map((ws) => (
-              <button
-                key={ws.id}
-                type="button"
-                onClick={() => {
-                  onSelect(ws.id);
-                  setOpen(false);
-                }}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-bold text-app-muted hover:bg-app-soft hover:text-app-strong"
-              >
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: ws.color || "#d7b46a" }} />
-                <span className="truncate">{ws.name}</span>
-                {ws.kind === "personal" && <Lock size={12} className="text-app-faint" />}
-                {activeWorkspace?.id === ws.id && <Check size={15} className="ml-auto text-app-accent" />}
-              </button>
-            ))}
+            {workspaces.map((ws) => {
+              const checked = visibleIds.includes(ws.id);
+              // No permitir desmarcar la última (siempre al menos una visible).
+              const isLast = checked && onlyOneSelected;
+              return (
+                <button
+                  key={ws.id}
+                  type="button"
+                  onClick={() => { if (!isLast) onToggle(ws.id); }}
+                  aria-pressed={checked}
+                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-bold transition ${
+                    checked ? "text-app-strong" : "text-app-muted hover:text-app-strong"
+                  } ${isLast ? "cursor-default opacity-70" : "hover:bg-app-soft"}`}
+                >
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${checked ? "border-app-accent" : "border-app-soft"}`}
+                    style={checked ? { backgroundColor: ws.color || "#d7b46a", borderColor: ws.color || "#d7b46a" } : undefined}
+                  >
+                    {checked && <Check size={13} className="text-slate-950" />}
+                  </span>
+                  <span className="truncate">{ws.name}</span>
+                  {ws.kind === "personal" && <Lock size={12} className="ml-auto text-app-faint" />}
+                </button>
+              );
+            })}
           </div>
           <button
             type="button"

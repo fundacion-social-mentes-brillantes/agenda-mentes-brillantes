@@ -3,13 +3,17 @@ import { eventsService } from "../services/eventsService";
 import type { EventWriteResult } from "../services/eventsService";
 import type { CalendarEvent } from "../types/event";
 
-export function useEvents(workspaceId: string | null) {
+export function useEvents(workspaceIds: string[]) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Clave estable para no re-suscribir por identidad del array.
+  const idsKey = [...new Set((workspaceIds || []).filter(Boolean))].sort().join(",");
+
   useEffect(() => {
-    if (!workspaceId) {
+    const ids = idsKey ? idsKey.split(",") : [];
+    if (ids.length === 0) {
       setEvents([]);
       setLoading(false);
       setError(null);
@@ -17,8 +21,8 @@ export function useEvents(workspaceId: string | null) {
     }
 
     setLoading(true);
-    const unsubscribe = eventsService.subscribeToEvents(
-      workspaceId,
+    const unsubscribe = eventsService.subscribeToEventsMulti(
+      ids,
       (fetchedEvents) => {
         setEvents(fetchedEvents);
         setLoading(false);
@@ -31,7 +35,7 @@ export function useEvents(workspaceId: string | null) {
     );
 
     return () => unsubscribe();
-  }, [workspaceId]);
+  }, [idsKey]);
 
   const createEvent = useCallback(
     async (eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">): Promise<EventWriteResult> => {
