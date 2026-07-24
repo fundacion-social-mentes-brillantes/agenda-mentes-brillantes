@@ -109,11 +109,20 @@ export function readCode(code) {
 }
 
 // ---------- access / refresh tokens ----------
+// El access token es un CONTENEDOR del refreshToken de Firebase (cifrado): en cada
+// llamada, /api/mcp lo descifra y saca un idToken FRESCO vía securetoken. El refresh
+// token de Firebase es estable y reutilizable, así que no hay razón para que el access
+// token expire en 1h y obligue a una renovación OAuth (el punto que fallaba y hacía que
+// el conector "perdiera autenticación"). Lo hacemos de larga duración para que funcione
+// sin interrupciones día a día. El refresh_token (OAuth) dura aún más y lo extiende.
+export const ACCESS_TTL_SECONDS = 60 * 60 * 24 * 90;   // 90 días
+export const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 365; // 365 días
+
 export function mintAccessToken({ uid, name, firebaseRefresh, encFr }) {
-  return "mcp_" + sign({ typ: "access", uid, name, fr: encFr || encryptRefresh(firebaseRefresh), exp: now() + 3600 });
+  return "mcp_" + sign({ typ: "access", uid, name, fr: encFr || encryptRefresh(firebaseRefresh), exp: now() + ACCESS_TTL_SECONDS });
 }
 export function mintRefreshToken({ uid, name, firebaseRefresh, encFr }) {
-  return "mcpr_" + sign({ typ: "refresh", uid, name, fr: encFr || encryptRefresh(firebaseRefresh), exp: now() + 60 * 60 * 24 * 60 }); // 60 días
+  return "mcpr_" + sign({ typ: "refresh", uid, name, fr: encFr || encryptRefresh(firebaseRefresh), exp: now() + REFRESH_TTL_SECONDS });
 }
 
 /** Lee un access token del MCP -> { uid, name, firebaseRefreshToken } o null. */

@@ -1,7 +1,7 @@
 // Endpoint de token OAuth 2.1. Cambia el "code" por access/refresh tokens (con PKCE),
 // y renueva con grant_type=refresh_token. Sin estado (los tokens son autocontenidos).
 
-import { readCode, readRefreshToken, mintAccessToken, mintRefreshToken, verifyPkce } from "./_tokens.js";
+import { readCode, readRefreshToken, mintAccessToken, mintRefreshToken, verifyPkce, ACCESS_TTL_SECONDS } from "./_tokens.js";
 
 function parseBody(req) {
   let body = req.body;
@@ -38,7 +38,7 @@ export default function handler(req, res) {
     }
     const access = mintAccessToken({ uid: p.uid, name: p.name, encFr: p.fr });
     const refresh = mintRefreshToken({ uid: p.uid, name: p.name, encFr: p.fr });
-    res.status(200).json({ access_token: access, token_type: "Bearer", expires_in: 3600, refresh_token: refresh, scope: "agenda" });
+    res.status(200).json({ access_token: access, token_type: "Bearer", expires_in: ACCESS_TTL_SECONDS, refresh_token: refresh, scope: "agenda" });
     return;
   }
 
@@ -47,7 +47,7 @@ export default function handler(req, res) {
     if (!p) { res.status(400).json({ error: "invalid_grant", error_description: "refresh_token inválido." }); return; }
     const access = mintAccessToken({ uid: p.uid, name: p.name, encFr: p.fr });
     const refresh = mintRefreshToken({ uid: p.uid, name: p.name, encFr: p.fr });
-    res.status(200).json({ access_token: access, token_type: "Bearer", expires_in: 3600, refresh_token: refresh, scope: "agenda" });
+    res.status(200).json({ access_token: access, token_type: "Bearer", expires_in: ACCESS_TTL_SECONDS, refresh_token: refresh, scope: "agenda" });
     return;
   }
 
