@@ -67,3 +67,51 @@ export function formatearPesos(valor: number | null | undefined): string {
   if (valor === null || valor === undefined) return "—";
   return `$${Math.round(valor).toLocaleString("es-CO")}`;
 }
+
+/**
+ * Le cuenta al ERP que sesiones coach hay en la agenda dentro de una ventana.
+ *
+ * NO cambia nada en la contabilidad: el ERP solo lo usa para comparar y avisarle
+ * al dueño de las diferencias (sesiones que ya pasaron sin registrar, fechas
+ * movidas, eventos borrados que ya estaban cobrados). Quien decide que se
+ * registra es una persona, desde el ERP.
+ *
+ * Silencioso a proposito: si el ERP no responde, la agenda no se entera y sigue
+ * funcionando igual.
+ */
+export async function reportarSesionesAlErp(params: {
+  workspaceId: string;
+  desde: string;
+  hasta: string;
+  eventos: Array<{
+    id?: string;
+    kind?: string;
+    clientCode?: number | null;
+    clientName?: string | null;
+    date?: string;
+    startAt?: unknown;
+    title?: string;
+    modality?: string;
+    done?: boolean;
+  }>;
+}): Promise<{ diferencias: number } | null> {
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return null;
+
+    const r = await fetch("/api/erp-sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, ...params })
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Fecha en formato AAAA-MM-DD. */
+export function aFechaIso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}

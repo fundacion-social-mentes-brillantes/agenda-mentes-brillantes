@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
 import { useEvents } from "./hooks/useEvents";
+import { useReporteErp } from "./hooks/useReporteErp";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useEventReminders } from "./hooks/useEventReminders";
 import { useClients } from "./hooks/useClients";
@@ -92,6 +93,10 @@ function AppContent() {
   const createTargetName = useMemo(() => workspaces.find((w) => w.id === createTargetId)?.name, [workspaces, createTargetId]);
 
   const { events, loading: eventsLoading, createEvent, updateEvent, deleteEvent } = useEvents(visibleWorkspaceIds);
+
+  // Le avisa al ERP que sesiones coach hay en la agenda, para que el dueno
+  // pueda revisar diferencias. No cambia nada en la contabilidad.
+  useReporteErp(activeWorkspaceId, events);
 
   const [activePage, setActivePage] = useState<PageType>("calendar");
   const [assistantHasOpened, setAssistantHasOpened] = useState(false);
