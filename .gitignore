@@ -36,3 +36,4 @@ firebase-adminsdk*.json
 *.njsproj
 *.sln
 *.sw?
+.vercel

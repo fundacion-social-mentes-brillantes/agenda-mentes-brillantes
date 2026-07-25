@@ -5,6 +5,8 @@ import { Spinner } from "../components/ui/Spinner";
 import { formatEventTime, toDate } from "../lib/dateUtils";
 import { normalizeText } from "../services/clientsService";
 import { parseClientsCsv } from "../lib/clientsCsv";
+import { useEstadoErp } from "../hooks/useEstadoErp";
+import { formatearPesos } from "../services/erpService";
 import type { Client } from "../types/client";
 import type { CalendarEvent } from "../types/event";
 
@@ -38,6 +40,11 @@ export default function CoachPage({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Estado real del ERP, solo de la persona abierta: preciso y sin consultar
+  // 258 fichas de golpe. La agenda no guarda estas cifras, las lee en vivo.
+  const { estados: estadosErp, cargando: cargandoErp, erpCaido } = useEstadoErp(
+    expanded === null ? [] : [expanded]
+  );
   const now = new Date();
 
   // Edición de una persona (nombre y/o código).
@@ -264,6 +271,11 @@ export default function CoachPage({
 
                 {isOpen && (
                   <div className="space-y-3 border-t border-app-soft p-4">
+                    <EstadoContable
+                      estado={estadosErp.get(c.code)}
+                      cargando={cargandoErp}
+                      caido={erpCaido}
+                    />
                     {editingId === c.id ? (
                       <div className="space-y-2 rounded-2xl border border-app-soft bg-app-soft p-3">
                         <p className="m-0 section-label">Editar persona</p>
@@ -366,4 +378,109 @@ function initials(name: string): string {
     .map((p) => p[0])
     .join("")
     .toUpperCase();
+}
+
+/**
+ * Verdad contable del ERP para la persona abierta. Deliberadamente se muestra
+ * aparte de los contadores de la agenda: si no coinciden, hay que verlo, no
+ * taparlo. El ERP manda en dinero y en sesiones del paquete.
+ */
+function EstadoContable({
+  estado,
+  cargando,
+  caido
+}: {
+  estado?: import("../services/erpService").EstadoErp;
+  cargando: boolean;
+  caido: boolean;
+}) {
+  if (caido) {
+    return (
+      <div className="rounded-2xl border border-app-soft bg-app-soft px-3 py-2">
+        <p className="m-0 text-xs font-bold text-app-faint">
+          No se pudo consultar el ERP ahora mismo. La agenda sigue funcionando; vuelve a abrir para reintentar.
+        </p>
+      </div>
+    );
+  }
+
+  if (cargando && !estado) {
+    return (
+      <div className="rounded-2xl border border-app-soft bg-app-soft px-3 py-2">
+        <p className="m-0 text-xs font-bold text-app-faint">Consultando el ERP…</p>
+      </div>
+    );
+  }
+
+  if (!estado) return null;
+
+  if (!estado.existe) {
+    return (
+      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+        <p className="m-0 text-xs font-bold text-amber-600">
+          Esta persona no está en el ERP contable. Revisa que el código coincida.
+        </p>
+      </div>
+    );
+  }
+
+  const deuda = estado.deuda_total ?? 0;
+  const saldo = estado.saldo_a_favor ?? 0;
+  const coach = estado.coach;
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-app-soft bg-app-soft p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="m-0 section-label">Según el ERP contable</p>
+        {estado.completo === false && (
+          <span className="text-[10px] font-bold uppercase text-amber-600">Lectura parcial</span>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <DatoErp
+          etiqueta="Debe"
+          valor={formatearPesos(deuda)}
+          tono={deuda > 0 ? "deuda" : "ok"}
+        />
+        {saldo > 0 && <DatoErp etiqueta="Saldo a favor" valor={formatearPesos(saldo)} tono="ok" />}
+        {estado.cuentas_pendientes ? (
+          <DatoErp etiqueta="Cuentas pendientes" valor={String(estado.cuentas_pendientes)} tono="neutro" />
+        ) : null}
+        {coach && coach.sesiones_compradas > 0 && (
+          <DatoErp
+            etiqueta="Paquete coach"
+            valor={`${coach.sesiones_realizadas}/${coach.sesiones_compradas} · quedan ${coach.sesiones_restantes}`}
+            tono={coach.sesiones_restantes > 0 ? "ok" : "deuda"}
+          />
+        )}
+        {coach && coach.sesiones_migradas > 0 && (
+          <DatoErp etiqueta="Sesiones antiguas" valor={String(coach.sesiones_migradas)} tono="neutro" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DatoErp({
+  etiqueta,
+  valor,
+  tono
+}: {
+  etiqueta: string;
+  valor: string;
+  tono: "ok" | "deuda" | "neutro";
+}) {
+  const clase =
+    tono === "deuda"
+      ? "border-red-500/30 bg-red-500/10 text-red-500"
+      : tono === "ok"
+        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
+        : "border-app-soft bg-app-panel text-app-strong";
+  return (
+    <span className={`flex flex-col rounded-2xl border px-3 py-1 ${clase}`}>
+      <span className="text-sm font-black leading-tight">{valor}</span>
+      <span className="text-[10px] font-bold uppercase tracking-wide">{etiqueta}</span>
+    </span>
+  );
 }
