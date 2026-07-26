@@ -19,4 +19,18 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // El receptor de avisos push corre DENTRO del service worker (con la app cerrada),
+    // así que es el más difícil de depurar: conviene que también se revise.
+    files: ['public/push-sw.js'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2020,
+      sourceType: 'script',
+      globals: globals.serviceworker,
+    },
+    rules: {
+      'no-unused-vars': ['error', { caughtErrors: 'none' }],
+    },
+  },
 ])

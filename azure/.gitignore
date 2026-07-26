@@ -1,0 +1,15 @@
+# Dependencias
+node_modules
+
+# Configuración local CON SECRETOS: nunca se sube al repositorio.
+local.settings.json
+
+# Restos del emulador de almacenamiento (Azurite) al probar en el computador
+__azurite_db*__.json
+__blobstorage__
+__queuestorage__
+
+# Compilados y registros
+bin
+obj
+*.log

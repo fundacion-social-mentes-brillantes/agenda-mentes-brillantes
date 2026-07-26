@@ -1,0 +1,10 @@
+{
+  "_ayuda": "PLANTILLA. Copia este archivo como 'local.settings.json' (sin .ejemplo) y pon los valores reales. Ese archivo NO se sube al repositorio ni a Azure: solo sirve para probar en tu computador. En Azure los mismos valores se ponen con 'az functionapp config appsettings set' (ver LEEME.md).",
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "VERCEL_URL": "https://agenda-mentes-brillantes.vercel.app",
+    "PUSH_TICK_SECRET": "pon-aqui-el-mismo-secreto-que-en-vercel"
+  }
+}

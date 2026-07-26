@@ -26,6 +26,7 @@ import { toDate } from "./lib/dateUtils";
 import { Spinner } from "./components/ui/Spinner";
 import { authService } from "./services/authService";
 import { workspaceService } from "./services/workspaceService";
+import { AGENDA_AVISOS, sincronizarPush } from "./lib/push";
 import type { AppTheme } from "./types/theme";
 
 function AppContent() {
@@ -82,6 +83,18 @@ function AppContent() {
     return shared?.id || activeWorkspaceId;
   }, [workspaces, activeWorkspaceId]);
   const coachWorkspaceName = useMemo(() => workspaces.find((w) => w.id === coachWorkspaceId)?.name, [workspaces, coachWorkspaceId]);
+
+  // Avisos push: el servidor SIEMPRE lee la agenda del equipo (AGENDA_AVISOS), así que
+  // la suscripción debe guardarse ahí y no en la agenda que esté activa en pantalla.
+  const puedeRecibirAvisos = useMemo(() => workspaces.some((w) => w.id === AGENDA_AVISOS), [workspaces]);
+
+  // Si el navegador cambió la suscripción por su cuenta (pasa solo, o al reinstalar la
+  // app), aquí se vuelve a guardar la buena. Sin esto la persona dejaría de recibir
+  // avisos para siempre sin enterarse.
+  useEffect(() => {
+    if (!user || !puedeRecibirAvisos) return;
+    void sincronizarPush(AGENDA_AVISOS, user.uid);
+  }, [user, puedeRecibirAvisos]);
 
   // Agenda destino al crear un evento normal: la compartida visible; si no, la primera visible.
   const createTargetId = useMemo(() => {
@@ -356,7 +369,14 @@ function AppContent() {
           />
         );
       case "settings":
-        return <SettingsPage profile={profile} onThemeChange={handleThemeChange} onGoToWorkspaces={() => handlePageChange("workspaces")} />;
+        return (
+          <SettingsPage
+            profile={profile}
+            notifyWorkspaceId={puedeRecibirAvisos ? AGENDA_AVISOS : null}
+            onThemeChange={handleThemeChange}
+            onGoToWorkspaces={() => handlePageChange("workspaces")}
+          />
+        );
       default:
         return <div>Página no encontrada.</div>;
     }

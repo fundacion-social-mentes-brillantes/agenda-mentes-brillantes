@@ -26,7 +26,7 @@ function saveNotified(set: Set<string>) {
   }
 }
 
-async function showReminder(title: string, when: string) {
+async function showReminder(id: string, title: string, when: string) {
   const body = `Empieza a las ${when} (en unos 15 minutos).`;
   try {
     const reg = await navigator.serviceWorker?.ready;
@@ -35,7 +35,9 @@ async function showReminder(title: string, when: string) {
         body,
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
-        tag: title + when
+        // MISMA etiqueta que usa el servidor al mandar el aviso push: si llegan los
+        // dos (app abierta), el segundo reemplaza al primero en vez de apilarse.
+        tag: "ev-" + id
       });
       return;
     }
@@ -71,7 +73,7 @@ export function useEventReminders(events: CalendarEvent[]) {
           notifiedRef.current.add(key);
           saveNotified(notifiedRef.current);
           const when = toDate(ev.startAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: true });
-          void showReminder(ev.title, when);
+          void showReminder(ev.id, ev.title, when);
         }
       }
     };

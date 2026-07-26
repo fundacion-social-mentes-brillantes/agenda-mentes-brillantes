@@ -1,0 +1,19 @@
+# Cosas que NO se suben a Azure al hacer "func azure functionapp publish".
+
+# Configuración local con secretos (en Azure se usan los App Settings)
+local.settings.json
+local.settings.json.ejemplo
+
+# Documentación y control de versiones
+LEEME.md
+.git*
+.vscode
+
+# Restos del emulador de almacenamiento (Azurite)
+__azurite_db*__.json
+__blobstorage__
+__queuestorage__
+
+# Pruebas y mapas de código
+test
+*.js.map

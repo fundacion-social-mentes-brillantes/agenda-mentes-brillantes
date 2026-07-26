@@ -1,0 +1,17 @@
+{
+  "name": "agenda-mentes-brillantes-avisos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Despertador en la nube (Azure Functions) que le pide a la agenda enviar los avisos push al celular.",
+  "type": "commonjs",
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

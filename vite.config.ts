@@ -31,6 +31,9 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Se carga dentro del service worker generado: escucha los avisos push
+        // que llegan del servidor y los muestra aunque la app esté cerrada.
+        importScripts: ['/push-sw.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,jpg,jpeg,webp,woff,woff2}'],
         globIgnores: [
           '**/brand/brand-hero-*.png',
