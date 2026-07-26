@@ -23,7 +23,18 @@ export default async function handler(req, res) {
     return;
   }
 
+  const llave = process.env.VAPID_PUBLIC_KEY || "";
+
+  // Si todavía no se ha configurado la llave en el servidor, NO se responde 200 con
+  // una llave vacía: se quedaría guardada 5 minutos y, justo después de configurarla,
+  // los avisos seguirían sin activarse dando la impresión de que el arreglo no sirvió.
+  if (!llave) {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(503).json({ error: "Todavía no está configurada la llave de avisos (VAPID_PUBLIC_KEY) en el servidor." });
+    return;
+  }
+
   // La llave casi nunca cambia: se deja guardar 5 minutos para no pedirla todo el rato.
   res.setHeader("Cache-Control", "public, max-age=300");
-  res.status(200).json({ publicKey: process.env.VAPID_PUBLIC_KEY || "" });
+  res.status(200).json({ publicKey: llave });
 }
