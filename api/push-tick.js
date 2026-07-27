@@ -47,6 +47,16 @@ const MAX_EVENTOS = 2000; // tope de seguridad al leer la agenda.
 // Utilidades pequeñas
 // ------------------------------------------------------------------
 
+/**
+ * Lee una variable de entorno quitándole espacios y saltos de línea.
+ * Al pegar valores largos (o al pasarlos por una tubería) es fácil que quede un
+ * salto invisible al final; sin esto, la llave dejaría de funcionar sin explicación.
+ */
+function env(nombre) {
+  const valor = process.env[nombre];
+  return typeof valor === "string" ? valor.trim() : "";
+}
+
 /** El cuerpo puede llegar ya interpretado, como texto o como Buffer; se normaliza a objeto. */
 function parseBody(body) {
   // Un Buffer pasa por "object" y se colaría sin interpretar: se convierte primero.
@@ -262,7 +272,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const secreto = process.env.PUSH_TICK_SECRET;
+  const secreto = env("PUSH_TICK_SECRET");
   if (!secreto) {
     res.status(500).json({ error: "Falta configurar PUSH_TICK_SECRET en el servidor." });
     return;
@@ -273,16 +283,17 @@ export default async function handler(req, res) {
   }
 
   // Llaves de las notificaciones: sin ellas no se puede enviar nada.
-  const vapidPublica = process.env.VAPID_PUBLIC_KEY;
-  const vapidPrivada = process.env.VAPID_PRIVATE_KEY;
-  const vapidSujeto = process.env.VAPID_SUBJECT;
+  const vapidPublica = env("VAPID_PUBLIC_KEY");
+  const vapidPrivada = env("VAPID_PRIVATE_KEY");
+  const vapidSujeto = env("VAPID_SUBJECT");
   if (!vapidPublica || !vapidPrivada || !vapidSujeto) {
     res.status(500).json({
       error: "Faltan las llaves de notificaciones en el servidor (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY y VAPID_SUBJECT)."
     });
     return;
   }
-  if (!process.env.PUSH_REFRESH_TOKEN) {
+  const refreshGuardado = env("PUSH_REFRESH_TOKEN");
+  if (!refreshGuardado) {
     res.status(500).json({ error: "Falta configurar PUSH_REFRESH_TOKEN en el servidor (sin él no se puede leer la agenda)." });
     return;
   }
@@ -309,7 +320,7 @@ export default async function handler(req, res) {
 
   try {
     // 2. Sesión de Firebase fresca (el idToken dura una hora, así que se pide siempre).
-    const sesion = await refreshIdToken(process.env.PUSH_REFRESH_TOKEN);
+    const sesion = await refreshIdToken(refreshGuardado);
     const fs = new UserFirestore(sesion.idToken);
 
     // 3. Miembros de la agenda del equipo con notificaciones activadas.
