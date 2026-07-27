@@ -8,6 +8,61 @@ function activeStorageKey(uid: string) {
   return `activeWorkspace_${uid}`;
 }
 
+function cacheKey(uid: string) {
+  return `workspacesCache_${uid}`;
+}
+
+/**
+ * Guarda/lee la lista de agendas en el propio dispositivo.
+ *
+ * Antes, al abrir la app había que ESPERAR a que el servidor respondiera con las
+ * agendas para recién entonces poder pedir los eventos: dos esperas en fila. Con
+ * esta copia local, la agenda se muestra al instante y la lista real llega por
+ * detrás y la corrige si algo cambió.
+ */
+function leerCache(uid: string): WorkspaceWithRole[] {
+  try {
+    const crudo = localStorage.getItem(cacheKey(uid));
+    if (!crudo) return [];
+    const lista = JSON.parse(crudo);
+    if (!Array.isArray(lista)) return [];
+    return lista
+      .filter((ws) => ws && typeof ws.id === "string" && typeof ws.name === "string")
+      .map((ws) => ({
+        ...ws,
+        // Las fechas se guardan como texto; se devuelven como fecha real.
+        createdAt: ws.createdAt ? new Date(ws.createdAt) : new Date(0),
+        updatedAt: ws.updatedAt ? new Date(ws.updatedAt) : new Date(0)
+      })) as WorkspaceWithRole[];
+  } catch {
+    return [];
+  }
+}
+
+function guardarCache(uid: string, lista: WorkspaceWithRole[]) {
+  try {
+    const plano = lista.map((ws) => ({
+      ...ws,
+      createdAt: toIso(ws.createdAt),
+      updatedAt: toIso(ws.updatedAt)
+    }));
+    localStorage.setItem(cacheKey(uid), JSON.stringify(plano));
+  } catch {
+    /* sin almacenamiento: no pasa nada, solo se pierde el arranque rápido */
+  }
+}
+
+function toIso(valor: unknown): string {
+  try {
+    if (valor instanceof Date) return valor.toISOString();
+    const conToDate = valor as { toDate?: () => Date } | null;
+    if (conToDate && typeof conToDate.toDate === "function") return conToDate.toDate().toISOString();
+  } catch {
+    /* fecha rara: se ignora */
+  }
+  return new Date(0).toISOString();
+}
+
 export function useWorkspaces(user: FirebaseUser | null) {
   const [workspaces, setWorkspaces] = useState<WorkspaceWithRole[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,11 +109,31 @@ export function useWorkspaces(user: FirebaseUser | null) {
       return;
     }
 
-    setLoading(true);
+    // Arranque rápido: se muestran de inmediato las agendas que ya conocíamos de la
+    // última vez, sin esperar al servidor. Si no hay copia guardada (primera vez),
+    // se comporta como antes y muestra el indicador de carga.
+    const guardadas = leerCache(user.uid);
+    if (guardadas.length > 0) {
+      setWorkspaces(guardadas);
+      setLoading(false);
+      // También se recupera cuál estaba activa, para que nada quede vacío mientras llega
+      // la lista real del servidor.
+      setActiveWorkspaceIdState((current) => {
+        const stored = typeof localStorage !== "undefined" ? localStorage.getItem(activeStorageKey(user.uid)) : null;
+        const candidate = current || stored;
+        if (candidate && guardadas.some((ws) => ws.id === candidate)) return candidate;
+        const personal = guardadas.find((ws) => ws.id === personalWorkspaceId(user.uid));
+        return personal?.id || guardadas[0]?.id || null;
+      });
+    } else {
+      setLoading(true);
+    }
+
     const unsubscribe = workspaceService.subscribeToMyWorkspaces(
       user.uid,
       (list) => {
         setWorkspaces(list);
+        guardarCache(user.uid, list); // para el próximo arranque
         setLoading(false);
         setError(null);
 
