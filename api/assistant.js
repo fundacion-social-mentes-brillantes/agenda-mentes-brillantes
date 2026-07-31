@@ -57,6 +57,19 @@ function parseBody(body) {
   }
 }
 
+// Traduce la opción que llega del navegador ("flash" o "pro") al modelo real de DeepSeek.
+// IMPORTANTE (seguridad): el navegador SOLO puede mandar esas dos palabras clave, nunca el
+// identificador real del modelo. Si aceptáramos el id tal cual, cualquiera podría apuntar el bot
+// a un modelo arbitrario (mucho más caro o no permitido) y disparar el gasto de la cuenta.
+// Cualquier otro valor, o si no viene nada, cae en "flash" (el barato y rápido).
+// DEEPSEEK_MODEL sigue mandando sobre el id calculado: es la salida de emergencia si DeepSeek
+// cambia los nombres de sus modelos y hay que corregirlo sin tocar el código.
+function resolverModelo(elegido) {
+  const esPro = elegido === "pro";
+  const id = process.env.DEEPSEEK_MODEL || (esPro ? "deepseek-v4-pro" : "deepseek-v4-flash");
+  return { id, thinking: { type: esPro ? "enabled" : "disabled" } };
+}
+
 function firestoreValue(value) {
   if (!value || typeof value !== "object") return null;
   if ("stringValue" in value) return value.stringValue;
@@ -419,6 +432,10 @@ function buildSystem({ workspaceName, userName, today, events, clients }) {
   ].join("\n");
 }
 
+// El modo "Inteligente" piensa antes de responder y tarda más. Sin esto, Vercel corta la
+// función a los pocos segundos y el usuario ve un error de conexión que no es real.
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Método no permitido." });
@@ -436,7 +453,8 @@ export default async function handler(req, res) {
     res.status(400).json({ error: "El cuerpo de la solicitud no es JSON valido." });
     return;
   }
-  const { idToken, messages = [], workspaceId = "" } = body;
+  // "model" es opcional y solo acepta las palabras "flash" o "pro" (lo demás se trata como flash).
+  const { idToken, messages = [], workspaceId = "", model: modeloElegido = "flash" } = body;
 
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: "Faltan los mensajes de la conversación." });
@@ -460,7 +478,8 @@ export default async function handler(req, res) {
     return;
   }
 
-  const model = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+  // Modo elegido por el usuario: "Rápido" (flash, sin razonar) o "Inteligente" (pro, razonando).
+  const { id: model, thinking } = resolverModelo(modeloElegido);
   let context;
   try {
     context = await loadWorkspaceContext(idToken, workspaceId);
@@ -486,6 +505,7 @@ export default async function handler(req, res) {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
+        thinking,
         messages: [{ role: "system", content: system }, ...convo],
         tools: TOOLS,
         tool_choice: "auto",
@@ -501,7 +521,18 @@ export default async function handler(req, res) {
     }
 
     const data = await r.json();
-    const message = data?.choices?.[0]?.message || { role: "assistant", content: "No pude generar una respuesta." };
+    const bruto = data?.choices?.[0]?.message;
+    // Al navegador le devolvemos SOLO lo necesario. En modo "Inteligente" DeepSeek añade
+    // "reasoning_content" (todo su razonamiento, varios kB). Si lo dejáramos pasar, el
+    // navegador lo guardaría en la conversación y lo volvería a subir en cada mensaje,
+    // hasta pasarse del límite de tamaño y dejar el chat muerto hasta recargar la página.
+    const message = bruto
+      ? {
+          role: "assistant",
+          content: typeof bruto.content === "string" ? bruto.content : "",
+          ...(bruto.tool_calls ? { tool_calls: bruto.tool_calls } : {})
+        }
+      : { role: "assistant", content: "No pude generar una respuesta." };
     res.status(200).json({ message });
   } catch (err) {
     res.status(502).json({ error: "No pudimos conectar con el asistente. Intenta de nuevo." });

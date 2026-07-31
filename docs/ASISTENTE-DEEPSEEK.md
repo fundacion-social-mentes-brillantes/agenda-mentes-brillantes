@@ -16,7 +16,13 @@ La clave de DeepSeek **NO va en el navegador** (DeepSeek lo prohíbe). Vive en u
      Si guardaste la clave "agenda", úsala. Si no la guardaste (DeepSeek solo la muestra al crearla),
      crea una nueva en https://platform.deepseek.com/api_keys y usa esa.
    - **Environments:** marca Production y Preview.
-3. (Opcional) Si quieres fijar el modelo, agrega `DEEPSEEK_MODEL` = `deepseek-chat` (es el valor por defecto).
+3. **NO agregues `DEEPSEEK_MODEL`.** El modelo se elige desde el propio bot, con las
+   pastillas **Rápido** (`deepseek-v4-flash`, responde al instante) e **Inteligente**
+   (`deepseek-v4-pro`, piensa más y cuesta ~3 veces más).
+   Esa variable existe solo como salida de emergencia por si DeepSeek cambia los nombres
+   de sus modelos: **si está definida, manda sobre la elección del usuario y el selector
+   deja de servir.** Si ya la tienes puesta, bórrala en Vercel (Settings → Environment
+   Variables → los tres puntos → Remove) y vuelve a desplegar.
 4. Ve a **Deployments** → en el último, menú **⋯ → Redeploy** (para que tome la variable).
 
 Listo: el botón 🤖 ya responderá usando tu agenda.

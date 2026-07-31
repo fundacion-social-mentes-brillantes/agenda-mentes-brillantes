@@ -15,6 +15,27 @@ interface UiMessage {
   content: string;
 }
 
+// Las dos formas de pensar del asistente. Al servidor solo le mandamos esta palabra
+// ("flash" o "pro"); él decide qué modelo usar de verdad.
+type ModeloBot = "flash" | "pro";
+
+// Dónde se recuerda la elección en este navegador.
+const CLAVE_MODELO = "asistenteModelo";
+
+const OPCIONES_MODELO: { valor: ModeloBot; etiqueta: string; descripcion: string }[] = [
+  { valor: "flash", etiqueta: "Rápido", descripcion: "Al instante, para el día a día" },
+  { valor: "pro", etiqueta: "Inteligente", descripcion: "Piensa más, para peticiones difíciles" }
+];
+
+// Lee la opción guardada. Si el navegador no deja (modo privado), usa "Rápido".
+function leerModeloGuardado(): ModeloBot {
+  try {
+    return localStorage.getItem(CLAVE_MODELO) === "pro" ? "pro" : "flash";
+  } catch {
+    return "flash";
+  }
+}
+
 interface AssistantWidgetProps {
   events: CalendarEvent[];
   clients: Client[];
@@ -53,6 +74,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("Pensando...");
+  const [modelo, setModelo] = useState<ModeloBot>(leerModeloGuardado);
   const convoRef = useRef<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Caché de eventos creados/duplicados en ESTE turno: permite mover/duplicar/borrar
@@ -80,6 +102,16 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
   useEffect(() => {
     if (open && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [uiMessages, open, loading, status]);
+
+  // Cambiar de opción NO borra la conversación: solo aplica desde el siguiente mensaje.
+  const cambiarModelo = (valor: ModeloBot) => {
+    setModelo(valor);
+    try {
+      localStorage.setItem(CLAVE_MODELO, valor);
+    } catch {
+      // Si el navegador no deja guardar (modo privado), igual funciona en esta sesión.
+    }
+  };
 
   async function execTool(name: string, args: any): Promise<string> {
     try {
@@ -276,7 +308,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
         const res = await fetch("/api/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idToken, messages: convoRef.current, workspaceId })
+          body: JSON.stringify({ idToken, messages: convoRef.current, workspaceId, model: modelo })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -318,7 +350,12 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
           }
           setStatus("Pensando...");
         } else {
-          if (message.content) setUiMessages((prev) => [...prev, { role: "assistant", content: message.content }]);
+          // Si por lo que sea llega vacío, decimos algo: nunca dejar al usuario mirando
+          // una pantalla muda (se leería como "la app se dañó").
+          setUiMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: message.content || "No me salió la respuesta. ¿Me lo repites?" }
+          ]);
           answered = true;
         }
       }
@@ -389,6 +426,33 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
           </div>
 
           <div className="border-t border-app-soft p-2">
+            {/* Cómo quieres que piense: rápido para lo del día a día, inteligente para lo difícil. */}
+            <div role="group" aria-label="Cómo quieres que piense el asistente" className="flex items-center gap-1.5 px-1">
+              {OPCIONES_MODELO.map((opcion) => {
+                const activa = modelo === opcion.valor;
+                return (
+                  <button
+                    key={opcion.valor}
+                    type="button"
+                    onClick={() => cambiarModelo(opcion.valor)}
+                    aria-pressed={activa}
+                    title={opcion.descripcion}
+                    // Mientras responde no se puede cambiar: el turno en curso ya salió con
+                    // el modo anterior y encender la otra pastilla sería mentir.
+                    disabled={loading}
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-black transition disabled:opacity-50 ${
+                      activa ? "border-app-accent bg-app-soft text-app-accent" : "border-app-soft text-app-muted hover:text-app-strong"
+                    }`}
+                  >
+                    {opcion.etiqueta}
+                  </button>
+                );
+              })}
+            </div>
+            {/* La descripción va VISIBLE: en el celular no existen los tooltips del ratón. */}
+            <p className="m-0 mb-2 px-1 text-[11px] text-app-muted">
+              {OPCIONES_MODELO.find((o) => o.valor === modelo)?.descripcion}
+            </p>
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
