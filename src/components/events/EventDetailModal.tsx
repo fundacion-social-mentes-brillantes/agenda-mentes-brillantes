@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Spinner } from "../ui/Spinner";
+import { PasarAlErpBoton } from "./PasarAlErpBoton";
 import type { CalendarEvent } from "../../types/event";
 import { formatCOP, formatEventDate, formatEventTime, toDate } from "../../lib/dateUtils";
 import { getModalityLabel } from "../../lib/eventMeta";
@@ -220,6 +221,9 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onDuplicate, 
               </div>
             </div>
           )}
+
+          {/* Solo en sesiones coach: pasar la sesión a la contabilidad. */}
+          <PasarAlErpBoton event={event} />
 
           {hasAmounts && (
             <div className="rounded-2xl border border-app-soft bg-app-soft p-4">

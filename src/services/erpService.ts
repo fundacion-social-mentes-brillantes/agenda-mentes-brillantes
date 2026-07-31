@@ -115,3 +115,77 @@ export async function reportarSesionesAlErp(params: {
 export function aFechaIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/** Lo que el ERP contesta al intentar pasar una sesión. */
+export type ResultadoPaseErp =
+  | { estado: "registrada"; persona: string; fecha: string; mensaje: string; paquete: string | null; coach: ResumenCupoErp }
+  | { estado: "ya_estaba"; persona: string; fecha: string; mensaje: string; coach: ResumenCupoErp }
+  | { estado: "sin_cupo"; persona: string; fecha: string; mensaje: string; detalle: string; coach: ResumenCupoErp }
+  | { estado: "persona_desconocida"; codigo: string; mensaje: string }
+  | { estado: "error"; mensaje: string };
+
+export interface ResumenCupoErp {
+  compradas: number;
+  realizadas: number;
+  restantes: number;
+}
+
+/**
+ * Pasa una sesión coach de la agenda a la contabilidad del ERP.
+ *
+ * El ERP solo la descuenta de un paquete YA comprado. Si la persona no tiene
+ * cupo devuelve `sin_cupo` y no escribe nada: vender el paquete es una decisión
+ * de plata que se sigue tomando allá, no desde el calendario.
+ *
+ * A diferencia del resto del servicio, este NO es silencioso: quien oprime el
+ * botón tiene que enterarse de lo que pasó.
+ */
+export async function pasarSesionAlErp(params: {
+  codigo: number;
+  fecha: string;
+  eventoId: string;
+}): Promise<ResultadoPaseErp> {
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return { estado: "error", mensaje: "Tu sesión expiró. Vuelve a iniciar sesión." };
+
+    const r = await fetch("/api/erp-registrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, codigo: String(params.codigo), fecha: params.fecha, eventoId: params.eventoId })
+    });
+
+    const datos = await r.json().catch(() => ({}));
+    if (!r.ok) return { estado: "error", mensaje: datos?.error || "No se pudo conectar con el ERP." };
+    if (!datos?.estado) return { estado: "error", mensaje: "El ERP contestó algo que no se entiende." };
+    return datos as ResultadoPaseErp;
+  } catch {
+    return { estado: "error", mensaje: "No se pudo conectar con el ERP." };
+  }
+}
+
+/**
+ * Cuáles de estos eventos ya están registrados en el ERP, para pintar el botón.
+ * Silencioso: si el ERP no responde, se devuelve vacío y el botón queda gris.
+ */
+export async function consultarEventosEnErp(eventoIds: string[]): Promise<Set<string>> {
+  const limpios = Array.from(new Set(eventoIds.filter(Boolean))).slice(0, 200);
+  if (!limpios.length) return new Set();
+
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return new Set();
+
+    const r = await fetch("/api/erp-registrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, consultar: true, eventos: limpios })
+    });
+    if (!r.ok) return new Set();
+
+    const datos = await r.json();
+    return new Set<string>(Array.isArray(datos?.registrados) ? datos.registrados : []);
+  } catch {
+    return new Set();
+  }
+}
