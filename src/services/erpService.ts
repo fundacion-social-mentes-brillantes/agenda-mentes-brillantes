@@ -149,10 +149,16 @@ export async function pasarSesionAlErp(params: {
     const idToken = await auth.currentUser?.getIdToken();
     if (!idToken) return { estado: "error", mensaje: "Tu sesión expiró. Vuelve a iniciar sesión." };
 
-    const r = await fetch("/api/erp-registrar", {
+    const r = await fetch("/api/erp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken, codigo: String(params.codigo), fecha: params.fecha, eventoId: params.eventoId })
+      body: JSON.stringify({
+        idToken,
+        accion: "registrar-sesion",
+        codigo: String(params.codigo),
+        fecha: params.fecha,
+        eventoId: params.eventoId
+      })
     });
 
     const datos = await r.json().catch(() => ({}));
@@ -176,10 +182,10 @@ export async function consultarEventosEnErp(eventoIds: string[]): Promise<Set<st
     const idToken = await auth.currentUser?.getIdToken();
     if (!idToken) return new Set();
 
-    const r = await fetch("/api/erp-registrar", {
+    const r = await fetch("/api/erp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken, consultar: true, eventos: limpios })
+      body: JSON.stringify({ idToken, accion: "consultar-eventos", eventos: limpios })
     });
     if (!r.ok) return new Set();
 

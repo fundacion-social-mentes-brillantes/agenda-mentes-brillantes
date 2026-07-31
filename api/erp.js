@@ -1,12 +1,20 @@
-// Función de servidor (Vercel): trae del ERP el estado real de las personas.
+// Función de servidor (Vercel): único puente entre la agenda y el ERP contable.
 //
-// La agenda ya comparte los códigos de persona con el ERP, pero el dinero y
-// el conteo de sesiones se escribían a mano en cada evento y podían desviarse
-// de la contabilidad. Aquí se consulta la verdad del ERP.
+// Hace tres cosas según "accion", y NO se parte en varias funciones a
+// propósito: el plan de Vercel permite 12 funciones serverless y ya están
+// todas usadas. Separarlas tumbaría el despliegue entero.
+//
+//   (sin accion)        estado real de unas personas (deuda y sesiones coach)
+//   "consultar-eventos" cuáles eventos ya están en el ERP (para pintar el botón)
+//   "registrar-sesion"  pasa UNA sesión coach a la contabilidad
+//
+// Solo la última escribe, y escribe poco: el ERP únicamente descuenta de un
+// paquete YA comprado. Si la persona no tiene cupo contesta que no y no toca
+// nada; vender el paquete se sigue decidiendo en el ERP.
 //
 // El secreto (ERP_SHARED_SECRET) vive SOLO en el servidor, nunca en el
-// navegador. Y antes de consultar se verifica que quien pregunta tenga sesión
-// válida en la agenda, igual que hace el asistente.
+// navegador. Y antes de consultar o escribir se verifica que quien pregunta
+// tenga sesión válida en la agenda, igual que hace el asistente.
 
 const FIREBASE_API_KEY =
   process.env.FIREBASE_API_KEY ||
@@ -14,7 +22,10 @@ const FIREBASE_API_KEY =
   "AIzaSyAfijrkvPKyIgnyfkYEJvjmYqT77disxHI"; // clave web publica
 
 const ERP_BASE_URL = process.env.ERP_BASE_URL || "https://mentes-brillantes-erp.vercel.app";
+const RUTA_PERSONAS = "/api/integraciones/agenda/personas";
+const RUTA_SESION = "/api/integraciones/agenda/registrar-sesion";
 const MAX_CODIGOS = 50;
+const MAX_EVENTOS = 200;
 
 async function verifyUser(idToken) {
   if (!idToken) return null;
@@ -69,14 +80,65 @@ export default async function handler(req, res) {
     return;
   }
 
-  const codigos = normalizarCodigos(body.codigos ?? body.codigo);
-  if (!codigos.length) {
-    res.status(400).json({ error: "Indica al menos un código de persona." });
-    return;
-  }
+  const accion = String(body.accion || "").trim();
 
   try {
-    const url = `${ERP_BASE_URL}/api/integraciones/agenda/personas?codigos=${encodeURIComponent(codigos.join(","))}`;
+    if (accion === "consultar-eventos") {
+      const eventos = (Array.isArray(body.eventos) ? body.eventos : [])
+        .map((e) => String(e || "").trim())
+        .filter(Boolean)
+        .slice(0, MAX_EVENTOS);
+
+      if (!eventos.length) {
+        res.status(200).json({ registrados: [] });
+        return;
+      }
+
+      const url = `${ERP_BASE_URL}${RUTA_SESION}?eventos=${encodeURIComponent(eventos.join(","))}`;
+      const r = await fetch(url, { headers: { "x-agenda-secret": secreto } });
+      if (!r.ok) {
+        console.error("[erp] consultar-eventos no OK", r.status);
+        res.status(502).json({ error: "No se pudo consultar el ERP en este momento." });
+        return;
+      }
+      res.status(200).json(await r.json());
+      return;
+    }
+
+    if (accion === "registrar-sesion") {
+      const codigo = String(body.codigo ?? "").trim();
+      const fecha = String(body.fecha ?? "").trim();
+      const eventoId = String(body.eventoId ?? "").trim();
+
+      if (!/^\d{1,10}$/.test(codigo) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        res.status(400).json({ error: "Faltan el código de la persona o la fecha de la sesión." });
+        return;
+      }
+
+      const r = await fetch(`${ERP_BASE_URL}${RUTA_SESION}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-agenda-secret": secreto },
+        body: JSON.stringify({ codigo, fecha, eventoId })
+      });
+
+      const datos = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        console.error("[erp] registrar-sesion no OK", r.status, datos?.error);
+        res.status(502).json({ error: datos?.mensaje || "No se pudo pasar la sesión al ERP en este momento." });
+        return;
+      }
+      res.status(200).json(datos);
+      return;
+    }
+
+    // Por defecto: estado financiero de unas personas.
+    const codigos = normalizarCodigos(body.codigos ?? body.codigo);
+    if (!codigos.length) {
+      res.status(400).json({ error: "Indica al menos un código de persona." });
+      return;
+    }
+
+    const url = `${ERP_BASE_URL}${RUTA_PERSONAS}?codigos=${encodeURIComponent(codigos.join(","))}`;
     const r = await fetch(url, { headers: { "x-agenda-secret": secreto } });
 
     if (!r.ok) {
@@ -86,10 +148,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    const datos = await r.json();
-    res.status(200).json(datos);
+    res.status(200).json(await r.json());
   } catch (error) {
     console.error("[erp] fallo de red", error?.message);
-    res.status(502).json({ error: "No se pudo consultar el ERP en este momento." });
+    res.status(502).json({ error: "No se pudo conectar con el ERP en este momento." });
   }
 }
