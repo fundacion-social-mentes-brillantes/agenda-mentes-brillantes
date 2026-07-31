@@ -38,8 +38,12 @@ export interface RespuestaErp {
  */
 /** El ERP atiende 50 códigos por consulta; con más se va por tandas. */
 const CODIGOS_POR_TANDA = 50;
-/** Tope de seguridad: no tiene sentido pedir la lista entera de 258 personas. */
-const MAX_CODIGOS = 150;
+/**
+ * Tope de seguridad. El ERP hace dos consultas por persona, así que pedir la
+ * lista entera de 258 son cientos de consultas por cada carga de pantalla.
+ * Quien llama debe acotar antes; esto es solo la última red.
+ */
+const MAX_CODIGOS = 60;
 
 export async function consultarEstadoErp(codigos: number[]): Promise<Map<number, EstadoErp> | null> {
   const limpios = Array.from(new Set(codigos.filter((c) => Number.isFinite(c)))).slice(0, MAX_CODIGOS);

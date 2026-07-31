@@ -70,11 +70,30 @@ export default function CoachPage({
     return clients.filter((c) => terms.every((t) => c.nameLower.includes(t) || String(c.code) === t));
   }, [clients, search]);
 
-  // La verdad del ERP para las personas visibles, no solo para la ficha abierta:
-  // sin esto la cabecera de la lista no tenía de dónde sacarla y se inventaba
-  // sus propias cifras. El servicio la pide por tandas y la agenda no se bloquea
-  // si el ERP no responde.
-  const codigosVisibles = useMemo(() => filtered.map((c) => c.code), [filtered]);
+  /**
+   * La verdad del ERP para la cabecera de la lista. Antes solo se consultaba la
+   * ficha abierta y por eso la lista se inventaba sus propias cifras.
+   *
+   * Pero preguntar por las 258 personas de golpe son cientos de consultas al
+   * ERP en cada carga, y la mayoría no tiene nada que ver con coach. Así que:
+   *
+   *  - Lista completa: se pregunta solo por quienes SÍ tienen sesiones coach en
+   *    la agenda (un puñado), más la ficha que esté abierta.
+   *  - Lista filtrada por una búsqueda: se pregunta por todas las que salen,
+   *    que es cuando de verdad se quiere ver el detalle de alguien.
+   *
+   * Quien no se consultó muestra un guion, que es más honesto que un cero.
+   */
+  const LIMITE_CONSULTA = 60;
+  const codigosVisibles = useMemo(() => {
+    const codigos = filtered.map((c) => c.code);
+    if (codigos.length <= LIMITE_CONSULTA) return codigos;
+
+    const conSesiones = codigos.filter((code) => byCode.has(code));
+    if (expanded !== null && !conSesiones.includes(expanded)) conSesiones.push(expanded);
+    return conSesiones.slice(0, LIMITE_CONSULTA);
+  }, [filtered, byCode, expanded]);
+
   const { estados: estadosErp, cargando: cargandoErp, erpCaido } = useEstadoErp(codigosVisibles);
 
   /**
