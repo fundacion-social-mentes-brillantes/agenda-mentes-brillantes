@@ -64,8 +64,17 @@ function parseBody(body) {
 // Cualquier otro valor, o si no viene nada, cae en "flash" (el barato y rápido).
 // DEEPSEEK_MODEL sigue mandando sobre el id calculado: es la salida de emergencia si DeepSeek
 // cambia los nombres de sus modelos y hay que corregirlo sin tocar el código.
+//
+// MODO "INTELIGENTE" (v4-pro razonando): APAGADO A PROPÓSITO.
+// Hoy DeepSeek-V4-Flash-0731 puntúa 50 en el índice de Artificial Analysis y v4-pro solo 44:
+// Flash es MÁS capaz Y ~3x más barato, así que pagar por Pro sería perder por los dos lados.
+// Cuando DeepSeek actualice Pro y valga la pena, se enciende SIN TOCAR CÓDIGO: basta poner
+// la variable VITE_MODO_PENSAR = 1 en Vercel y volver a desplegar. Esa misma variable hace
+// aparecer el selector en el widget (la lee también el navegador).
+const MODO_PENSAR_HABILITADO = process.env.VITE_MODO_PENSAR === "1";
+
 function resolverModelo(elegido) {
-  const esPro = elegido === "pro";
+  const esPro = MODO_PENSAR_HABILITADO && elegido === "pro";
   const id = process.env.DEEPSEEK_MODEL || (esPro ? "deepseek-v4-pro" : "deepseek-v4-flash");
   return { id, thinking: { type: esPro ? "enabled" : "disabled" } };
 }

@@ -27,8 +27,16 @@ const OPCIONES_MODELO: { valor: ModeloBot; etiqueta: string; descripcion: string
   { valor: "pro", etiqueta: "Inteligente", descripcion: "Piensa más, para peticiones difíciles" }
 ];
 
+// ¿Se ofrece el modo "Inteligente" (v4-pro razonando)? HOY NO.
+// DeepSeek-V4-Flash-0731 puntúa 50 en el índice de Artificial Analysis y v4-pro solo 44: Flash
+// es más capaz Y ~3x más barato. Cuando actualicen Pro y valga la pena, se enciende poniendo
+// VITE_MODO_PENSAR = 1 en Vercel (la misma variable que lee el servidor) y volviendo a desplegar.
+const MODO_PENSAR_HABILITADO = import.meta.env.VITE_MODO_PENSAR === "1";
+
 // Lee la opción guardada. Si el navegador no deja (modo privado), usa "Rápido".
+// Con el modo pensar apagado siempre es "Rápido", aunque quedara una elección vieja guardada.
 function leerModeloGuardado(): ModeloBot {
+  if (!MODO_PENSAR_HABILITADO) return "flash";
   try {
     return localStorage.getItem(CLAVE_MODELO) === "pro" ? "pro" : "flash";
   } catch {
@@ -426,7 +434,10 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
           </div>
 
           <div className="border-t border-app-soft p-2">
-            {/* Cómo quieres que piense: rápido para lo del día a día, inteligente para lo difícil. */}
+            {/* Cómo quieres que piense: rápido para lo del día a día, inteligente para lo difícil.
+                Hoy el selector está OCULTO porque v4-flash es más capaz y más barato que v4-pro.
+                Reaparece solo con la variable VITE_MODO_PENSAR = 1 (la misma que usa el servidor). */}
+            {MODO_PENSAR_HABILITADO && (
             <div role="group" aria-label="Cómo quieres que piense el asistente" className="flex items-center gap-1.5 px-1">
               {OPCIONES_MODELO.map((opcion) => {
                 const activa = modelo === opcion.valor;
@@ -449,10 +460,13 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
                 );
               })}
             </div>
+            )}
             {/* La descripción va VISIBLE: en el celular no existen los tooltips del ratón. */}
-            <p className="m-0 mb-2 px-1 text-[11px] text-app-muted">
-              {OPCIONES_MODELO.find((o) => o.valor === modelo)?.descripcion}
-            </p>
+            {MODO_PENSAR_HABILITADO && (
+              <p className="m-0 mb-2 px-1 text-[11px] text-app-muted">
+                {OPCIONES_MODELO.find((o) => o.valor === modelo)?.descripcion}
+              </p>
+            )}
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
