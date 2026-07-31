@@ -84,9 +84,19 @@ export default async function handler(req, res) {
 
   try {
     if (accion === "consultar-eventos") {
+      // Cada evento viaja con su persona y su fecha, no solo con el id: es lo
+      // que le permite al ERP reconocer las sesiones que se registraron alla
+      // directamente, que no tienen enlace con el evento de la agenda.
       const eventos = (Array.isArray(body.eventos) ? body.eventos : [])
-        .map((e) => String(e || "").trim())
-        .filter(Boolean)
+        .map((e) => {
+          if (typeof e === "string") return { id: e.trim(), codigo: null, fecha: null };
+          return {
+            id: String(e?.id ?? "").trim(),
+            codigo: /^\d{1,10}$/.test(String(e?.codigo ?? "")) ? String(e.codigo) : null,
+            fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(e?.fecha ?? "")) ? String(e.fecha) : null
+          };
+        })
+        .filter((e) => e.id)
         .slice(0, MAX_EVENTOS);
 
       if (!eventos.length) {
@@ -94,8 +104,11 @@ export default async function handler(req, res) {
         return;
       }
 
-      const url = `${ERP_BASE_URL}${RUTA_SESION}?eventos=${encodeURIComponent(eventos.join(","))}`;
-      const r = await fetch(url, { headers: { "x-agenda-secret": secreto } });
+      const r = await fetch(`${ERP_BASE_URL}${RUTA_SESION}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-agenda-secret": secreto },
+        body: JSON.stringify({ eventos })
+      });
       if (!r.ok) {
         console.error("[erp] consultar-eventos no OK", r.status);
         res.status(502).json({ error: "No se pudo consultar el ERP en este momento." });

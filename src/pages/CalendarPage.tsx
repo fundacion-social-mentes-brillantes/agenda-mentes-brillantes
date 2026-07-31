@@ -4,6 +4,7 @@ import { Bell, CalendarPlus, ChevronLeft, ChevronRight, Sparkles } from "lucide-
 import { Modal } from "../components/ui/Modal";
 import { EventDetailModal } from "../components/events/EventDetailModal";
 import { formatCOP, isSameDay, toDate } from "../lib/dateUtils";
+import { useEventosEnErp } from "../hooks/useEventosEnErp";
 import type { CalendarEvent } from "../types/event";
 
 interface CalendarPageProps {
@@ -37,6 +38,11 @@ export default function CalendarPage({
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [drag, setDrag] = useState<{ event: CalendarEvent; x: number; y: number; overKey: string | null } | null>(null);
   const didDragRef = useRef(false);
+
+  // Qué sesiones coach ya están en la contabilidad, para verlo sin abrir nada.
+  const { registrados: enErp } = useEventosEnErp(events);
+  const estaEnErp = (event: CalendarEvent) => Boolean(event.id && enErp.has(event.id));
+  const esCoach = (event: CalendarEvent) => event.kind === "coach" && typeof event.clientCode === "number";
 
   const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -250,19 +256,25 @@ export default function CalendarPage({
                   {date.getDate()}
                 </span>
                 <div className="flex-1 space-y-0.5 overflow-hidden">
-                  {dayEvents.slice(0, 4).map((event) => (
-                    <span
-                      key={event.id}
-                      title={event.title}
-                      onPointerDown={(e) => startChipDrag(e, event)}
-                      className={`block truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-4 text-white sm:py-0 ${
-                        drag?.event.id === event.id ? "opacity-40" : ""
-                      }`}
-                      style={{ backgroundColor: event.color, touchAction: "none" }}
-                    >
-                      {event.title}
-                    </span>
-                  ))}
+                  {dayEvents.slice(0, 4).map((event) => {
+                    // Solo las sesiones coach se marcan: el resto del calendario
+                    // no tiene nada que ver con la contabilidad.
+                    const yaEnErp = esCoach(event) && estaEnErp(event);
+                    return (
+                      <span
+                        key={event.id}
+                        title={yaEnErp ? `${event.title} — ya está en el ERP` : event.title}
+                        onPointerDown={(e) => startChipDrag(e, event)}
+                        className={`block truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-4 text-white sm:py-0 ${
+                          drag?.event.id === event.id ? "opacity-40" : ""
+                        } ${yaEnErp ? "ring-1 ring-emerald-300" : ""}`}
+                        style={{ backgroundColor: event.color, touchAction: "none" }}
+                      >
+                        {yaEnErp && <span className="mr-0.5 font-black text-emerald-200">✓</span>}
+                        {event.title}
+                      </span>
+                    );
+                  })}
                   {dayEvents.length > 4 && (
                     <span className="block px-1 text-[10px] font-black text-app-faint">+{dayEvents.length - 4} más</span>
                   )}

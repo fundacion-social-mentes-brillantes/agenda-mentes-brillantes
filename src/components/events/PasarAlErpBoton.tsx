@@ -51,7 +51,7 @@ export function PasarAlErpBoton({ event }: { event: CalendarEvent }) {
     setPaso("revisando");
     setResultado(null);
 
-    consultarEventosEnErp([event.id]).then((registrados) => {
+    consultarEventosEnErp([{ id: event.id, codigo, fecha }]).then((registrados) => {
       if (cancelado) return;
       setPaso(registrados.has(event.id as string) ? "resuelto" : "listo");
     });
@@ -59,7 +59,7 @@ export function PasarAlErpBoton({ event }: { event: CalendarEvent }) {
     return () => {
       cancelado = true;
     };
-  }, [event.id, esCoach]);
+  }, [event.id, esCoach, codigo, fecha]);
 
   if (!esCoach || !event.id) return null;
 

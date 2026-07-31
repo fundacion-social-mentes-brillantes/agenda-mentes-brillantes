@@ -40,11 +40,6 @@ export default function CoachPage({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  // Estado real del ERP, solo de la persona abierta: preciso y sin consultar
-  // 258 fichas de golpe. La agenda no guarda estas cifras, las lee en vivo.
-  const { estados: estadosErp, cargando: cargandoErp, erpCaido } = useEstadoErp(
-    expanded === null ? [] : [expanded]
-  );
   const now = new Date();
 
   // Edición de una persona (nombre y/o código).
@@ -75,13 +70,35 @@ export default function CoachPage({
     return clients.filter((c) => terms.every((t) => c.nameLower.includes(t) || String(c.code) === t));
   }, [clients, search]);
 
+  // La verdad del ERP para las personas visibles, no solo para la ficha abierta:
+  // sin esto la cabecera de la lista no tenía de dónde sacarla y se inventaba
+  // sus propias cifras. El servicio la pide por tandas y la agenda no se bloquea
+  // si el ERP no responde.
+  const codigosVisibles = useMemo(() => filtered.map((c) => c.code), [filtered]);
+  const { estados: estadosErp, cargando: cargandoErp, erpCaido } = useEstadoErp(codigosVisibles);
+
+  /**
+   * Dos cosas distintas, y antes se mezclaban con las mismas palabras:
+   *
+   *  - AGENDADAS y PRÓXIMAS son del calendario: cuántas citas hay y cuántas ya
+   *    pasaron. No dicen nada de plata.
+   *  - COMPRADAS y QUEDAN son del ERP, que es quien manda en eso. Si el ERP no
+   *    contestó se devuelven null y se muestran con guion, en vez de inventar
+   *    un número (antes "compradas" era el máximo del campo escrito a mano en
+   *    cada evento, que por defecto vale 1: por eso decía 1 con 5 sesiones).
+   */
   const countsFor = (code: number) => {
     const list = byCode.get(code) || [];
-    const tomadas = list.filter((e) => toDate(e.startAt).getTime() < now.getTime()).length;
-    // "Compradas" = el paquete más grande registrado (no la suma), para que no se descuadre
-    // al registrar el paquete (ej. 24) y además crear cada sesión.
-    const compradas = list.reduce((m, e) => Math.max(m, typeof e.purchasedSessions === "number" && e.purchasedSessions >= 0 ? e.purchasedSessions : 1), 0);
-    return { total: list.length, tomadas, proximas: list.length - tomadas, compradas, quedan: compradas - list.length };
+    const pasadas = list.filter((e) => toDate(e.startAt).getTime() < now.getTime()).length;
+    const coach = estadosErp.get(code)?.coach;
+    return {
+      total: list.length,
+      agendadas: list.length,
+      pasadas,
+      proximas: list.length - pasadas,
+      compradas: coach ? coach.sesiones_compradas : null,
+      quedan: coach ? coach.sesiones_restantes : null,
+    };
   };
 
   const sessionsFor = (code: number) =>
@@ -254,19 +271,27 @@ export default function CoachPage({
                     <p className="m-0 text-xs font-bold text-app-faint">#{c.code}</p>
                   </div>
                   <div className="hidden gap-2 sm:flex">
-                    <Badge label="Tomadas" value={counts.tomadas} tone="done" />
+                    <Badge label="Agendadas" value={counts.pasadas} tone="done" />
                     <Badge label="Próximas" value={counts.proximas} tone="next" />
-                    <Badge label="Compradas" value={counts.compradas} tone="total" />
-                    <Badge label="Quedan" value={Math.max(0, counts.quedan)} tone={counts.compradas === 0 ? "total" : counts.quedan > 0 ? "left" : "warn"} />
+                    <Badge label="Compradas" value={counts.compradas ?? "—"} tone="total" />
+                    <Badge
+                      label="Quedan"
+                      value={counts.quedan ?? "—"}
+                      tone={counts.quedan === null ? "total" : counts.quedan > 0 ? "left" : "warn"}
+                    />
                   </div>
                   <ChevronDown size={18} className={`shrink-0 text-app-faint transition ${isOpen ? "rotate-180" : ""}`} />
                 </button>
 
                 <div className="flex flex-wrap gap-2 px-4 pb-3 sm:hidden">
-                  <Badge label="Tomadas" value={counts.tomadas} tone="done" />
+                  <Badge label="Agendadas" value={counts.pasadas} tone="done" />
                   <Badge label="Próximas" value={counts.proximas} tone="next" />
-                  <Badge label="Compradas" value={counts.compradas} tone="total" />
-                  <Badge label="Quedan" value={Math.max(0, counts.quedan)} tone={counts.compradas === 0 ? "total" : counts.quedan > 0 ? "left" : "warn"} />
+                  <Badge label="Compradas" value={counts.compradas ?? "—"} tone="total" />
+                  <Badge
+                    label="Quedan"
+                    value={counts.quedan ?? "—"}
+                    tone={counts.quedan === null ? "total" : counts.quedan > 0 ? "left" : "warn"}
+                  />
                 </div>
 
                 {isOpen && (
@@ -351,7 +376,9 @@ export default function CoachPage({
   );
 }
 
-function Badge({ label, value, tone }: { label: string; value: number; tone: "done" | "next" | "total" | "left" | "warn" }) {
+// value acepta texto para poder mostrar "—" cuando el ERP no contestó: es más
+// honesto que enseñar un cero que parece un dato.
+function Badge({ label, value, tone }: { label: string; value: number | string; tone: "done" | "next" | "total" | "left" | "warn" }) {
   const toneClass =
     tone === "done"
       ? "border-app-soft bg-app-soft text-app-muted"

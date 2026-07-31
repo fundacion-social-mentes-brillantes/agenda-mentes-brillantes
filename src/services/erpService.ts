@@ -36,28 +36,43 @@ export interface RespuestaErp {
  * Si el ERP no responde, devuelve null: la agenda sigue funcionando igual, solo
  * que sin el dato financiero (nunca debe quedar bloqueada por el ERP).
  */
+/** El ERP atiende 50 códigos por consulta; con más se va por tandas. */
+const CODIGOS_POR_TANDA = 50;
+/** Tope de seguridad: no tiene sentido pedir la lista entera de 258 personas. */
+const MAX_CODIGOS = 150;
+
 export async function consultarEstadoErp(codigos: number[]): Promise<Map<number, EstadoErp> | null> {
-  const limpios = Array.from(new Set(codigos.filter((c) => Number.isFinite(c)))).slice(0, 50);
+  const limpios = Array.from(new Set(codigos.filter((c) => Number.isFinite(c)))).slice(0, MAX_CODIGOS);
   if (!limpios.length) return new Map();
 
   try {
     const idToken = await auth.currentUser?.getIdToken();
     if (!idToken) return null;
 
-    const r = await fetch("/api/erp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken, codigos: limpios })
-    });
-    if (!r.ok) return null;
-
-    const datos: RespuestaErp = await r.json();
-    const mapa = new Map<number, EstadoErp>();
-    for (const p of datos.personas || []) {
-      const codigo = Number(p.codigo);
-      if (Number.isFinite(codigo)) mapa.set(codigo, p);
+    const tandas: number[][] = [];
+    for (let i = 0; i < limpios.length; i += CODIGOS_POR_TANDA) {
+      tandas.push(limpios.slice(i, i + CODIGOS_POR_TANDA));
     }
-    return mapa;
+
+    const mapa = new Map<number, EstadoErp>();
+    for (const tanda of tandas) {
+      const r = await fetch("/api/erp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken, codigos: tanda })
+      });
+      // Si una tanda falla se devuelve lo que ya se tenga: media verdad del ERP
+      // es mejor que ninguna, y quien no llegó se muestra con guion.
+      if (!r.ok) break;
+
+      const datos: RespuestaErp = await r.json();
+      for (const p of datos.personas || []) {
+        const codigo = Number(p.codigo);
+        if (Number.isFinite(codigo)) mapa.set(codigo, p);
+      }
+    }
+
+    return mapa.size ? mapa : null;
   } catch {
     return null;
   }
@@ -170,12 +185,33 @@ export async function pasarSesionAlErp(params: {
   }
 }
 
+/** Un evento coach descrito para preguntarle al ERP si ya está registrado. */
+export interface EventoParaConsultar {
+  id: string;
+  codigo: number | null;
+  fecha: string;
+}
+
 /**
- * Cuáles de estos eventos ya están registrados en el ERP, para pintar el botón.
- * Silencioso: si el ERP no responde, se devuelve vacío y el botón queda gris.
+ * Cuáles de estos eventos ya están registrados en el ERP, para pintarlos verdes.
+ *
+ * Se manda persona y fecha además del id: el ERP guarda el enlace al evento
+ * solo cuando la sesión se pasó desde aquí, así que las que el dueño registra
+ * directamente en el ERP solo se reconocen por persona+fecha. Sin eso, el día
+ * se quedaba gris aunque la sesión sí estuviera en la contabilidad.
+ *
+ * Silencioso: si el ERP no responde, se devuelve vacío y todo queda gris.
  */
-export async function consultarEventosEnErp(eventoIds: string[]): Promise<Set<string>> {
-  const limpios = Array.from(new Set(eventoIds.filter(Boolean))).slice(0, 200);
+export async function consultarEventosEnErp(eventos: EventoParaConsultar[]): Promise<Set<string>> {
+  const vistos = new Set<string>();
+  const limpios = eventos
+    .filter((e) => {
+      if (!e?.id || vistos.has(e.id)) return false;
+      vistos.add(e.id);
+      return true;
+    })
+    .slice(0, 200);
+
   if (!limpios.length) return new Set();
 
   try {
