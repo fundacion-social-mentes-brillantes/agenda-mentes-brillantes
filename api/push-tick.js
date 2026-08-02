@@ -265,7 +265,10 @@ function suscripcionDe(miembro) {
 // Series que se repiten para siempre (ej. la reunión de lunes a viernes)
 // ------------------------------------------------------------------
 
-const MESES_HORIZONTE = 18; // hasta dónde se adelanta la serie
+// Hasta dónde se adelantan las series. 12 meses a propósito: más allá solo engorda
+// la agenda (y la vuelve lenta) sin que nadie mire tan lejos. Se mantiene rodando:
+// cada día se agrega un día más por el final.
+const MESES_HORIZONTE = 12;
 const MAX_CREAR_POR_DIA = 200; // tope de seguridad por ejecución
 
 /**

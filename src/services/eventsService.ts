@@ -4,6 +4,7 @@ import {
   doc,
   getDocs,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -316,12 +317,19 @@ export const eventsService = {
       return () => {};
     }
 
-    const q = query(collection(db, "events"), where("workspaceId", "in", ids.slice(0, 30)));
+    // OPTIMIZACIÓN IMPORTANTE: ordenar por startAt hace que Firestore NO descargue
+    // las fichas de las personas de sesiones coach, que viven en esta misma colección
+    // pero NO tienen fecha de inicio (Firestore omite los documentos sin el campo del
+    // orderBy). Eran 258 documentos —una cuarta parte de todo— que se bajaban en cada
+    // arranque solo para descartarlos aquí abajo. El índice compuesto que lo hace
+    // eficiente está en firestore.indexes.json (workspaceId + startAt).
+    const q = query(collection(db, "events"), where("workspaceId", "in", ids.slice(0, 30)), orderBy("startAt"));
 
     return onSnapshot(
       q,
       (snapshot) => {
         const events = snapshot.docs
+          // Red de seguridad: si algún día una ficha llegara con fecha, no debe salir.
           .filter((docSnap) => docSnap.data().recordType !== "client")
           .map((docSnap) => mapDocToEvent(docSnap.id, docSnap.data()))
           .sort((a, b) => toDateSafe(a.startAt).getTime() - toDateSafe(b.startAt).getTime());
