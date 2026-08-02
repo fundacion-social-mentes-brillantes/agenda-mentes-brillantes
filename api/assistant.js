@@ -14,6 +14,9 @@ const FIREBASE_PROJECT_ID =
 
 const MAX_BODY_BYTES = 120_000;
 const MAX_MESSAGES = 16;
+// Cuántas acciones puede pedir el modelo en un solo turno. Debe ser holgado: si se
+// recortan, sobran respuestas sin pregunta y la API rechaza la conversación entera.
+const MAX_TOOL_CALLS = 40;
 const MAX_MESSAGE_CHARS = 2_000;
 const MAX_TOOL_ARG_CHARS = 4_000;
 const MAX_EVENTS = 800;
@@ -254,7 +257,10 @@ async function loadWorkspaceContext(idToken, workspaceId) {
 function sanitizeToolCalls(toolCalls) {
   if (!Array.isArray(toolCalls)) return undefined;
   const cleaned = toolCalls
-    .slice(0, 8)
+    // Antes se recortaba a 8. El modelo puede pedir 20 acciones de golpe y el
+    // navegador devuelve las 20 respuestas: si aquí se quedaban 8, las cuentas no
+    // cuadraban y la API rechazaba TODA la conversación (el bot parecía caído).
+    .slice(0, MAX_TOOL_CALLS)
     .map((call) => {
       const name = trimText(call?.function?.name, 80);
       if (!ALLOWED_TOOL_NAMES.has(name)) return null;
@@ -271,11 +277,64 @@ function sanitizeToolCalls(toolCalls) {
   return cleaned.length ? cleaned : undefined;
 }
 
+/**
+ * Recorta la conversación a los últimos mensajes SIN partir los pares
+ * "el bot pide herramientas" -> "resultados de esas herramientas".
+ * Si la ventana empezara por un resultado suelto, DeepSeek rechaza la petición
+ * COMPLETA ("tool must be a response to a preceding message with tool_calls")
+ * y el asistente parece caído. Por eso, si hace falta, la ventana se agranda
+ * hacia atrás hasta incluir el mensaje que pidió esas herramientas.
+ */
+function ventanaCoherente(lista) {
+  let inicio = Math.max(0, lista.length - MAX_MESSAGES);
+  while (inicio > 0 && lista[inicio].role === "tool") inicio--;
+  // Si aun así empieza por resultados (no hay quien los pidiera), se descartan.
+  while (inicio < lista.length && lista[inicio].role === "tool") inicio++;
+  // Y se conserva la petición original del usuario: si la ventana empezara por la
+  // respuesta del bot, este perdería de vista QUÉ se le pidió a mitad del trabajo.
+  if (inicio > 0 && lista[inicio - 1].role === "user") inicio--;
+  return lista.slice(inicio);
+}
+
+/**
+ * Deja SOLO pares completos: cada acción pedida debe tener su resultado y cada
+ * resultado debe corresponder a una acción pedida. Cualquier descuadre hace que
+ * la API devuelva 400 y el usuario vea "el asistente no pudo responder".
+ */
+function emparejarHerramientas(lista) {
+  const salida = [];
+  for (let i = 0; i < lista.length; i++) {
+    const m = lista[i];
+    if (m.role === "tool") continue; // resultado huérfano: se descarta
+    if (m.role !== "assistant" || !m.tool_calls) {
+      salida.push(m);
+      continue;
+    }
+    // Los resultados vienen inmediatamente después del mensaje que los pidió.
+    const respuestas = [];
+    let j = i + 1;
+    while (j < lista.length && lista[j].role === "tool") {
+      respuestas.push(lista[j]);
+      j++;
+    }
+    const porId = new Map(respuestas.filter((r) => r.tool_call_id).map((r) => [r.tool_call_id, r]));
+    const conRespuesta = m.tool_calls.filter((c) => porId.has(c.id));
+    if (conRespuesta.length) {
+      salida.push({ ...m, tool_calls: conRespuesta });
+      for (const c of conRespuesta) salida.push(porId.get(c.id));
+    } else {
+      // Se pidieron acciones pero no llegó ningún resultado: se conserva solo el texto.
+      salida.push({ role: "assistant", content: typeof m.content === "string" ? m.content : "" });
+    }
+    i = j - 1;
+  }
+  return salida;
+}
+
 function sanitizeMessages(messages) {
   if (!Array.isArray(messages)) return [];
-  return messages
+  const normalizados = messages
     .filter((m) => m && typeof m === "object" && ALLOWED_MESSAGE_ROLES.has(m.role))
-    .slice(-MAX_MESSAGES)
     .map((m) => {
       const msg = { role: m.role };
       if (typeof m.content === "string") msg.content = m.content.slice(0, MAX_MESSAGE_CHARS);
@@ -287,6 +346,11 @@ function sanitizeMessages(messages) {
       if (msg.content === undefined && !msg.tool_calls) msg.content = "";
       return msg;
     });
+
+  // Primero se recorta sin partir pares, y luego se descarta cualquier descuadre
+  // que hubiera quedado. En ese orden: si se emparejara antes, el recorte podría
+  // volver a dejar un resultado suelto al principio.
+  return emparejarHerramientas(ventanaCoherente(normalizados));
 }
 
 const TOOLS = [
