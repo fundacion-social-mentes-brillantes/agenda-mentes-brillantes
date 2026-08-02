@@ -262,6 +262,143 @@ function suscripcionDe(miembro) {
 }
 
 // ------------------------------------------------------------------
+// Series que se repiten para siempre (ej. la reunión de lunes a viernes)
+// ------------------------------------------------------------------
+
+const MESES_HORIZONTE = 18; // hasta dónde se adelanta la serie
+const MAX_CREAR_POR_DIA = 200; // tope de seguridad por ejecución
+
+/**
+ * Mantiene "vivas" las series marcadas con el campo `serie`.
+ *
+ * Cómo funciona, y por qué así:
+ *  - Solo agrega fechas DESPUÉS de la última que ya existe. Nunca rellena huecos
+ *    anteriores, para que si borras una ocurrencia suelta (un festivo, un viaje)
+ *    no vuelva a aparecer sola al día siguiente.
+ *  - Si la serie no tiene NINGUNA fecha futura, se considera retirada y no se
+ *    vuelve a extender. Así, para quitarla basta con borrar lo que queda por venir.
+ *  - Los días de la semana y la hora se deducen de las propias ocurrencias.
+ */
+/** Día de la semana en Colombia (0 domingo … 6 sábado). */
+function diaSemanaBogota(fecha) {
+  const iso = fechaBogota(fecha); // YYYY-MM-DD en hora de Colombia
+  return new Date(`${iso}T12:00:00Z`).getUTCDay();
+}
+
+/** Hora de Colombia como ["HH","MM"]. */
+function horaBogotaPartes(fecha) {
+  const txt = new Intl.DateTimeFormat("es-CO", {
+    // Misma zona que usa fechaBogota(): si se cambia una, hay que cambiar la otra.
+    timeZone: "America/Bogota",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(fecha);
+  const [hh = "00", mm = "00"] = txt.split(":");
+  return [hh.padStart(2, "0"), mm.padStart(2, "0")];
+}
+
+async function extenderSeries(fs, uid, ahora, anotar) {
+  // Consulta propia: aquí hacen falta más datos que en los avisos (color, duración,
+  // modalidad y el nombre de la serie), así que no se reutiliza leerEventosEnVentana.
+  let documentos = [];
+  try {
+    documentos = await fs.runQuery({
+      from: [{ collectionId: "events" }],
+      where: {
+        fieldFilter: { field: { fieldPath: "workspaceId" }, op: "EQUAL", value: { stringValue: WORKSPACE_ID } }
+      },
+      limit: MAX_EVENTOS
+    });
+  } catch (error) {
+    console.warn("[push-tick] no se pudieron leer las series:", String(error?.message || "").slice(0, 120));
+    return;
+  }
+
+  const grupos = new Map();
+  for (const doc of documentos) {
+    const nombre = typeof doc.data?.serie === "string" ? doc.data.serie.trim() : "";
+    if (!nombre || !doc.data.startAt) continue;
+    const inicio = new Date(doc.data.startAt);
+    if (Number.isNaN(inicio.getTime())) continue;
+    const fin = doc.data.endAt ? new Date(doc.data.endAt) : null;
+    if (!grupos.has(nombre)) grupos.set(nombre, []);
+    grupos.get(nombre).push({
+      inicio,
+      fin: fin && !Number.isNaN(fin.getTime()) ? fin : null,
+      titulo: String(doc.data.title || "").trim() || "Evento",
+      color: doc.data.color,
+      modality: doc.data.modality
+    });
+  }
+  if (grupos.size === 0) return;
+
+  const horizonte = new Date(ahora.getTime());
+  horizonte.setUTCMonth(horizonte.getUTCMonth() + MESES_HORIZONTE);
+  let creados = 0;
+
+  for (const [nombre, lista] of grupos) {
+    const futuras = lista.filter((e) => e.inicio > ahora);
+    if (futuras.length === 0) {
+      anotar(`Serie "${nombre}": sin fechas futuras, se considera retirada.`);
+      continue;
+    }
+    lista.sort((a, b) => a.inicio - b.inicio);
+    const ultima = lista[lista.length - 1];
+    if (ultima.inicio >= horizonte) continue; // ya está bastante adelantada
+
+    // Días de la semana y hora se copian de las ocurrencias existentes.
+    const dias = new Set(lista.map((e) => Number(diaSemanaBogota(e.inicio))));
+    const molde = futuras[0];
+    const duracionMs = Math.max(60000, (molde.fin?.getTime?.() || molde.inicio.getTime() + 3600000) - molde.inicio.getTime());
+    const [hh, mm] = horaBogotaPartes(molde.inicio);
+
+    let cursor = new Date(ultima.inicio.getTime());
+    while (cursor < horizonte && creados < MAX_CREAR_POR_DIA) {
+      cursor = new Date(cursor.getTime() + 86400000);
+      if (!dias.has(Number(diaSemanaBogota(cursor)))) continue;
+      const fecha = fechaBogota(cursor);
+      const inicio = new Date(`${fecha}T${hh}:${mm}:00${TZ}`);
+      if (Number.isNaN(inicio.getTime())) continue;
+      try {
+        await fs.createDoc(
+          "events",
+          {
+            workspaceId: WORKSPACE_ID,
+            title: molde.titulo,
+            description: "",
+            startAt: new Ts(inicio),
+            endAt: new Ts(new Date(inicio.getTime() + duracionMs)),
+            allDay: false,
+            color: molde.color || "#3b82f6",
+            modality: molde.modality || "virtual",
+            kind: "normal",
+            clientCode: null,
+            clientName: null,
+            purchasedSessions: null,
+            reminderMinutes: 30,
+            totalAmount: null,
+            paidAmount: null,
+            attachments: [],
+            done: false,
+            createdBy: uid,
+            createdByName: "Serie automática",
+            serie: nombre,
+            createdAt: new Ts(new Date()),
+            updatedAt: new Ts(new Date())
+          },
+          `${nombre}__${fecha}`
+        );
+        creados++;
+      } catch {
+        /* si ya existe o falla una, se sigue con las demás */
+      }
+    }
+  }
+  if (creados > 0) anotar(`Se adelantaron ${creados} fecha(s) de series que se repiten.`);
+}
+
+// ------------------------------------------------------------------
 // Endpoint
 // ------------------------------------------------------------------
 
@@ -335,6 +472,14 @@ export default async function handler(req, res) {
     let hoy = fechaBogota(ahora);
 
     if (mode === "daily") {
+      // Una vez al día se adelantan las series que se repiten "para siempre",
+      // para que nunca se queden sin fechas. Si falla, no debe impedir el resumen.
+      try {
+        await extenderSeries(fs, sesion.uid || "", ahora, anotar);
+      } catch (error) {
+        console.error("[push-tick] no se pudieron extender las series", String(error?.message || "").slice(0, 150));
+      }
+
       // Todo el día de hoy en hora de Colombia.
       const desde = new Date(`${hoy}T00:00:00${TZ}`);
       const hasta = new Date(`${hoy}T23:59:59${TZ}`);
