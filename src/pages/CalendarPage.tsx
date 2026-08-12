@@ -150,17 +150,26 @@ export default function CalendarPage({
     }
   };
 
-  const { eventsByDay, visiblesEnMes } = useMemo(() => {
+  const { eventsByDay, visiblesEnMes, visiblesEnCelular } = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     let enMes = 0;
+    let enCelular = 0;
     const firstVisible = gridCells[0]?.date;
     const lastVisible = gridCells[gridCells.length - 1]?.date;
+    // En celular la 6ª fila está oculta (.cal-cell-extra en index.css), así que lo que
+    // el teléfono DIBUJA termina en la última celda de las semanas del mes. Sin esta
+    // cuenta aparte, una sesión en esos días invisibles callaba el aviso de mes vacío
+    // y el calendario quedaba en blanco sin explicación.
+    const lastPhone = gridCells[weeks * 7 - 1]?.date;
     const firstTime = firstVisible
       ? new Date(firstVisible.getFullYear(), firstVisible.getMonth(), firstVisible.getDate()).getTime()
       : Number.NEGATIVE_INFINITY;
     const lastTime = lastVisible
       ? new Date(lastVisible.getFullYear(), lastVisible.getMonth(), lastVisible.getDate(), 23, 59, 59, 999).getTime()
       : Number.POSITIVE_INFINITY;
+    const lastPhoneTime = lastPhone
+      ? new Date(lastPhone.getFullYear(), lastPhone.getMonth(), lastPhone.getDate(), 23, 59, 59, 999).getTime()
+      : lastTime;
     for (const event of events) {
       // Con el filtro en "Sesiones coach" el resto de la agenda no se dibuja.
       if (soloCoach && event.kind !== "coach") continue;
@@ -168,14 +177,15 @@ export default function CalendarPage({
       const time = d.getTime();
       if (time < firstTime || time > lastTime) continue;
       if (d.getFullYear() === year && d.getMonth() === month) enMes++;
+      if (time <= lastPhoneTime) enCelular++;
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
       const list = map.get(key) || [];
       list.push(event);
       map.set(key, list);
     }
     for (const list of map.values()) list.sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime());
-    return { eventsByDay: map, visiblesEnMes: enMes };
-  }, [events, gridCells, soloCoach, month, year]);
+    return { eventsByDay: map, visiblesEnMes: enMes, visiblesEnCelular: enCelular };
+  }, [events, gridCells, weeks, soloCoach, month, year]);
 
   const getEventsForDay = (date: Date) => eventsByDay.get(`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`) || [];
 
@@ -197,16 +207,19 @@ export default function CalendarPage({
 
   return (
     <div className="-mx-4 flex h-[calc(100dvh-10.5rem)] flex-col gap-2 sm:mx-0 sm:gap-3 md:h-[calc(100dvh-6rem)]">
-      {/* En celular: fila 1 = mes + navegación (igual que siempre) y fila 2 = filtro.
-          En PC (sm+) el bloque mes/navegación pasa a "contents", así el filtro entra
-          en la MISMA fila (mes · filtro · navegación) y no le quita alto al calendario. */}
-      <div className="flex shrink-0 flex-col gap-2 px-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-0">
-        <div className="flex items-center justify-between gap-3 sm:contents">
+      {/* Hasta 1023px: fila 1 = mes + navegación (igual que siempre) y fila 2 = filtro.
+          Desde 1024px (lg) el bloque mes/navegación pasa a "contents", así el filtro
+          entra en la MISMA fila (mes · filtro · navegación) y solo cuesta 1px de alto.
+          El corte es lg y no sm porque el bloque completo mide ~610px: entre 640 y
+          1023px (sobre todo con la barra lateral) no cabe, y la fila se partía en dos
+          solo en los meses de nombre largo — el calendario brincaba al pasar de mes. */}
+      <div className="flex shrink-0 flex-col gap-2 px-3 lg:flex-row lg:flex-wrap lg:items-center lg:gap-3 lg:px-0">
+        <div className="flex items-center justify-between gap-3 lg:contents">
           <h2 className="m-0 text-xl font-black tracking-tight text-app-strong sm:text-2xl">
             {MONTHS[month]} {year}
           </h2>
 
-          <div className="flex items-center gap-1.5 sm:order-3 sm:ml-auto">
+          <div className="flex items-center gap-1.5 lg:order-3 lg:ml-auto">
             <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="btn-secondary min-h-9 px-2.5" aria-label="Mes anterior">
               <ChevronLeft size={18} />
             </button>
@@ -219,13 +232,13 @@ export default function CalendarPage({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:order-2">
+        <div className="flex items-center gap-2 lg:order-2">
           <div className="flex gap-1 rounded-2xl border border-app-soft bg-app-soft p-1" role="group" aria-label="Filtrar calendario">
             <button
               type="button"
               onClick={() => setFilter("all")}
               aria-pressed={!soloCoach}
-              className={`rounded-xl px-3 py-2 text-xs font-black transition sm:py-1.5 ${!soloCoach ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
+              className={`rounded-xl px-3 py-2 text-xs font-black transition lg:py-1.5 ${!soloCoach ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
             >
               Todo
             </button>
@@ -233,19 +246,22 @@ export default function CalendarPage({
               type="button"
               onClick={() => setFilter("coach")}
               aria-pressed={soloCoach}
-              className={`flex items-center gap-1 rounded-xl px-3 py-2 text-xs font-black transition sm:py-1.5 ${soloCoach ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
+              className={`flex items-center gap-1 rounded-xl px-3 py-2 text-xs font-black transition lg:py-1.5 ${soloCoach ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
             >
               <HeartHandshake size={13} />
-              <span className="sm:hidden">Coach</span>
-              <span className="hidden sm:inline">Sesiones coach</span>
+              Sesiones coach
             </button>
           </div>
-          {/* Cuenta solo en celular: ahí el filtro tiene su propia línea y sobra sitio.
-              En PC no se muestra para que la fila del mes NUNCA cambie de ancho (si
-              cambiara, los botones de mes brincarían de línea al filtrar). */}
-          {soloCoach && visiblesEnMes > 0 && (
-            <span className="min-w-0 truncate text-[11px] font-bold text-app-faint sm:hidden">
-              {visiblesEnMes} {visiblesEnMes === 1 ? "sesión" : "sesiones"} en {MONTHS[month]}
+          {/* Cuenta del mes, solo mientras el filtro tiene su propia línea (hasta 1023px):
+              ahí sobra sitio. Desde lg no se muestra para que la fila del mes NUNCA
+              cambie de ancho al filtrar y los botones de mes no brinquen de línea.
+              Se muestra también en cero: si el mes está vacío pero asoman fichas de los
+              días vecinos, esta línea es la única que lo explica (el aviso grande no sale). */}
+          {soloCoach && (
+            <span className="min-w-0 truncate text-[11px] font-bold text-app-faint lg:hidden">
+              {visiblesEnMes === 0
+                ? `Sin sesiones en ${MONTHS[month].toLowerCase()}`
+                : `${visiblesEnMes} ${visiblesEnMes === 1 ? "sesión" : "sesiones"} en ${MONTHS[month].toLowerCase()}`}
             </span>
           )}
         </div>
@@ -329,11 +345,19 @@ export default function CalendarPage({
         </div>
 
         {/* Aviso DENTRO del calendario (no en la fila del mes, para no mover nada):
-            filtrando sesiones coach y este mes no tiene ninguna. */}
-        {soloCoach && eventsByDay.size === 0 && (
-          <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-6">
+            filtrando sesiones coach y no hay NADA dibujado.
+            Se decide con la cuenta del celular (que ignora la 6ª fila oculta); en
+            pantallas de 640px o más esa fila sí se ve, así que ahí el aviso se esconde
+            cuando hay alguna ficha en ella (sm:hidden). */}
+        {soloCoach && visiblesEnCelular === 0 && (
+          <div
+            role="status"
+            className={`pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-6 ${
+              eventsByDay.size > 0 ? "sm:hidden" : ""
+            }`}
+          >
             <p className="m-0 rounded-2xl border border-app-soft bg-app-solid px-4 py-3 text-center text-sm font-black text-app-muted shadow-lg">
-              No hay sesiones coach en {MONTHS[month]}
+              No hay sesiones coach en {MONTHS[month].toLowerCase()}
             </p>
           </div>
         )}
