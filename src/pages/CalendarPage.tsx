@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type React from "react";
-import { Bell, CalendarPlus, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { Bell, CalendarPlus, ChevronLeft, ChevronRight, HeartHandshake, Sparkles } from "lucide-react";
 import { Modal } from "../components/ui/Modal";
 import { EventDetailModal } from "../components/events/EventDetailModal";
 import { formatCOP, isSameDay, toDate } from "../lib/dateUtils";
@@ -34,6 +34,9 @@ export default function CalendarPage({
   onDeleteEvent
 }: CalendarPageProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  // Filtro del calendario: "todo" (por defecto) o solo las sesiones coach.
+  const [filter, setFilter] = useState<"all" | "coach">("all");
+  const soloCoach = filter === "coach";
   const [dayModal, setDayModal] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [drag, setDrag] = useState<{ event: CalendarEvent; x: number; y: number; overKey: string | null } | null>(null);
@@ -147,8 +150,9 @@ export default function CalendarPage({
     }
   };
 
-  const eventsByDay = useMemo(() => {
+  const { eventsByDay, visiblesEnMes } = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
+    let enMes = 0;
     const firstVisible = gridCells[0]?.date;
     const lastVisible = gridCells[gridCells.length - 1]?.date;
     const firstTime = firstVisible
@@ -158,17 +162,20 @@ export default function CalendarPage({
       ? new Date(lastVisible.getFullYear(), lastVisible.getMonth(), lastVisible.getDate(), 23, 59, 59, 999).getTime()
       : Number.POSITIVE_INFINITY;
     for (const event of events) {
+      // Con el filtro en "Sesiones coach" el resto de la agenda no se dibuja.
+      if (soloCoach && event.kind !== "coach") continue;
       const d = toDate(event.startAt);
       const time = d.getTime();
       if (time < firstTime || time > lastTime) continue;
+      if (d.getFullYear() === year && d.getMonth() === month) enMes++;
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
       const list = map.get(key) || [];
       list.push(event);
       map.set(key, list);
     }
     for (const list of map.values()) list.sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime());
-    return map;
-  }, [events, gridCells]);
+    return { eventsByDay: map, visiblesEnMes: enMes };
+  }, [events, gridCells, soloCoach, month, year]);
 
   const getEventsForDay = (date: Date) => eventsByDay.get(`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`) || [];
 
@@ -190,27 +197,64 @@ export default function CalendarPage({
 
   return (
     <div className="-mx-4 flex h-[calc(100dvh-10.5rem)] flex-col gap-2 sm:mx-0 sm:gap-3 md:h-[calc(100dvh-6rem)]">
-      <div className="flex shrink-0 items-center justify-between gap-3 px-3 sm:px-0">
-        <h2 className="m-0 text-xl font-black tracking-tight text-app-strong sm:text-2xl">
-          {MONTHS[month]} {year}
-        </h2>
-        <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="btn-secondary min-h-9 px-2.5" aria-label="Mes anterior">
-            <ChevronLeft size={18} />
-          </button>
-          <button type="button" onClick={() => setCurrentDate(new Date())} className="btn-secondary min-h-9 px-3 text-sm">
-            Hoy
-          </button>
-          <button type="button" onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="btn-secondary min-h-9 px-2.5" aria-label="Mes siguiente">
-            <ChevronRight size={18} />
-          </button>
+      {/* En celular: fila 1 = mes + navegación (igual que siempre) y fila 2 = filtro.
+          En PC (sm+) el bloque mes/navegación pasa a "contents", así el filtro entra
+          en la MISMA fila (mes · filtro · navegación) y no le quita alto al calendario. */}
+      <div className="flex shrink-0 flex-col gap-2 px-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-0">
+        <div className="flex items-center justify-between gap-3 sm:contents">
+          <h2 className="m-0 text-xl font-black tracking-tight text-app-strong sm:text-2xl">
+            {MONTHS[month]} {year}
+          </h2>
+
+          <div className="flex items-center gap-1.5 sm:order-3 sm:ml-auto">
+            <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="btn-secondary min-h-9 px-2.5" aria-label="Mes anterior">
+              <ChevronLeft size={18} />
+            </button>
+            <button type="button" onClick={() => setCurrentDate(new Date())} className="btn-secondary min-h-9 px-3 text-sm">
+              Hoy
+            </button>
+            <button type="button" onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="btn-secondary min-h-9 px-2.5" aria-label="Mes siguiente">
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 sm:order-2">
+          <div className="flex gap-1 rounded-2xl border border-app-soft bg-app-soft p-1" role="group" aria-label="Filtrar calendario">
+            <button
+              type="button"
+              onClick={() => setFilter("all")}
+              aria-pressed={!soloCoach}
+              className={`rounded-xl px-3 py-2 text-xs font-black transition sm:py-1.5 ${!soloCoach ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
+            >
+              Todo
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter("coach")}
+              aria-pressed={soloCoach}
+              className={`flex items-center gap-1 rounded-xl px-3 py-2 text-xs font-black transition sm:py-1.5 ${soloCoach ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
+            >
+              <HeartHandshake size={13} />
+              <span className="sm:hidden">Coach</span>
+              <span className="hidden sm:inline">Sesiones coach</span>
+            </button>
+          </div>
+          {/* Cuenta solo en celular: ahí el filtro tiene su propia línea y sobra sitio.
+              En PC no se muestra para que la fila del mes NUNCA cambie de ancho (si
+              cambiara, los botones de mes brincarían de línea al filtrar). */}
+          {soloCoach && visiblesEnMes > 0 && (
+            <span className="min-w-0 truncate text-[11px] font-bold text-app-faint sm:hidden">
+              {visiblesEnMes} {visiblesEnMes === 1 ? "sesión" : "sesiones"} en {MONTHS[month]}
+            </span>
+          )}
         </div>
       </div>
 
       {/* En celular: plano y de borde a borde (estilo TimeTree), fijo sin scroll, con swipe para cambiar de mes.
           En sm+ (PC/tablet) conserva exactamente la tarjeta y cuadrícula de siempre. */}
       <div
-        className="cal-wrap flex min-h-0 flex-1 flex-col rounded-2xl border border-app-soft bg-app-panel p-1.5 shadow-sm sm:p-3"
+        className="cal-wrap relative flex min-h-0 flex-1 flex-col rounded-2xl border border-app-soft bg-app-panel p-1.5 shadow-sm sm:p-3"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -265,7 +309,7 @@ export default function CalendarPage({
                         key={event.id}
                         title={yaEnErp ? `${event.title} — ya está en el ERP` : event.title}
                         onPointerDown={(e) => startChipDrag(e, event)}
-                        className={`block truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-4 text-white sm:py-0 ${
+                        className={`block truncate rounded-md px-1.5 py-0 text-[10px] font-semibold leading-4 text-white ${
                           drag?.event.id === event.id ? "opacity-40" : ""
                         } ${yaEnErp ? "ring-1 ring-emerald-300" : ""}`}
                         style={{ backgroundColor: event.color, touchAction: "none" }}
@@ -283,6 +327,16 @@ export default function CalendarPage({
             );
           })}
         </div>
+
+        {/* Aviso DENTRO del calendario (no en la fila del mes, para no mover nada):
+            filtrando sesiones coach y este mes no tiene ninguna. */}
+        {soloCoach && eventsByDay.size === 0 && (
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-6">
+            <p className="m-0 rounded-2xl border border-app-soft bg-app-solid px-4 py-3 text-center text-sm font-black text-app-muted shadow-lg">
+              No hay sesiones coach en {MONTHS[month]}
+            </p>
+          </div>
+        )}
       </div>
 
       <Modal
@@ -295,7 +349,8 @@ export default function CalendarPage({
           {dayModalEvents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <Sparkles size={36} className="mb-3 text-app-accent" />
-              <p className="m-0 text-sm font-black text-app-strong">No hay eventos este día</p>
+              <p className="m-0 text-sm font-black text-app-strong">{soloCoach ? "No hay sesiones coach este día" : "No hay eventos este día"}</p>
+              {soloCoach && <p className="m-0 mt-1 text-xs font-semibold text-app-faint">El filtro está en “Sesiones coach”.</p>}
             </div>
           ) : (
             dayModalEvents.map((event) => <DayRow key={event.id} event={event} onClick={() => setSelectedEvent(event)} />)
