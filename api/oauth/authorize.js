@@ -19,9 +19,12 @@ function safeJson(obj) {
   return JSON.stringify(obj).replace(/</g, "\\u003c");
 }
 
-function errorPage(res, message) {
+function errorPage(res, message, ayuda = "") {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.status(400).send(`<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;background:#0a0f1c;color:#fff7e6;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center;max-width:420px;padding:24px"><h2>No se pudo iniciar la conexión</h2><p style="color:#b8c0d4">${message}</p></div></body>`);
+  const bloqueAyuda = ayuda
+    ? `<p style="color:#d7b46a;margin-top:18px;line-height:1.5">${ayuda}</p>`
+    : "";
+  res.status(400).send(`<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;background:#0a0f1c;color:#fff7e6;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center;max-width:460px;padding:24px"><h2>No se pudo iniciar la conexión</h2><p style="color:#b8c0d4">${message}</p>${bloqueAyuda}</div></body>`);
 }
 
 export default function handler(req, res) {
@@ -36,7 +39,17 @@ export default function handler(req, res) {
 
   if (responseType !== "code") return errorPage(res, "response_type no soportado.");
   const client = readClientId(clientId);
-  if (!client) return errorPage(res, "Aplicación no reconocida (client_id).");
+  // Pasa sobre todo cuando se rota OAUTH_SECRET: la app guardó un client_id
+  // firmado con la llave anterior y ya no verifica. Reconectar no basta, porque
+  // muchas apps reutilizan el client_id guardado: hay que quitar el conector y
+  // volverlo a agregar para que se registre de nuevo.
+  if (!client) {
+    return errorPage(
+      res,
+      "Aplicación no reconocida (client_id).",
+      "Suele ser una conexión antigua. Quita el conector de la agenda en Claude o ChatGPT y vuelve a agregarlo desde cero (no uses «reconectar»)."
+    );
+  }
   if (!Array.isArray(client.ru) || !client.ru.includes(redirectUri)) {
     return errorPage(res, "La dirección de retorno no está autorizada.");
   }
