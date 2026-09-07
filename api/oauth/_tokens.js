@@ -10,18 +10,17 @@
 
 import crypto from "node:crypto";
 
-// Secreto para firmar/cifrar. Si no hay uno dedicado (OAUTH_SECRET), reutiliza un
-// secreto de servidor que ya existe en Vercel (DEEPSEEK_API_KEY) para funcionar sin
-// pasos manuales. Recomendado: definir OAUTH_SECRET propio cuando se pueda.
-const SECRET =
-  process.env.OAUTH_SECRET ||
-  process.env.MCP_OAUTH_SECRET ||
-  process.env.DEEPSEEK_API_KEY ||
-  "";
+// Secreto para firmar/cifrar. Tiene que ser propio y exclusivo de este OAuth:
+// nunca una llave que se le entregue a un tercero (antes caía a DEEPSEEK_API_KEY,
+// que viaja a api.deepseek.com en cada petición del bot). Sin él, el servidor no
+// emite ni acepta tokens: es preferible fallar a firmar con algo que se comparte.
+const SECRET = process.env.OAUTH_SECRET || process.env.MCP_OAUTH_SECRET || "";
 
-function keyBytes() {
+// De un mismo secreto salen dos llaves distintas, una para firmar y otra para
+// cifrar, para no reutilizar el mismo material en dos primitivas.
+function keyBytes(uso = "firma") {
   if (!SECRET) throw new Error("Falta OAUTH_SECRET en el servidor.");
-  return crypto.createHash("sha256").update(SECRET).digest();
+  return crypto.createHash("sha256").update(`${uso}:${SECRET}`).digest();
 }
 
 function b64url(buf) {
@@ -62,7 +61,7 @@ export function verify(token) {
 // ---------- Cifrado del refreshToken de Firebase (AES-256-GCM) ----------
 export function encryptRefresh(refreshToken) {
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", keyBytes(), iv);
+  const cipher = crypto.createCipheriv("aes-256-gcm", keyBytes("cifrado"), iv);
   const ct = Buffer.concat([cipher.update(String(refreshToken), "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return b64url(Buffer.concat([iv, tag, ct]));
@@ -73,7 +72,7 @@ export function decryptRefresh(blob) {
   const iv = raw.subarray(0, 12);
   const tag = raw.subarray(12, 28);
   const ct = raw.subarray(28);
-  const decipher = crypto.createDecipheriv("aes-256-gcm", keyBytes(), iv);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", keyBytes("cifrado"), iv);
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
 }

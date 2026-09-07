@@ -74,6 +74,12 @@ Requiere plan Plus, Pro, Business, Enterprise o Edu, con **Developer Mode**.
   (dominio `agenda-mentes-brillantes.vercel.app` ya autorizado). No usa service
   account: cada operación corre con el idToken del usuario contra Firestore REST,
   autorizada por `firestore.rules`.
-- Secreto de firma: variable `OAUTH_SECRET` en Vercel (opcional; por defecto usa
-  `DEEPSEEK_API_KEY`). Para reforzar, define `OAUTH_SECRET` con un valor aleatorio
-  largo en el proyecto de Vercel.
+- Secreto de firma: variable `OAUTH_SECRET` en Vercel, **obligatoria**. Tiene que
+  ser un valor aleatorio largo (mínimo 32 bytes) y exclusivo de este OAuth: con él
+  se firman los tokens y se cifra el refreshToken de Firebase de cada usuario. Si
+  falta, el servidor no emite ni acepta tokens. Nunca reutilices aquí una llave que
+  se le entregue a un tercero (como la de DeepSeek, que viaja a su API en cada
+  petición del bot).
+- Rotar `OAUTH_SECRET` es la forma de revocar de golpe todos los tokens emitidos:
+  después de cambiarlo, cada persona tiene que volver a conectar el conector. No
+  afecta al asistente DeepSeek, que lee su propia variable.
