@@ -3,7 +3,7 @@
 // Al autenticarse, la página manda el idToken+refreshToken a /api/oauth/complete
 // y este responde con la URL de retorno (con el "code") a Claude/ChatGPT.
 
-import { readClientId } from "./_tokens.js";
+import { readClientIdCompatible, redirectUriPermitido } from "./_tokens.js";
 
 const FB = {
   apiKey: process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || "AIzaSyAfijrkvPKyIgnyfkYEJvjmYqT77disxHI",
@@ -38,7 +38,7 @@ export default function handler(req, res) {
   const responseType = q.response_type || "code";
 
   if (responseType !== "code") return errorPage(res, "response_type no soportado.");
-  const client = readClientId(clientId);
+  const client = readClientIdCompatible(clientId);
   // Pasa sobre todo cuando se rota OAUTH_SECRET: la app guardó un client_id
   // firmado con la llave anterior y ya no verifica. Reconectar no basta, porque
   // muchas apps reutilizan el client_id guardado: hay que quitar el conector y
@@ -52,6 +52,15 @@ export default function handler(req, res) {
   }
   if (!Array.isArray(client.ru) || !client.ru.includes(redirectUri)) {
     return errorPage(res, "La dirección de retorno no está autorizada.");
+  }
+  // Lo que de verdad protege el código: solo puede volver a Claude, a ChatGPT
+  // o a la máquina de uno, venga de donde venga el client_id.
+  if (!redirectUriPermitido(redirectUri)) {
+    return errorPage(
+      res,
+      "La dirección de retorno no está permitida.",
+      "El código de acceso solo puede devolverse a Claude, a ChatGPT o a tu propio computador."
+    );
   }
 
   const P = { client_id: clientId, redirect_uri: redirectUri, state, code_challenge: codeChallenge };

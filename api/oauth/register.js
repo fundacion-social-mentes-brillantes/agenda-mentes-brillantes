@@ -1,7 +1,7 @@
 // Registro dinámico de cliente (DCR) SIN estado: el client_id es un blob firmado
 // con los redirect_uris. Claude y ChatGPT registran su cliente aquí automáticamente.
 
-import { mintClientId } from "./_tokens.js";
+import { mintClientId, redirectUriPermitido } from "./_tokens.js";
 
 export default function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -17,6 +17,17 @@ export default function handler(req, res) {
   const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((u) => typeof u === "string") : [];
   if (redirectUris.length === 0) {
     res.status(400).json({ error: "invalid_redirect_uri", error_description: "Faltan redirect_uris." });
+    return;
+  }
+
+  // Solo se registran clientes que devuelvan el codigo a Claude, ChatGPT o la
+  // maquina de uno. Antes se aceptaba cualquier direccion.
+  const noPermitidas = redirectUris.filter((u) => !redirectUriPermitido(u));
+  if (noPermitidas.length > 0) {
+    res.status(400).json({
+      error: "invalid_redirect_uri",
+      error_description: `Direccion de retorno no permitida: ${noPermitidas.join(", ")}`,
+    });
     return;
   }
 

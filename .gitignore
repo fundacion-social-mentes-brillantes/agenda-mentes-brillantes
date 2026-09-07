@@ -37,3 +37,4 @@ firebase-adminsdk*.json
 *.sln
 *.sw?
 .vercel
+.env*

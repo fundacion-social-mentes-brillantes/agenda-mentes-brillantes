@@ -3,7 +3,7 @@
 // con el "code" (que lleva, cifrado, el refreshToken del usuario).
 
 import { verifyIdToken } from "../_lib/firestore.js";
-import { readClientId, mintCode } from "./_tokens.js";
+import { readClientIdCompatible, redirectUriPermitido, mintCode } from "./_tokens.js";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -18,10 +18,14 @@ export default async function handler(req, res) {
 
   const { client_id, redirect_uri, code_challenge, state, idToken, refreshToken } = body;
 
-  const client = readClientId(client_id);
+  const client = readClientIdCompatible(client_id);
   if (!client) { res.status(400).json({ error: "invalid_client" }); return; }
   if (!Array.isArray(client.ru) || !client.ru.includes(redirect_uri)) {
     res.status(400).json({ error: "invalid_redirect_uri" }); return;
+  }
+  // Última puerta antes de emitir el código: la dirección debe estar permitida.
+  if (!redirectUriPermitido(redirect_uri)) {
+    res.status(400).json({ error: "invalid_redirect_uri", error_description: "Dirección de retorno no permitida." }); return;
   }
   if (!idToken || !refreshToken) { res.status(400).json({ error: "missing_session" }); return; }
 

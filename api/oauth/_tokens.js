@@ -154,3 +154,61 @@ export function verifyPkce(codeVerifier, codeChallenge) {
 export function hasSecret() {
   return Boolean(SECRET);
 }
+
+// ---------- Direcciones de retorno permitidas ----------
+// La seguridad de a donde vuelve el codigo de autorizacion la da ESTA lista, no
+// la firma del client_id: el registro es abierto, asi que cualquiera podia pedir
+// un client_id firmado apuntando a su propio servidor y llevarse el codigo de
+// quien abriera el enlace. Con la lista, el codigo solo puede volver a Claude,
+// a ChatGPT o a la maquina de uno.
+// Se puede ampliar con MCP_ALLOWED_REDIRECT_HOSTS (hosts separados por coma).
+const HOSTS_PERMITIDOS = [
+  "claude.ai",
+  "claude.com",
+  "anthropic.com",
+  "chatgpt.com",
+  "openai.com",
+  ...String(process.env.MCP_ALLOWED_REDIRECT_HOSTS || "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
+];
+
+const esLocal = (host) => host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+
+/** ¿Puede el codigo de autorizacion volver a esta direccion? */
+export function redirectUriPermitido(uri) {
+  let u;
+  try {
+    u = new URL(String(uri));
+  } catch {
+    return false;
+  }
+  const host = u.hostname.toLowerCase();
+  if (esLocal(host)) return u.protocol === "http:" || u.protocol === "https:";
+  if (u.protocol !== "https:") return false;
+  // El host debe ser uno permitido o un subdominio suyo (no basta con terminar
+  // igual: "malo-claude.ai" no puede colarse como "claude.ai").
+  return HOSTS_PERMITIDOS.some((permitido) => host === permitido || host.endsWith(`.${permitido}`));
+}
+
+/**
+ * Lee un client_id emitido por este servidor. Verifica la firma cuando coincide;
+ * si no (por ejemplo, un cliente registrado antes de rotar OAUTH_SECRET), acepta
+ * el contenido igualmente. Es seguro porque quien llame DEBE validar ademas el
+ * redirect_uri con redirectUriPermitido: la firma aqui solo evitaba manipular un
+ * blob que cualquiera podia pedir firmado de todos modos.
+ */
+export function readClientIdCompatible(clientId) {
+  const verificado = readClientId(clientId);
+  if (verificado) return verificado;
+  if (!clientId || !clientId.startsWith("mcpc_")) return null;
+  try {
+    const body = String(clientId).slice(5).split(".")[1];
+    if (!body) return null;
+    const p = JSON.parse(b64urlToBuf(body).toString("utf8"));
+    return p && p.typ === "client" && Array.isArray(p.ru) ? p : null;
+  } catch {
+    return null;
+  }
+}
