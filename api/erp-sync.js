@@ -6,13 +6,17 @@
 // eventos borrados que ya estaban cobrados). Quien decide qué se registra es
 // una persona, desde el ERP.
 //
-// El secreto vive SOLO en el servidor. Y se exige sesión válida de la agenda,
-// para que no pueda reportar cualquiera.
+// El secreto vive SOLO en el servidor. Y no basta con tener cuenta: hay que ser
+// del equipo (estar invitado a una agenda compartida), porque un reporte falso
+// puede hacer que el ERP dé por borradas sesiones que sí existen.
 
 const FIREBASE_API_KEY =
   process.env.FIREBASE_API_KEY ||
   process.env.VITE_FIREBASE_API_KEY ||
   "AIzaSyAfijrkvPKyIgnyfkYEJvjmYqT77disxHI"; // clave web publica
+
+import { UserFirestore } from "./_lib/firestore.js";
+import { esDelEquipo } from "./_lib/agenda.js";
 
 const ERP_BASE_URL = process.env.ERP_BASE_URL || "https://mentes-brillantes-erp.vercel.app";
 const MAX_EVENTOS = 500;
@@ -60,6 +64,11 @@ export default async function handler(req, res) {
   const user = await verifyUser(body.idToken);
   if (!user) {
     res.status(401).json({ error: "Tu sesión no es válida." });
+    return;
+  }
+
+  if (!(await esDelEquipo(new UserFirestore(body.idToken), user.localId))) {
+    res.status(403).json({ error: "Esta parte es solo para el equipo de la fundación." });
     return;
   }
 

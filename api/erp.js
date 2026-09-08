@@ -16,6 +16,9 @@
 // navegador. Y antes de consultar o escribir se verifica que quien pregunta
 // tenga sesión válida en la agenda, igual que hace el asistente.
 
+import { UserFirestore } from "./_lib/firestore.js";
+import { esDelEquipo } from "./_lib/agenda.js";
+
 const FIREBASE_API_KEY =
   process.env.FIREBASE_API_KEY ||
   process.env.VITE_FIREBASE_API_KEY ||
@@ -42,6 +45,7 @@ async function verifyUser(idToken) {
     return null;
   }
 }
+
 
 function parseBody(body) {
   if (typeof body !== "string") return body && typeof body === "object" ? body : {};
@@ -77,6 +81,13 @@ export default async function handler(req, res) {
   const user = await verifyUser(body.idToken);
   if (!user) {
     res.status(401).json({ error: "Tu sesión no es válida. Cierra y vuelve a iniciar sesión." });
+    return;
+  }
+
+  if (!(await esDelEquipo(new UserFirestore(body.idToken), user.localId))) {
+    res.status(403).json({
+      error: "Esta parte es solo para el equipo de la fundación. Pide que te inviten a la agenda compartida."
+    });
     return;
   }
 

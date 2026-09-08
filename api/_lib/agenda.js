@@ -89,6 +89,36 @@ function viewEvent(id, data) {
 // Agendas (workspaces) del usuario
 // ------------------------------------------------------------------
 
+/**
+ * Ser del equipo = estar invitado a alguna agenda COMPARTIDA.
+ *
+ * Tener cuenta en la agenda NO basta para asomarse a la plata del ERP ni para
+ * descontarle una sesion a alguien: el registro de cuentas es abierto, asi que
+ * cualquiera podria crearse una y, sabiendo un codigo, ver la deuda de esa
+ * persona o gastarle una sesion de su paquete. Es la misma definicion que usa
+ * firestore.rules para el resto de la app; aqui hay que repetirla porque el ERP
+ * confia en este servidor por el secreto compartido y ya no pregunta quien es.
+ *
+ * Es UNA sola consulta (las membresias del usuario), sin abrir cada agenda.
+ */
+export async function esDelEquipo(fs, uid) {
+  if (!uid) return false;
+  try {
+    const filas = await fs.runQuery({
+      from: [{ collectionId: "members", allDescendants: true }],
+      where: { fieldFilter: { field: { fieldPath: "uid" }, op: "EQUAL", value: { stringValue: uid } } }
+    });
+    const propia = personalWorkspaceId(uid);
+    return filas.some((fila) => {
+      const partes = String(fila.name).split("/documents/")[1]?.split("/") || [];
+      const wsId = partes[0] === "workspaces" ? partes[1] : null;
+      return wsId && wsId !== propia;
+    });
+  } catch {
+    return false;
+  }
+}
+
 export async function listWorkspaces(fs, uid) {
   const rows = await fs.runQuery({
     from: [{ collectionId: "members", allDescendants: true }],
