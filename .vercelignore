@@ -1,0 +1,7 @@
+# Las pruebas no se publican. Vercel convierte en funcion cada archivo de api/
+# y el plan admite 12, que ya estan todas en uso: una prueba de mas tumbaria
+# el despliegue.
+api/**/__tests__
+**/*.test.js
+**/*.test.ts
+vitest.config.ts
