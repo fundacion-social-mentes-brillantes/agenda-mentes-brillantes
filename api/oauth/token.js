@@ -30,8 +30,13 @@ export default function handler(req, res) {
   if (grantType === "authorization_code") {
     const p = readCode(body.code);
     if (!p) { res.status(400).json({ error: "invalid_grant", error_description: "Código inválido o vencido." }); return; }
-    if (p.ru && body.redirect_uri && p.ru !== body.redirect_uri) {
+    // El codigo solo se canjea con la misma direccion de retorno y el mismo
+    // cliente con que se pidio (antes se podia omitir la direccion).
+    if (p.ru && p.ru !== body.redirect_uri) {
       res.status(400).json({ error: "invalid_grant", error_description: "redirect_uri no coincide." }); return;
+    }
+    if (p.cid && body.client_id && p.cid !== body.client_id) {
+      res.status(400).json({ error: "invalid_grant", error_description: "client_id no coincide." }); return;
     }
     if (!verifyPkce(body.code_verifier, p.cc)) {
       res.status(400).json({ error: "invalid_grant", error_description: "PKCE inválido." }); return;

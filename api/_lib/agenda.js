@@ -101,22 +101,56 @@ function viewEvent(id, data) {
  *
  * Es UNA sola consulta (las membresias del usuario), sin abrir cada agenda.
  */
-export async function esDelEquipo(fs, uid) {
-  if (!uid) return false;
+// Quien es "del equipo" no puede depender de estar en CUALQUIER agenda
+// compartida: cualquiera que entre con Google puede crearse una y meterse como
+// dueno. Cuenta solo una agenda cuyo dueno sea una cuenta de la fundacion. Por
+// defecto, la de Sebastian (creo la agenda "GEMB" del equipo); se amplia con
+// AGENDA_EQUIPO_DUENOS (uids de Firebase separados por coma).
+const DUENOS_DEL_EQUIPO = new Set([
+  "xGsf9WRF9dUIJfs885AZzXFhjhf1",
+  ...String(process.env.AGENDA_EQUIPO_DUENOS || "")
+    .split(",")
+    .map((uid) => uid.trim())
+    .filter(Boolean),
+]);
+
+/** Fecha AAAA-MM-DD en Colombia de un instante (ISO o Date). */
+export function fechaEnBogota(valor) {
+  const d = parseTs(valor);
+  return d ? isoDate(d) : null;
+}
+
+/**
+ * Las agendas del equipo a las que pertenece esta persona (ids). Vacio si no
+ * es del equipo o si algo falla: ante la duda, no se abre la puerta.
+ */
+export async function agendasDelEquipo(fs, uid) {
+  const agendas = new Set();
+  if (!uid) return agendas;
   try {
     const filas = await fs.runQuery({
       from: [{ collectionId: "members", allDescendants: true }],
       where: { fieldFilter: { field: { fieldPath: "uid" }, op: "EQUAL", value: { stringValue: uid } } }
     });
     const propia = personalWorkspaceId(uid);
-    return filas.some((fila) => {
-      const partes = String(fila.name).split("/documents/")[1]?.split("/") || [];
-      const wsId = partes[0] === "workspaces" ? partes[1] : null;
-      return wsId && wsId !== propia;
-    });
+    const ids = filas
+      .map((fila) => {
+        const partes = String(fila.name).split("/documents/")[1]?.split("/") || [];
+        return partes[0] === "workspaces" ? partes[1] : null;
+      })
+      .filter((wsId) => wsId && wsId !== propia);
+    for (const wsId of new Set(ids)) {
+      const agenda = await fs.getDoc(`workspaces/${wsId}`);
+      if (agenda && DUENOS_DEL_EQUIPO.has(agenda.data.ownerId)) agendas.add(wsId);
+    }
   } catch {
-    return false;
+    agendas.clear();
   }
+  return agendas;
+}
+
+export async function esDelEquipo(fs, uid) {
+  return (await agendasDelEquipo(fs, uid)).size > 0;
 }
 
 export async function listWorkspaces(fs, uid) {

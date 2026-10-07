@@ -38,6 +38,9 @@ export default function handler(req, res) {
   const responseType = q.response_type || "code";
 
   if (responseType !== "code") return errorPage(res, "response_type no soportado.");
+  if (!/^[A-Za-z0-9_-]{43}$/.test(codeChallenge) || q.code_challenge_method !== "S256") {
+    return errorPage(res, "La aplicación no envió una verificación PKCE (S256) válida.");
+  }
   const client = readClientIdCompatible(clientId);
   // Pasa sobre todo cuando se rota OAUTH_SECRET: la app guardó un client_id
   // firmado con la llave anterior y ya no verifica. Reconectar no basta, porque

@@ -16,35 +16,14 @@
 // navegador. Y antes de consultar o escribir se verifica que quien pregunta
 // tenga sesión válida en la agenda, igual que hace el asistente.
 
-import { UserFirestore } from "./_lib/firestore.js";
-import { esDelEquipo } from "./_lib/agenda.js";
-
-const FIREBASE_API_KEY =
-  process.env.FIREBASE_API_KEY ||
-  process.env.VITE_FIREBASE_API_KEY ||
-  "AIzaSyAfijrkvPKyIgnyfkYEJvjmYqT77disxHI"; // clave web publica
+import { UserFirestore, verifyIdToken } from "./_lib/firestore.js";
+import { agendasDelEquipo, fechaEnBogota } from "./_lib/agenda.js";
 
 const ERP_BASE_URL = process.env.ERP_BASE_URL || "https://mentes-brillantes-erp.vercel.app";
 const RUTA_PERSONAS = "/api/integraciones/agenda/personas";
 const RUTA_SESION = "/api/integraciones/agenda/registrar-sesion";
 const MAX_CODIGOS = 50;
 const MAX_EVENTOS = 200;
-
-async function verifyUser(idToken) {
-  if (!idToken) return null;
-  try {
-    const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken })
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    return data.users && data.users[0] ? data.users[0] : null;
-  } catch {
-    return null;
-  }
-}
 
 
 function parseBody(body) {
@@ -78,13 +57,15 @@ export default async function handler(req, res) {
   }
 
   const body = parseBody(req.body);
-  const user = await verifyUser(body.idToken);
+  const user = await verifyIdToken(body.idToken);
   if (!user) {
     res.status(401).json({ error: "Tu sesión no es válida. Cierra y vuelve a iniciar sesión." });
     return;
   }
 
-  if (!(await esDelEquipo(new UserFirestore(body.idToken), user.localId))) {
+  const fs = new UserFirestore(body.idToken);
+  const equipo = await agendasDelEquipo(fs, user.localId);
+  if (!equipo.size) {
     res.status(403).json({
       error: "Esta parte es solo para el equipo de la fundación. Pide que te inviten a la agenda compartida."
     });
@@ -134,8 +115,24 @@ export default async function handler(req, res) {
       const fecha = String(body.fecha ?? "").trim();
       const eventoId = String(body.eventoId ?? "").trim();
 
-      if (!/^\d{1,10}$/.test(codigo) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-        res.status(400).json({ error: "Faltan el código de la persona o la fecha de la sesión." });
+      if (!/^\d{1,10}$/.test(codigo) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^[A-Za-z0-9_-]{1,128}$/.test(eventoId)) {
+        res.status(400).json({ error: "Faltan el código de la persona, la fecha o el evento de la sesión." });
+        return;
+      }
+
+      // Lo que se descuenta tiene que ser una sesion coach que de verdad esta en
+      // la agenda del equipo, con esa persona y ese dia. Asi nadie puede gastar
+      // el paquete de otra persona mandando un codigo y una fecha a mano.
+      const evento = await fs.getDoc(`events/${eventoId}`);
+      const datosEvento = evento?.data || {};
+      const coincide =
+        evento &&
+        equipo.has(datosEvento.workspaceId) &&
+        datosEvento.kind === "coach" &&
+        String(datosEvento.clientCode) === codigo &&
+        fechaEnBogota(datosEvento.startAt) === fecha;
+      if (!coincide) {
+        res.status(400).json({ error: "La sesión no coincide con el evento de la agenda. Recarga la página y vuelve a intentarlo." });
         return;
       }
 

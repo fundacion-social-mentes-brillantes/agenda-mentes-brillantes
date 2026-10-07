@@ -144,11 +144,15 @@ export function readRefreshToken(token) {
 }
 
 // ---------- PKCE ----------
+// PKCE es obligatorio (OAuth 2.1): sin el, quien intercepte el codigo (por
+// ejemplo otro programa escuchando en localhost) podria canjearlo. Claude y
+// ChatGPT siempre lo mandan.
 export function verifyPkce(codeVerifier, codeChallenge) {
-  if (!codeChallenge) return true; // sin PKCE (algunos clientes)
-  if (!codeVerifier) return false;
-  const hash = b64url(crypto.createHash("sha256").update(codeVerifier).digest());
-  return hash === codeChallenge;
+  if (!codeChallenge || !codeVerifier) return false;
+  if (!/^[A-Za-z0-9._~-]{43,128}$/.test(String(codeVerifier))) return false;
+  const a = Buffer.from(b64url(crypto.createHash("sha256").update(String(codeVerifier)).digest()));
+  const b = Buffer.from(String(codeChallenge));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export function hasSecret() {

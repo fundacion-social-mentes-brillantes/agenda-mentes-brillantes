@@ -3,10 +3,9 @@
 // Las herramientas (crear/editar/eliminar) las EJECUTA el navegador en la sesión del usuario,
 // bajo las reglas de Firebase. El servidor solo conversa con DeepSeek y relé el mensaje.
 
-const FIREBASE_API_KEY =
-  process.env.FIREBASE_API_KEY ||
-  process.env.VITE_FIREBASE_API_KEY ||
-  "AIzaSyAfijrkvPKyIgnyfkYEJvjmYqT77disxHI"; // clave web publica
+import { UserFirestore, verifyIdToken } from "./_lib/firestore.js";
+import { esDelEquipo } from "./_lib/agenda.js";
+
 const FIREBASE_PROJECT_ID =
   process.env.FIREBASE_PROJECT_ID ||
   process.env.VITE_FIREBASE_PROJECT_ID ||
@@ -30,22 +29,6 @@ const ALLOWED_TOOL_NAMES = new Set([
   "add_client",
   "delete_event"
 ]);
-
-async function verifyUser(idToken) {
-  if (!idToken) return null;
-  try {
-    const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken })
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    return data.users && data.users[0] ? data.users[0] : null;
-  } catch {
-    return null;
-  }
-}
 
 function trimText(value, max = 200) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -539,9 +522,16 @@ export default async function handler(req, res) {
     return;
   }
 
-  const user = await verifyUser(idToken);
+  const user = await verifyIdToken(idToken);
   if (!user) {
     res.status(401).json({ error: "Tu sesión no es válida. Cierra y vuelve a iniciar sesión." });
+    return;
+  }
+
+  // Cada pregunta gasta credito de DeepSeek: el asistente es para el equipo de
+  // la fundacion, no para cualquiera que entre con una cuenta de Google.
+  if (!(await esDelEquipo(new UserFirestore(idToken), user.localId))) {
+    res.status(403).json({ error: "El asistente es solo para el equipo de la fundación. Pide que te inviten a la agenda compartida." });
     return;
   }
 

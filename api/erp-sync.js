@@ -10,32 +10,11 @@
 // del equipo (estar invitado a una agenda compartida), porque un reporte falso
 // puede hacer que el ERP dé por borradas sesiones que sí existen.
 
-const FIREBASE_API_KEY =
-  process.env.FIREBASE_API_KEY ||
-  process.env.VITE_FIREBASE_API_KEY ||
-  "AIzaSyAfijrkvPKyIgnyfkYEJvjmYqT77disxHI"; // clave web publica
-
-import { UserFirestore } from "./_lib/firestore.js";
-import { esDelEquipo } from "./_lib/agenda.js";
+import { UserFirestore, verifyIdToken } from "./_lib/firestore.js";
+import { agendasDelEquipo } from "./_lib/agenda.js";
 
 const ERP_BASE_URL = process.env.ERP_BASE_URL || "https://mentes-brillantes-erp.vercel.app";
 const MAX_EVENTOS = 500;
-
-async function verifyUser(idToken) {
-  if (!idToken) return null;
-  try {
-    const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken })
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    return data.users && data.users[0] ? data.users[0] : null;
-  } catch {
-    return null;
-  }
-}
 
 function parseBody(body) {
   if (typeof body !== "string") return body && typeof body === "object" ? body : {};
@@ -61,13 +40,14 @@ export default async function handler(req, res) {
   }
 
   const body = parseBody(req.body);
-  const user = await verifyUser(body.idToken);
+  const user = await verifyIdToken(body.idToken);
   if (!user) {
     res.status(401).json({ error: "Tu sesión no es válida." });
     return;
   }
 
-  if (!(await esDelEquipo(new UserFirestore(body.idToken), user.localId))) {
+  const equipo = await agendasDelEquipo(new UserFirestore(body.idToken), user.localId);
+  if (!equipo.size) {
     res.status(403).json({ error: "Esta parte es solo para el equipo de la fundación." });
     return;
   }
@@ -79,12 +59,18 @@ export default async function handler(req, res) {
     res.status(400).json({ error: "Faltan la agenda o la ventana de fechas." });
     return;
   }
+  // Solo se reporta la agenda del equipo, y solo la puede reportar alguien de ella.
+  if (!equipo.has(workspaceId)) {
+    res.status(403).json({ error: "Esa agenda no es la del equipo." });
+    return;
+  }
 
   // Solo se envían sesiones coach: el resto del calendario (reuniones,
   // festivos, citas médicas) no tiene nada que ver con la contabilidad y no
   // debe salir de la agenda.
   const eventos = (Array.isArray(body.eventos) ? body.eventos : [])
-    .filter((e) => e && e.kind === "coach" && Number.isFinite(Number(e.clientCode)))
+    // Codigo entero positivo: un "" pasaba como 0 (Number("") es 0).
+    .filter((e) => e && e.kind === "coach" && Number.isInteger(Number(e.clientCode)) && Number(e.clientCode) > 0 && String(e.clientCode).trim() !== "")
     .slice(0, MAX_EVENTOS)
     .map((e) => ({
       id: String(e.id || "").slice(0, 128),
