@@ -114,9 +114,10 @@ function AppContent() {
 
   const { events, loading: eventsLoading, createEvent, updateEvent, deleteEvent } = useEvents(visibleWorkspaceIds);
 
-  // Le avisa al ERP que sesiones coach hay en la agenda, para que el dueno
-  // pueda revisar diferencias. No cambia nada en la contabilidad.
-  useReporteErp(activeWorkspaceId, events);
+  // Le avisa al ERP que sesiones coach hay en la agenda del equipo, para que el
+  // dueno pueda revisar diferencias. No cambia nada en la contabilidad. Siempre
+  // la del equipo y no la activa: con "Mi agenda" activa el ERP lo rechazaba.
+  useReporteErp(puedeRecibirAvisos ? AGENDA_AVISOS : null, events);
 
   const [activePage, setActivePage] = useState<PageType>("calendar");
   const [assistantHasOpened, setAssistantHasOpened] = useState(false);

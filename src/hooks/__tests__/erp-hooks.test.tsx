@@ -5,18 +5,22 @@ import type { CalendarEvent } from "../../types/event";
 
 const consultarEstadoErp = vi.fn();
 const consultarEventosEnErp = vi.fn();
+const reportarSesionesAlErp = vi.fn();
 vi.mock("../../services/erpService", () => ({
   consultarEstadoErp: (...a: unknown[]) => consultarEstadoErp(...a),
   consultarEventosEnErp: (...a: unknown[]) => consultarEventosEnErp(...a),
+  reportarSesionesAlErp: (...a: unknown[]) => reportarSesionesAlErp(...a),
   aFechaIso: (d: Date) => d.toISOString().slice(0, 10)
 }));
 
 const { useEstadoErp } = await import("../useEstadoErp");
 const { useEventosEnErp } = await import("../useEventosEnErp");
+const { useReporteErp } = await import("../useReporteErp");
 
 beforeEach(() => {
   consultarEstadoErp.mockReset();
   consultarEventosEnErp.mockReset();
+  reportarSesionesAlErp.mockReset();
 });
 
 describe("useEstadoErp", () => {
@@ -67,5 +71,30 @@ describe("useEventosEnErp", () => {
     const { result } = renderHook(() => useEventosEnErp([coach("e1", 211)]));
     await waitFor(() => expect(result.current.cargando).toBe(false));
     expect(result.current.registrados.size).toBe(0);
+  });
+});
+
+describe("useReporteErp", () => {
+  const manana = new Date(Date.now() + 86400000);
+  const sesion = (id: string, workspaceId: string, codigo: number) =>
+    ({ id, workspaceId, kind: "coach", clientCode: codigo, startAt: manana, title: "Sesion" }) as unknown as CalendarEvent;
+
+  it("reporta solo las sesiones de la agenda del equipo, aunque se vean otras", () => {
+    const eventos = [sesion("e1", "gemb", 211), sesion("e2", "personal_x", 129)];
+    renderHook(() => useReporteErp("gemb", eventos));
+    expect(reportarSesionesAlErp).toHaveBeenCalledTimes(1);
+    const enviado = reportarSesionesAlErp.mock.calls[0][0];
+    expect(enviado.workspaceId).toBe("gemb");
+    expect(enviado.eventos.map((e: { id: string }) => e.id)).toEqual(["e1"]);
+  });
+
+  it("sin agenda del equipo no reporta nada", () => {
+    renderHook(() => useReporteErp(null, [sesion("e1", "gemb", 211)]));
+    expect(reportarSesionesAlErp).not.toHaveBeenCalled();
+  });
+
+  it("si la agenda del equipo no esta visible no manda una lista vacia", () => {
+    renderHook(() => useReporteErp("gemb", [sesion("e2", "personal_x", 129)]));
+    expect(reportarSesionesAlErp).not.toHaveBeenCalled();
   });
 });

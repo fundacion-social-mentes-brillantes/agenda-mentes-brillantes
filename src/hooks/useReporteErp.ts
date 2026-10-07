@@ -9,8 +9,13 @@ const VENTANA_ADELANTE_DIAS = 30;
 const CADA_MS = 30 * 60 * 1000;
 
 /**
- * Le reporta al ERP las sesiones coach de la agenda, para que el dueño pueda
- * revisar diferencias. No modifica nada aquí ni allá: es solo un aviso.
+ * Le reporta al ERP las sesiones coach de UNA agenda (la del equipo), para que
+ * el dueño pueda revisar diferencias. No modifica nada aquí ni allá: es solo un
+ * aviso.
+ *
+ * `events` trae todo lo visible (varias agendas a la vez), así que aquí se
+ * queda solo con lo de `workspaceId`: si no, sesiones del equipo terminaban
+ * reportadas como de una agenda personal, y el ERP las rechaza.
  */
 export function useReporteErp(workspaceId: string | null, events: CalendarEvent[], enabled = true) {
   const ultimoEnvio = useRef(0);
@@ -26,7 +31,7 @@ export function useReporteErp(workspaceId: string | null, events: CalendarEvent[
     const hasta = aFechaIso(new Date(hoy.getTime() + VENTANA_ADELANTE_DIAS * 86400000));
 
     const coach = events
-      .filter((e) => e.kind === "coach" && typeof e.clientCode === "number")
+      .filter((e) => e.workspaceId === workspaceId && e.kind === "coach" && typeof e.clientCode === "number")
       .map((e) => {
         const inicio = toDate(e.startAt);
         return {
