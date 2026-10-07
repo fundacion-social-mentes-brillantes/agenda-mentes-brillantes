@@ -39,6 +39,9 @@
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.11"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "overrides": {
     "protobufjs": "7.6.6",
     "@grpc/grpc-js": "1.14.5"

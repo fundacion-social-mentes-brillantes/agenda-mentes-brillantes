@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Lo mismo que se revisa a mano antes de publicar: lint, tipos, pruebas,
+# dependencias y compilacion. Si algo falla, no se publica.
+jobs:
+  calidad:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Vercel corre en UTC: las pruebas tambien.
+      TZ: UTC
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias (exactas, del lockfile)
+        run: npm ci
+
+      - name: Lint (app, funciones de servidor y Azure)
+        run: npm run lint
+
+      - name: Pruebas
+        run: npm test
+
+      - name: Auditoria de dependencias
+        run: npm audit --audit-level=high
+
+      - name: Compilacion (tipos + PWA)
+        run: npm run build
