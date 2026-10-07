@@ -1,20 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { AppTheme } from "../types/theme";
-
-interface ThemeContextType {
-  theme: AppTheme;
-  setTheme: (theme: AppTheme) => void;
-  toggleTheme: () => void;
-  themeLabel: string;
-}
-
-const ThemeContext = createContext<ThemeContextType>({
-  theme: "dark",
-  setTheme: () => {},
-  toggleTheme: () => {},
-  themeLabel: "Noche Dorada"
-});
+import { ThemeContext, type ThemeContextType } from "./themeContext";
 
 function getInitialTheme(): AppTheme {
   const saved = localStorage.getItem("theme");
@@ -44,8 +31,3 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
-
-export function useTheme() {
-  return useContext(ThemeContext);
-}
-

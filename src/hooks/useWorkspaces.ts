@@ -64,10 +64,15 @@ function toIso(valor: unknown): string {
 }
 
 export function useWorkspaces(user: FirebaseUser | null) {
-  const [workspaces, setWorkspaces] = useState<WorkspaceWithRole[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const uid = user?.uid ?? null;
+
+  // Lo que llego del servidor y lo que eligio la persona, cada cosa con el
+  // usuario al que pertenece. Lo que se muestra se deriva de ahi: los efectos
+  // solo escuchan a Firebase y no copian estados (y al cambiar de cuenta nunca
+  // se alcanzan a ver las agendas de la anterior).
+  const [delServidor, setDelServidor] = useState<{ uid: string; lista: WorkspaceWithRole[]; error: string | null } | null>(null);
+  const [elegida, setElegida] = useState<{ uid: string; id: string } | null>(null);
+  const [errorPersonal, setErrorPersonal] = useState<{ uid: string; mensaje: string } | null>(null);
 
   // Asegura agenda personal + migra eventos antiguos (una sola vez por usuario).
   useEffect(() => {
@@ -91,7 +96,12 @@ export function useWorkspaces(user: FirebaseUser | null) {
         }
       } catch (err) {
         console.error("No se pudo preparar la agenda personal", err);
-        if (!cancelled) setError("No pudimos preparar tu agenda personal. Revisa que se publicaron las reglas de Firebase y recarga.");
+        if (!cancelled) {
+          setErrorPersonal({
+            uid: user.uid,
+            mensaje: "No pudimos preparar tu agenda personal. Revisa que se publicaron las reglas de Firebase y recarga."
+          });
+        }
       }
     })();
 
@@ -102,65 +112,54 @@ export function useWorkspaces(user: FirebaseUser | null) {
 
   // Escucha en tiempo real las agendas del usuario.
   useEffect(() => {
-    if (!user) {
-      setWorkspaces([]);
-      setLoading(false);
-      setActiveWorkspaceIdState(null);
-      return;
-    }
-
-    // Arranque rápido: se muestran de inmediato las agendas que ya conocíamos de la
-    // última vez, sin esperar al servidor. Si no hay copia guardada (primera vez),
-    // se comporta como antes y muestra el indicador de carga.
-    const guardadas = leerCache(user.uid);
-    if (guardadas.length > 0) {
-      setWorkspaces(guardadas);
-      setLoading(false);
-      // También se recupera cuál estaba activa, para que nada quede vacío mientras llega
-      // la lista real del servidor.
-      setActiveWorkspaceIdState((current) => {
-        const stored = typeof localStorage !== "undefined" ? localStorage.getItem(activeStorageKey(user.uid)) : null;
-        const candidate = current || stored;
-        if (candidate && guardadas.some((ws) => ws.id === candidate)) return candidate;
-        const personal = guardadas.find((ws) => ws.id === personalWorkspaceId(user.uid));
-        return personal?.id || guardadas[0]?.id || null;
-      });
-    } else {
-      setLoading(true);
-    }
-
+    if (!user) return;
+    const dueno = user.uid;
     const unsubscribe = workspaceService.subscribeToMyWorkspaces(
-      user.uid,
+      dueno,
       (list) => {
-        setWorkspaces(list);
-        guardarCache(user.uid, list); // para el próximo arranque
-        setLoading(false);
-        setError(null);
-
-        setActiveWorkspaceIdState((current) => {
-          const stored = typeof localStorage !== "undefined" ? localStorage.getItem(activeStorageKey(user.uid)) : null;
-          const candidate = current || stored;
-          if (candidate && list.some((ws) => ws.id === candidate)) {
-            return candidate;
-          }
-          const personal = list.find((ws) => ws.id === personalWorkspaceId(user.uid));
-          return personal?.id || list[0]?.id || null;
-        });
+        guardarCache(dueno, list); // para el próximo arranque
+        setDelServidor({ uid: dueno, lista: list, error: null });
       },
-      (err) => {
-        setError(err instanceof Error ? err.message : "No pudimos cargar tus agendas.");
-        setLoading(false);
-      }
+      (err) =>
+        setDelServidor((previo) => ({
+          uid: dueno,
+          lista: previo?.uid === dueno ? previo.lista : leerCache(dueno),
+          error: err instanceof Error ? err.message : "No pudimos cargar tus agendas."
+        }))
     );
 
     return () => unsubscribe();
   }, [user]);
 
+  // Arranque rápido: mientras llega la lista real se muestran las agendas que ya
+  // conocíamos de la última vez. Sin copia guardada (primera vez), se espera.
+  const enCache = useMemo(() => (uid ? leerCache(uid) : []), [uid]);
+  const vigente = delServidor && delServidor.uid === uid ? delServidor : null;
+  const workspaces = useMemo(() => (!uid ? [] : vigente ? vigente.lista : enCache), [uid, vigente, enCache]);
+  const loading = Boolean(uid) && !vigente && enCache.length === 0;
+  const error = vigente?.error ?? (errorPersonal && errorPersonal.uid === uid ? errorPersonal.mensaje : null);
+
+  // Activa: la que eligió (en esta sesión o la vez pasada) si sigue existiendo;
+  // si no, la personal; si no, la primera.
+  const activeWorkspaceId = useMemo(() => {
+    if (!uid) return null;
+    const guardada = typeof localStorage !== "undefined" ? localStorage.getItem(activeStorageKey(uid)) : null;
+    const candidata = (elegida?.uid === uid ? elegida.id : null) || guardada;
+    if (candidata && workspaces.some((ws) => ws.id === candidata)) return candidata;
+    const personal = workspaces.find((ws) => ws.id === personalWorkspaceId(uid));
+    return personal?.id || workspaces[0]?.id || null;
+  }, [uid, elegida, workspaces]);
+
   const setActiveWorkspaceId = useCallback(
     (id: string) => {
-      setActiveWorkspaceIdState(id);
-      if (user && typeof localStorage !== "undefined") {
-        localStorage.setItem(activeStorageKey(user.uid), id);
+      if (!user) return;
+      setElegida({ uid: user.uid, id });
+      if (typeof localStorage !== "undefined") {
+        try {
+          localStorage.setItem(activeStorageKey(user.uid), id);
+        } catch {
+          /* sin almacenamiento: la elección vale solo en esta sesión */
+        }
       }
     },
     [user]

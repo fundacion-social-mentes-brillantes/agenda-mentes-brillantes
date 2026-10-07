@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ArrowLeft,
@@ -65,14 +65,19 @@ export function EventDetailModal({ event, isOpen, onClose, onEdit, onDuplicate, 
   const [dupDone, setDupDone] = useState(0);
 
   // Al abrir otro evento (o cerrar), volver siempre a la vista de detalle limpia.
-  useEffect(() => {
+  // Se ajusta durante el render (patron de React) en vez de en un efecto, asi
+  // nunca se alcanza a pintar el modo anterior con el evento nuevo.
+  const claveVista = `${event?.id ?? ""}|${isOpen}`;
+  const [vistaDe, setVistaDe] = useState(claveVista);
+  if (vistaDe !== claveVista) {
+    setVistaDe(claveVista);
     setMode("detail");
     setDupDates([]);
     setDupPick("");
     setDupBusy(false);
     setDupDone(0);
     setConfirmDelete(false);
-  }, [event?.id, isOpen]);
+  }
 
   if (!event) return null;
 

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { initializeApp, cert, applicationDefault, type App } from "firebase-admin/app";
+import { initializeApp, cert, applicationDefault, type App, type ServiceAccount } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 let firestore: Firestore | null = null;
@@ -10,7 +10,7 @@ function loadServiceAccount(): Record<string, unknown> | null {
     try {
       return JSON.parse(Buffer.from(base64, "base64").toString("utf8"));
     } catch (err) {
-      throw new Error("FIREBASE_SERVICE_ACCOUNT_BASE64 no es un JSON valido en base64.");
+      throw new Error("FIREBASE_SERVICE_ACCOUNT_BASE64 no es un JSON valido en base64.", { cause: err });
     }
   }
 
@@ -19,7 +19,7 @@ function loadServiceAccount(): Record<string, unknown> | null {
     try {
       return JSON.parse(readFileSync(path, "utf8"));
     } catch (err) {
-      throw new Error(`No se pudo leer la llave de servicio en ${path}. Revisa la ruta del archivo.`);
+      throw new Error(`No se pudo leer la llave de servicio en ${path}. Revisa la ruta del archivo.`, { cause: err });
     }
   }
 
@@ -34,7 +34,7 @@ export function getDb(): Firestore {
 
   if (serviceAccount) {
     // Opción 1: llave de servicio (JSON) por archivo o base64.
-    app = initializeApp({ credential: cert(serviceAccount as any) });
+    app = initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
   } else {
     // Opción 2: Application Default Credentials (sin descargar llave).
     // Funciona con `gcloud auth application-default login` en local,
@@ -49,7 +49,8 @@ export function getDb(): Firestore {
         "Faltan las credenciales de Firebase. Usa una de estas opciones: " +
           "(a) FIREBASE_SERVICE_ACCOUNT (ruta al JSON) o FIREBASE_SERVICE_ACCOUNT_BASE64; " +
           "(b) inicia sesión con `gcloud auth application-default login`; " +
-          "(c) GOOGLE_APPLICATION_CREDENTIALS."
+          "(c) GOOGLE_APPLICATION_CREDENTIALS.",
+        { cause: err }
       );
     }
   }

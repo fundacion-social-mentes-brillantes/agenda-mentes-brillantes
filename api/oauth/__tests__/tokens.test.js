@@ -37,7 +37,7 @@ describe("firmas y codigos", () => {
   it("un token alterado o de otro tipo no se acepta", () => {
     const code = t.mintCode({ uid: "u1", name: "Ana", firebaseRefresh: "rt", codeChallenge: CHALLENGE, clientId: "c", redirectUri: "r" });
     expect(t.readCode(code)?.uid).toBe("u1");
-    const [cab, cuerpo, firma] = code.slice(5).split(".");
+    const [cab, , firma] = code.slice(5).split(".");
     const cuerpoFalso = b64url(Buffer.from(JSON.stringify({ typ: "code", uid: "intruso" })));
     expect(t.readCode(`mcpa_${cab}.${cuerpoFalso}.${firma}`)).toBeNull();
     // Un codigo no sirve como access token.

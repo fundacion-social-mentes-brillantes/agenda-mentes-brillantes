@@ -45,7 +45,6 @@ async function showReminder(id: string, title: string, when: string) {
     /* intenta el modo simple */
   }
   try {
-    // eslint-disable-next-line no-new
     new Notification("⏰ " + title, { body, icon: "/icons/icon-192.png" });
   } catch {
     /* no soportado */
@@ -55,8 +54,11 @@ async function showReminder(id: string, title: string, when: string) {
 /** Avisa con una notificación ~15 minutos antes de cada evento (mientras la app esté abierta/activa). */
 export function useEventReminders(events: CalendarEvent[]) {
   const notifiedRef = useRef<Set<string>>(loadNotified());
+  // El intervalo lee siempre la lista mas reciente sin reiniciarse en cada cambio.
   const eventsRef = useRef<CalendarEvent[]>(events);
-  eventsRef.current = events;
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;

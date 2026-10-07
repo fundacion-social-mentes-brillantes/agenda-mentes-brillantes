@@ -33,7 +33,7 @@ function splitCsvLine(line: string): string[] {
 }
 
 export function parseClientsCsv(text: string): ParsedClientRow[] {
-  const clean = text.replace(/^﻿/, ""); // quita BOM si lo trae
+  const clean = text.replace(/^\uFEFF/, ""); // quita BOM si lo trae
   const lines = clean.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return [];
 

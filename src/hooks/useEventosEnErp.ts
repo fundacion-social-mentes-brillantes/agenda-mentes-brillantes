@@ -14,48 +14,51 @@ import { aFechaIso } from "../services/erpService";
  * Si el ERP no responde, el conjunto queda vacío y todo se ve gris. La agenda
  * nunca se bloquea por esto.
  */
+const NINGUNO: Set<string> = new Set();
+
 export function useEventosEnErp(events: CalendarEvent[], enabled = true) {
-  const [registrados, setRegistrados] = useState<Set<string>>(new Set());
-  const [cargando, setCargando] = useState(false);
   const [recargas, setRecargas] = useState(0);
+  // Ultima respuesta del ERP con la consulta a la que pertenece; "cargando" es
+  // que aun no llega la de la consulta actual (el efecto no pone estados a mano).
+  const [respuesta, setRespuesta] = useState<{ clave: string; recarga: number; registrados: Set<string> } | null>(null);
 
   // Solo sesiones coach con persona: el resto del calendario no es contabilidad.
-  const coach = events
+  // Clave estable (id|codigo|fecha): el array de eventos cambia de identidad en
+  // cada render aunque traiga lo mismo. La consulta se arma desde la clave, asi
+  // el efecto depende solo de ella.
+  const clave = events
     .filter((e) => e.id && e.kind === "coach" && typeof e.clientCode === "number")
-    .map((e) => ({ id: e.id as string, codigo: e.clientCode as number, fecha: aFechaIso(toDate(e.startAt)) }));
-
-  // Clave estable: el array cambia de identidad en cada render del calendario
-  // aunque traiga exactamente los mismos eventos.
-  const clave = coach
-    .map((e) => `${e.id}:${e.fecha}`)
+    .map((e) => `${e.id}|${e.clientCode}|${aFechaIso(toDate(e.startAt))}`)
     .sort()
     .join(",");
+  const activo = enabled && Boolean(clave);
 
   useEffect(() => {
-    if (!enabled || !clave) {
-      setRegistrados(new Set());
-      return;
-    }
+    if (!activo) return;
+
+    const consulta = clave.split(",").map((parte) => {
+      const [id, codigo, fecha] = parte.split("|");
+      return { id, codigo: Number(codigo), fecha };
+    });
 
     let cancelado = false;
-    setCargando(true);
-
-    consultarEventosEnErp(coach)
-      .then((mapa) => {
-        if (!cancelado) setRegistrados(mapa);
-      })
-      .finally(() => {
-        if (!cancelado) setCargando(false);
+    consultarEventosEnErp(consulta)
+      .catch(() => new Set<string>())
+      .then((registrados) => {
+        if (!cancelado) setRespuesta({ clave, recarga: recargas, registrados });
       });
 
     return () => {
       cancelado = true;
     };
-    // `coach` se reconstruye en cada render; la dependencia real es `clave`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clave, enabled, recargas]);
+  }, [clave, activo, recargas]);
 
   const recargar = useCallback(() => setRecargas((n) => n + 1), []);
 
-  return { registrados, cargando, recargar };
+  const alDia = respuesta?.clave === clave && respuesta.recarga === recargas;
+  return {
+    registrados: activo ? respuesta?.registrados ?? NINGUNO : NINGUNO,
+    cargando: activo && !alDia,
+    recargar
+  };
 }

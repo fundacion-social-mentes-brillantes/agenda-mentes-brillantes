@@ -104,7 +104,7 @@ export const storageService = {
       };
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        throw new Error("La subida del archivo tardó demasiado. Revisa tu conexión e intenta de nuevo.");
+        throw new Error("La subida del archivo tardó demasiado. Revisa tu conexión e intenta de nuevo.", { cause: error });
       }
       throw error instanceof Error ? error : new Error("No se pudo subir el archivo.");
     } finally {

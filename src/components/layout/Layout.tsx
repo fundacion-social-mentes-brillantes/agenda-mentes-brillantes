@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useEffectEvent } from "react";
 import type React from "react";
 import type { ReactNode } from "react";
 import {
@@ -64,10 +64,13 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
   const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Solo cuando cambia el tema GUARDADO en el perfil se aplica; cambiar el tema
+  // aqui mismo no debe re-disparar esto (por eso va como evento del efecto).
+  const aplicarTemaDelPerfil = useEffectEvent((temaPerfil: AppTheme | undefined) => {
+    if (temaPerfil && temaPerfil !== theme) setTheme(temaPerfil);
+  });
   useEffect(() => {
-    if (profile?.theme && profile.theme !== theme) {
-      setTheme(profile.theme);
-    }
+    aplicarTemaDelPerfil(profile?.theme);
   }, [profile?.theme]);
 
   const handleThemeChange = async (nextTheme: AppTheme) => {

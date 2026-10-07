@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
+import { collection, doc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch, type DocumentData } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toDateSafe } from "../lib/dateUtils";
 import type { Client } from "../types/client";
@@ -22,7 +22,7 @@ function clientDocId(workspaceId: string, code: number): string {
   return `client_${workspaceId}_${code}`;
 }
 
-function mapDoc(id: string, data: Record<string, any>): Client {
+function mapDoc(id: string, data: DocumentData): Client {
   const name = data.clientName || "";
   return {
     id,

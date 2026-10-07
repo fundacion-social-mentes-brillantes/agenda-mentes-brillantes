@@ -85,7 +85,7 @@ export const authService = {
       return userCredential.user;
     } catch (error) {
       console.error("Email sign-in failed", getErrorDetails(error));
-      throw new Error(getFriendlyAuthError(error));
+      throw new Error(getFriendlyAuthError(error), { cause: error });
     }
   },
 
@@ -119,7 +119,7 @@ export const authService = {
       return user;
     } catch (error) {
       console.error("Email registration failed", getErrorDetails(error));
-      throw new Error(getFriendlyAuthError(error));
+      throw new Error(getFriendlyAuthError(error), { cause: error });
     }
   },
 
@@ -147,11 +147,11 @@ export const authService = {
           return null;
         } catch (redirectError) {
           logGoogleSignInFailure(redirectError);
-          throw new Error(getFriendlyAuthError(redirectError));
+          throw new Error(getFriendlyAuthError(redirectError), { cause: redirectError });
         }
       }
 
-      throw new Error(getFriendlyAuthError(error));
+      throw new Error(getFriendlyAuthError(error), { cause: error });
     }
   },
 
@@ -163,7 +163,7 @@ export const authService = {
       return result.user;
     } catch (error) {
       logGoogleSignInFailure(error);
-      throw new Error(getFriendlyAuthError(error));
+      throw new Error(getFriendlyAuthError(error), { cause: error });
     }
   },
 

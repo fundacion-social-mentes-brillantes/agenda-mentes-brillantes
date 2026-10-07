@@ -43,14 +43,21 @@ export function PasarAlErpBoton({ event }: { event: CalendarEvent }) {
       }
     : undefined;
 
+  // Otro evento (o cambio de persona/fecha): se vuelve a revisar desde cero.
+  // Se ajusta durante el render, no en el efecto (patron de React).
+  const claveEvento = `${event.id ?? ""}|${codigo ?? ""}|${fecha}`;
+  const [revisadoPara, setRevisadoPara] = useState(claveEvento);
+  if (revisadoPara !== claveEvento) {
+    setRevisadoPara(claveEvento);
+    setPaso("revisando");
+    setResultado(null);
+  }
+
   // Al abrir el evento se pregunta si esa sesión ya está en la contabilidad.
   useEffect(() => {
     if (!esCoach || !event.id) return;
 
     let cancelado = false;
-    setPaso("revisando");
-    setResultado(null);
-
     consultarEventosEnErp([{ id: event.id, codigo, fecha }]).then((registrados) => {
       if (cancelado) return;
       setPaso(registrados.has(event.id as string) ? "resuelto" : "listo");

@@ -11,7 +11,8 @@ import {
   setDoc,
   updateDoc,
   where,
-  writeBatch
+  writeBatch,
+  type DocumentData
 } from "firebase/firestore";
 import type { User as FirebaseUser } from "firebase/auth";
 import { toDateSafe } from "../lib/dateUtils";
@@ -52,7 +53,7 @@ function memberPayload(user: FirebaseUser, role: MemberRole, color?: string, joi
   return payload;
 }
 
-function mapWorkspace(id: string, data: Record<string, any>): Workspace {
+function mapWorkspace(id: string, data: DocumentData): Workspace {
   return {
     id,
     name: data.name || "Agenda",

@@ -3,47 +3,55 @@ import { eventsService } from "../services/eventsService";
 import type { EventWriteResult } from "../services/eventsService";
 import type { CalendarEvent } from "../types/event";
 
-export function useEvents(workspaceIds: string[]) {
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+/** Mensaje del error, o el de respaldo si no trae uno legible. */
+function mensajeDe(err: unknown, respaldo: string): string {
+  return err instanceof Error && err.message ? err.message : respaldo;
+}
 
+export function useEvents(workspaceIds: string[]) {
   // Clave estable para no re-suscribir por identidad del array.
   const idsKey = [...new Set((workspaceIds || []).filter(Boolean))].sort().join(",");
 
+  // Lo ultimo que llego, con la clave de agendas a la que pertenece. "Cargando"
+  // es simplemente que todavia no llega nada para la clave actual: asi el efecto
+  // no tiene que poner estados a mano (y mientras carga se siguen viendo los
+  // eventos anteriores, como antes).
+  const [datos, setDatos] = useState<{ clave: string; events: CalendarEvent[]; error: string | null }>({
+    clave: "",
+    events: [],
+    error: null
+  });
+
   useEffect(() => {
     const ids = idsKey ? idsKey.split(",") : [];
-    if (ids.length === 0) {
-      setEvents([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
+    if (ids.length === 0) return;
 
-    setLoading(true);
     const unsubscribe = eventsService.subscribeToEventsMulti(
       ids,
-      (fetchedEvents) => {
-        setEvents(fetchedEvents);
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
-        setError(err instanceof Error ? err.message : "Error al sincronizar los eventos.");
-        setLoading(false);
-      }
+      (fetchedEvents) => setDatos({ clave: idsKey, events: fetchedEvents, error: null }),
+      (err) =>
+        setDatos((previo) => ({
+          clave: idsKey,
+          events: previo.events,
+          error: mensajeDe(err, "Error al sincronizar los eventos.")
+        }))
     );
 
     return () => unsubscribe();
   }, [idsKey]);
 
+  const vigente = datos.clave === idsKey;
+  const events = idsKey ? datos.events : [];
+  const loading = Boolean(idsKey) && !vigente;
+  const error = idsKey && vigente ? datos.error : null;
+
   const createEvent = useCallback(
     async (eventData: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">): Promise<EventWriteResult> => {
       try {
         return await eventsService.createEvent(eventData);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Error creating event:", err);
-        throw new Error(err.message || "Error al crear el evento.");
+        throw new Error(mensajeDe(err, "Error al crear el evento."), { cause: err });
       }
     },
     []
@@ -52,27 +60,27 @@ export function useEvents(workspaceIds: string[]) {
   const updateEvent = useCallback(async (eventId: string, eventData: Partial<CalendarEvent>) => {
     try {
       await eventsService.updateEvent(eventId, eventData);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error updating event:", err);
-      throw new Error(err.message || "Error al actualizar el evento.");
+      throw new Error(mensajeDe(err, "Error al actualizar el evento."), { cause: err });
     }
   }, []);
 
   const setEventDone = useCallback(async (eventId: string, done: boolean) => {
     try {
       await eventsService.setEventDone(eventId, done);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error updating event done:", err);
-      throw new Error(err.message || "Error al actualizar el evento.");
+      throw new Error(mensajeDe(err, "Error al actualizar el evento."), { cause: err });
     }
   }, []);
 
   const deleteEvent = useCallback(async (eventId: string) => {
     try {
       await eventsService.deleteEvent(eventId);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error deleting event:", err);
-      throw new Error(err.message || "Error al eliminar el evento.");
+      throw new Error(mensajeDe(err, "Error al eliminar el evento."), { cause: err });
     }
   }, []);
 

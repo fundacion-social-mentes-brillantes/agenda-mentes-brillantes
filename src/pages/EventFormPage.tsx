@@ -98,8 +98,11 @@ export default function EventFormPage({
   const [error, setError] = useState<string | null>(null);
   const [savedEventId, setSavedEventId] = useState<string | null>(null);
   const isSubmittingRef = useRef(false);
+  // Para liberar las vistas previas al salir: se guarda la lista mas reciente.
   const pendingFilesRef = useRef<PendingFile[]>([]);
-  pendingFilesRef.current = pendingFiles;
+  useEffect(() => {
+    pendingFilesRef.current = pendingFiles;
+  }, [pendingFiles]);
 
   const isBusy = submitPhase === "saving" || submitPhase === "uploading";
   const submitLabel = getSubmitLabel(submitPhase);
@@ -150,7 +153,25 @@ export default function EventFormPage({
     };
   }, []);
 
-  useEffect(() => {
+  // Carga el formulario cada vez que cambia lo que se va a editar o crear. Se
+  // hace durante el render (patron de React para ajustar estado cuando cambian
+  // las props), comparando exactamente lo mismo que antes miraba el efecto.
+  const [cargadoCon, setCargadoCon] = useState<{
+    editingEvent: typeof editingEvent;
+    isEdit: boolean;
+    selectedDate: typeof selectedDate;
+    initialKind: typeof initialKind;
+    codigoInicial: number | undefined;
+  } | null>(null);
+  const hayQueCargar =
+    !cargadoCon ||
+    cargadoCon.editingEvent !== editingEvent ||
+    cargadoCon.isEdit !== isEdit ||
+    cargadoCon.selectedDate !== selectedDate ||
+    cargadoCon.initialKind !== initialKind ||
+    cargadoCon.codigoInicial !== initialClient?.code;
+  if (hayQueCargar) {
+    setCargadoCon({ editingEvent, isEdit, selectedDate, initialKind, codigoInicial: initialClient?.code });
     const formatDate = (date: Date) => {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -221,7 +242,7 @@ export default function EventFormPage({
     setSuccessMessage(null);
     setWarningMessage(null);
     setError(null);
-  }, [editingEvent, isEdit, selectedDate, initialKind, initialClient?.code]);
+  }
 
   const handleAddFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -796,9 +817,12 @@ function ClientPicker({
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Al elegir otra persona, el buscador muestra su nombre (ajuste durante el render).
+  const [codigoMostrado, setCodigoMostrado] = useState(value?.code);
+  if (codigoMostrado !== value?.code) {
+    setCodigoMostrado(value?.code);
     setQuery(value?.name || "");
-  }, [value?.code]);
+  }
 
   const q = normalizeText(query);
   // Búsqueda por palabras sueltas: "adriana acevedo" encuentra "Adriana Paola Acevedo".

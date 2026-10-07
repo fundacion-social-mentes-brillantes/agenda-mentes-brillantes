@@ -42,39 +42,46 @@ function AppContent() {
   } = useWorkspaces(user);
 
   // Filtro multi-agenda (estilo TimeTree): qué agendas se ven a la vez.
-  const [visibleWorkspaceIds, setVisibleWorkspaceIds] = useState<string[]>([]);
+  // Se guarda solo lo que la persona eligió (null = aún nada en esta sesión) y lo
+  // visible se deriva de eso y de las agendas que existen: sin efectos que
+  // copien estado, y una agenda borrada nunca queda "visible".
+  const [elegidas, setElegidas] = useState<string[] | null>(null);
+  const visibleWorkspaceIds = useMemo(() => {
+    if (!user || workspaces.length === 0) return elegidas ?? [];
+    const existe = (id: string) => workspaces.some((w) => w.id === id);
+    const validas = (elegidas ?? []).filter(existe);
+    if (validas.length) return validas;
+    try {
+      const guardadas = JSON.parse(localStorage.getItem(`visibleWorkspaces_${user.uid}`) || "[]");
+      const ok = Array.isArray(guardadas) ? guardadas.filter((id: unknown) => typeof id === "string" && existe(id)) : [];
+      if (ok.length) return ok as string[];
+    } catch {
+      /* preferencia ilegible: se ignora */
+    }
+    return workspaces.map((w) => w.id); // por defecto: todas visibles
+  }, [user, workspaces, elegidas]);
+
+  // Lo visible en el ultimo render, para callbacks asincronos (unirse a una agenda).
+  const visiblesRef = useRef<string[]>([]);
   useEffect(() => {
-    if (!user || workspaces.length === 0) return;
-    setVisibleWorkspaceIds((prev) => {
-      const valid = prev.filter((id) => workspaces.some((w) => w.id === id));
-      if (valid.length) return valid;
-      try {
-        const stored = JSON.parse(localStorage.getItem(`visibleWorkspaces_${user.uid}`) || "[]");
-        const ok = Array.isArray(stored) ? stored.filter((id: string) => workspaces.some((w) => w.id === id)) : [];
-        if (ok.length) return ok;
-      } catch {
-        /* ignore */
-      }
-      return workspaces.map((w) => w.id); // por defecto: todas visibles
-    });
-  }, [user, workspaces]);
+    visiblesRef.current = visibleWorkspaceIds;
+  }, [visibleWorkspaceIds]);
 
   const toggleWorkspace = useCallback(
     (id: string) => {
-      setVisibleWorkspaceIds((prev) => {
-        const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-        const final = next.length ? next : prev; // nunca dejar cero agendas visibles
-        if (user) {
-          try {
-            localStorage.setItem(`visibleWorkspaces_${user.uid}`, JSON.stringify(final));
-          } catch {
-            /* ignore */
-          }
+      const prev = visibleWorkspaceIds;
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      const final = next.length ? next : prev; // nunca dejar cero agendas visibles
+      if (user) {
+        try {
+          localStorage.setItem(`visibleWorkspaces_${user.uid}`, JSON.stringify(final));
+        } catch {
+          /* sin almacenamiento: la eleccion vale solo en esta sesion */
         }
-        return final;
-      });
+      }
+      setElegidas(final);
     },
-    [user]
+    [user, visibleWorkspaceIds]
   );
 
   // Agenda del EQUIPO (primera compartida): para sesiones coach y el asistente.
@@ -138,7 +145,10 @@ function AppContent() {
       try {
         const ws = await workspaceService.joinWorkspace(user, wsId, code);
         setActiveWorkspaceId(ws.id);
-        setVisibleWorkspaceIds((p) => (p.includes(ws.id) ? p : [...p, ws.id]));
+        setElegidas((p) => {
+          const base = p ?? visiblesRef.current;
+          return base.includes(ws.id) ? base : [...base, ws.id];
+        });
         setActivePage("dashboard");
         setInviteNotice(`Te uniste a la agenda "${ws.name}".`);
         // Limpiamos la URL solo si funcionó (así, si falla, recargar reintenta).

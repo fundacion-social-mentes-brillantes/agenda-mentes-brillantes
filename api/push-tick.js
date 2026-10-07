@@ -42,6 +42,7 @@ const MAX_CLAVES = 400; // avisos recordados en la ficha de control (es comparti
 const HORAS_MEMORIA = 2; // se olvidan los recordatorios de hace más de 2 horas.
 const MAX_DETALLE = 40; // líneas de explicación que se devuelven como mucho.
 const MAX_EVENTOS = 2000; // tope de seguridad al leer la agenda.
+const DIAS_SERIES = 120; // hacia atrás, para reconocer cada serie y sus días.
 
 // ------------------------------------------------------------------
 // Utilidades pequeñas
@@ -184,7 +185,7 @@ async function leerEventosEnVentana(fs, desde, hasta) {
     }
   };
 
-  let documentos = [];
+  let documentos;
   try {
     documentos = await fs.runQuery({
       from: [{ collectionId: "events" }],
@@ -304,18 +305,45 @@ function horaBogotaPartes(fecha) {
 async function extenderSeries(fs, uid, ahora, anotar) {
   // Consulta propia: aquí hacen falta más datos que en los avisos (color, duración,
   // modalidad y el nombre de la serie), así que no se reutiliza leerEventosEnVentana.
-  let documentos = [];
+  //
+  // Solo los últimos DIAS_SERIES días y lo futuro: es lo que se necesita para ver
+  // qué series siguen vivas, en qué días caen y hasta dónde llegan. Antes se leía
+  // TODA la agenda con un tope de MAX_EVENTOS en orden cualquiera; al pasar ese
+  // número (crece ~100 eventos al mes) algunas series habrían dejado de alargarse
+  // sin aviso.
+  const desdeSeries = new Date(ahora.getTime() - DIAS_SERIES * 86400000);
+  const porAgenda = { fieldFilter: { field: { fieldPath: "workspaceId" }, op: "EQUAL", value: { stringValue: WORKSPACE_ID } } };
+  let documentos;
   try {
     documentos = await fs.runQuery({
       from: [{ collectionId: "events" }],
       where: {
-        fieldFilter: { field: { fieldPath: "workspaceId" }, op: "EQUAL", value: { stringValue: WORKSPACE_ID } }
+        compositeFilter: {
+          op: "AND",
+          filters: [
+            porAgenda,
+            {
+              fieldFilter: {
+                field: { fieldPath: "startAt" },
+                op: "GREATER_THAN_OR_EQUAL",
+                value: { timestampValue: desdeSeries.toISOString() }
+              }
+            }
+          ]
+        }
       },
+      orderBy: [{ field: { fieldPath: "startAt" }, direction: "ASCENDING" }],
       limit: MAX_EVENTOS
     });
   } catch (error) {
-    console.warn("[push-tick] no se pudieron leer las series:", String(error?.message || "").slice(0, 120));
-    return;
+    // Sin el indice compuesto, la consulta de antes (toda la agenda) sigue sirviendo.
+    console.warn("[push-tick] consulta de series por fecha no disponible:", String(error?.message || "").slice(0, 120));
+    try {
+      documentos = await fs.runQuery({ from: [{ collectionId: "events" }], where: porAgenda, limit: MAX_EVENTOS });
+    } catch (segundo) {
+      console.warn("[push-tick] no se pudieron leer las series:", String(segundo?.message || "").slice(0, 120));
+      return;
+    }
   }
 
   const grupos = new Map();

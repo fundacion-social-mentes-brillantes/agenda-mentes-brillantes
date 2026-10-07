@@ -10,7 +10,8 @@ import {
   setDoc,
   updateDoc,
   where,
-  writeBatch
+  writeBatch,
+  type DocumentData
 } from "firebase/firestore";
 import { TimeoutError, withTimeout } from "../lib/asyncUtils";
 import { toDateSafe } from "../lib/dateUtils";
@@ -130,7 +131,7 @@ function normalizeAttachments(value: unknown): EventAttachment[] {
 }
 
 /** Convierte un documento de Firestore (incluyendo eventos antiguos) al modelo actual. */
-function mapDocToEvent(id: string, data: Record<string, any>): CalendarEvent {
+function mapDocToEvent(id: string, data: DocumentData): CalendarEvent {
   const now = new Date();
   const startAt = toDateSafe(data.startAt, now);
   const endAt = toDateSafe(data.endAt, startAt);
@@ -363,7 +364,7 @@ export const eventsService = {
       if (error instanceof TimeoutError || isOfflineLikeError(error)) {
         return { id: docRef.id, syncWarning: PENDING_SYNC_MESSAGE };
       }
-      throw new Error(getEventErrorMessage(error));
+      throw new Error(getEventErrorMessage(error), { cause: error });
     }
   },
 
@@ -384,7 +385,7 @@ export const eventsService = {
       if (error instanceof TimeoutError || isOfflineLikeError(error)) {
         return;
       }
-      throw new Error(getEventErrorMessage(error));
+      throw new Error(getEventErrorMessage(error), { cause: error });
     }
   },
 
@@ -400,7 +401,7 @@ export const eventsService = {
       if (error instanceof TimeoutError || isOfflineLikeError(error)) {
         return;
       }
-      throw new Error(getEventErrorMessage(error));
+      throw new Error(getEventErrorMessage(error), { cause: error });
     }
   },
 
@@ -416,7 +417,7 @@ export const eventsService = {
       if (error instanceof TimeoutError || isOfflineLikeError(error)) {
         return;
       }
-      throw new Error(getEventErrorMessage(error));
+      throw new Error(getEventErrorMessage(error), { cause: error });
     }
   },
 

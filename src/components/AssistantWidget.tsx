@@ -19,6 +19,57 @@ interface UiMessage {
 // ("flash" o "pro"); él decide qué modelo usar de verdad.
 type ModeloBot = "flash" | "pro";
 
+/** Un mensaje de la conversacion con el modelo (formato de la API de chat). */
+interface MensajeIA {
+  role: "user" | "assistant" | "tool" | "system";
+  content?: string | null;
+  tool_calls?: Array<{ id: string; type?: string; function?: { name?: string; arguments?: string } }>;
+  tool_call_id?: string;
+  reasoning_content?: string | null;
+}
+
+/** Lo que el modelo puede mandar al pedir una accion; todo opcional. */
+interface ArgumentosHerramienta {
+  id?: string;
+  title?: string;
+  name?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  color?: string;
+  modality?: string;
+  reminderMinutes?: number;
+  totalAmount?: number;
+  paidAmount?: number;
+  clientCode?: number;
+  clientName?: string;
+}
+
+const CAMPOS_TEXTO = ["id", "title", "name", "date", "startTime", "endTime", "color", "modality", "clientName"] as const;
+const CAMPOS_NUMERO = ["reminderMinutes", "totalAmount", "paidAmount", "clientCode"] as const;
+
+/**
+ * Los argumentos llegan como JSON escrito por el modelo: se queda solo con los
+ * campos conocidos y del tipo correcto. Un "startTime": 9 o un "allDay": "si"
+ * se descartan en vez de romper la fecha del evento.
+ */
+function leerArgumentos(crudo: unknown): ArgumentosHerramienta {
+  const fuente = crudo && typeof crudo === "object" ? (crudo as Record<string, unknown>) : {};
+  const salida: ArgumentosHerramienta = {};
+  for (const campo of CAMPOS_TEXTO) {
+    const valor = fuente[campo];
+    if (typeof valor === "string") salida[campo] = valor;
+    else if (typeof valor === "number" && campo === "id") salida.id = String(valor);
+  }
+  for (const campo of CAMPOS_NUMERO) {
+    const valor = fuente[campo];
+    if (typeof valor === "number" && Number.isFinite(valor)) salida[campo] = valor;
+  }
+  if (typeof fuente.allDay === "boolean") salida.allDay = fuente.allDay;
+  return salida;
+}
+
 // Dónde se recuerda la elección en este navegador.
 const CLAVE_MODELO = "asistenteModelo";
 
@@ -83,7 +134,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("Pensando...");
   const [modelo, setModelo] = useState<ModeloBot>(leerModeloGuardado);
-  const convoRef = useRef<any[]>([]);
+  const convoRef = useRef<MensajeIA[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Caché de eventos creados/duplicados en ESTE turno: permite mover/duplicar/borrar
   // algo recién creado, aunque el listener de Firestore todavía no haya refrescado "events".
@@ -91,8 +142,8 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
   // Caché de personas creadas este turno (para agendar coach justo después de crearlas).
   const localClientsRef = useRef<Client[]>([]);
 
-  const findEvent = (id: string): CalendarEvent | undefined =>
-    events.find((e) => e.id === id) || localCacheRef.current.find((e) => e.id === id);
+  const findEvent = (id: string | undefined): CalendarEvent | undefined =>
+    id ? events.find((e) => e.id === id) || localCacheRef.current.find((e) => e.id === id) : undefined;
 
   const findClient = (codeOrName: { code?: number; name?: string }): Client | undefined => {
     const all = [...clients, ...localClientsRef.current];
@@ -121,7 +172,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
     }
   };
 
-  async function execTool(name: string, args: any): Promise<string> {
+  async function execTool(name: string, args: ArgumentosHerramienta): Promise<string> {
     try {
       if (name === "create_event") {
         if (!workspaceId) return "No hay agenda seleccionada.";
@@ -280,8 +331,8 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
       }
 
       return "Herramienta desconocida.";
-    } catch (e: any) {
-      return "No se pudo ejecutar la acción: " + (e?.message || "error");
+    } catch (e) {
+      return "No se pudo ejecutar la acción: " + (e instanceof Error && e.message ? e.message : "error");
     }
   }
 
@@ -325,7 +376,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
           break;
         }
 
-        const message = data.message || { role: "assistant", content: "No pude generar una respuesta." };
+        const message: MensajeIA = data.message || { role: "assistant", content: "No pude generar una respuesta." };
         convoRef.current.push(message);
 
         const toolCalls = message.tool_calls || [];
@@ -347,9 +398,9 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
                           ? "Eliminando evento..."
                           : "Trabajando..."
             );
-            let parsed: any = {};
+            let parsed: ArgumentosHerramienta = {};
             try {
-              parsed = JSON.parse(tc.function?.arguments || "{}");
+              parsed = leerArgumentos(JSON.parse(tc.function?.arguments || "{}"));
             } catch {
               parsed = {};
             }

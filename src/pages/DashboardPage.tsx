@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { CalendarDays, HeartHandshake, Plus, Sparkles, UserRound } from "lucide-react";
 import { Card } from "../components/ui/Card";
@@ -29,19 +29,17 @@ export default function DashboardPage({
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [filter, setFilter] = useState<"all" | "coach">("all");
   const now = new Date();
-  const todayStart = startOfDay(now);
-  const todayEnd = endOfDay(now);
+  const desdeHoy = startOfDay(now).getTime();
+  const hastaHoy = endOfDay(now).getTime();
 
-  const todayEvents = useMemo(
-    () =>
-      events
-        .filter((event) => {
-          const start = toDate(event.startAt);
-          return start >= todayStart && start <= todayEnd;
-        })
-        .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime()),
-    [events, todayEnd, todayStart]
-  );
+  // Calculo directo: son los eventos de un solo dia y la "memoria" que tenia no
+  // servia (dependia de fechas nuevas en cada render).
+  const todayEvents = events
+    .filter((event) => {
+      const start = toDate(event.startAt).getTime();
+      return start >= desdeHoy && start <= hastaHoy;
+    })
+    .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime());
 
   const shownEvents = filter === "coach" ? todayEvents.filter((e) => e.kind === "coach") : todayEvents;
 

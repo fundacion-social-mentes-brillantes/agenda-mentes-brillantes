@@ -169,13 +169,12 @@ function WorkspaceCard({
   const isShared = workspace.kind === "shared";
 
   useEffect(() => {
-    if (!isShared) {
-      setMembers([]);
-      return;
-    }
+    if (!isShared) return;
     const unsub = workspaceService.subscribeToMembers(workspace.id, setMembers);
     return () => unsub();
   }, [workspace.id, isShared]);
+  // Una agenda personal no tiene miembros que mostrar.
+  const miembrosVisibles = isShared ? members : [];
 
   const inviteLink = buildInviteLink(workspace);
 
@@ -307,9 +306,9 @@ function WorkspaceCard({
           </div>
 
           <div>
-            <p className="section-label mb-2">Personas ({members.length})</p>
+            <p className="section-label mb-2">Personas ({miembrosVisibles.length})</p>
             <div className="space-y-2">
-              {members.map((member) => (
+              {miembrosVisibles.map((member) => (
                 <div key={member.uid} className="flex items-center gap-3 rounded-2xl border border-app-soft bg-app-panel p-2.5">
                   {member.photoURL ? (
                     <img src={member.photoURL} alt={member.name} referrerPolicy="no-referrer" className="h-9 w-9 rounded-full object-cover" />

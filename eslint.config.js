@@ -18,6 +18,27 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Variables a proposito sin usar: se marcan con _ adelante.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
+  },
+  {
+    // Funciones de servidor (Vercel y Azure): corren en Node y antes no se
+    // revisaban, aunque son las que manejan secretos y el puente con el ERP.
+    files: ['api/**/*.js', 'azure/src/**/*.js'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'module',
+      globals: globals.node,
+    },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
+    },
   },
   {
     // El receptor de avisos push corre DENTRO del service worker (con la app cerrada),
