@@ -39,6 +39,7 @@ Todas deben empezar por `VITE_`.
 ```bash
 npm run lint    # app, funciones de servidor (api/) y Azure
 npm test        # pruebas (Vitest): seguridad de api/ y hooks de la app
+npm run test:reglas  # reglas de Firestore en el emulador (requiere Java y firebase-tools)
 npm run build   # tipos + PWA
 ```
 

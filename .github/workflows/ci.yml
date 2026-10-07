@@ -34,6 +34,17 @@ jobs:
       - name: Pruebas
         run: npm test
 
+      - name: Java para el emulador de Firestore
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Reglas de seguridad de Firestore (en el emulador, nunca en la base real)
+        run: |
+          npm install -g firebase-tools@15
+          npm run test:reglas
+
       - name: Auditoria de dependencias
         run: npm audit --audit-level=high
 

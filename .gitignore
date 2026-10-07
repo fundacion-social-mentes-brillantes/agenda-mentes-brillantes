@@ -38,3 +38,7 @@ firebase-adminsdk*.json
 *.sw?
 .vercel
 .env*
+
+# Registros del emulador de Firebase
+firestore-debug.log
+ui-debug.log
