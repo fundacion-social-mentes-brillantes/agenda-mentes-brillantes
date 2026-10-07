@@ -5,7 +5,7 @@
     { "source": "/.well-known/oauth-authorization-server", "destination": "/api/oauth/authorization-server" },
     { "source": "/.well-known/openid-configuration", "destination": "/api/oauth/authorization-server" },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|assets/).*)",
       "destination": "/index.html"
     }
   ],

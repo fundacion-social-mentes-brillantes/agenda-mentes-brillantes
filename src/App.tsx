@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
 import { useEvents } from "./hooks/useEvents";
@@ -15,18 +15,19 @@ import { AssistantWidget } from "./components/AssistantWidget";
 // Páginas que solo se ven tras navegar: se cargan aparte (carga diferida)
 // para que el arranque en celular sea liviano. Calendario (página inicial)
 // y Login van en el paquete principal.
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const CoachPage = lazy(() => import("./pages/CoachPage"));
-const DayPage = lazy(() => import("./pages/DayPage"));
-const EventFormPage = lazy(() => import("./pages/EventFormPage"));
-const SettingsPage = lazy(() => import("./pages/SettingsPage"));
-const WorkspacePage = lazy(() => import("./pages/WorkspacePage"));
+const DashboardPage = paginaPerezosa(() => import("./pages/DashboardPage"));
+const CoachPage = paginaPerezosa(() => import("./pages/CoachPage"));
+const DayPage = paginaPerezosa(() => import("./pages/DayPage"));
+const EventFormPage = paginaPerezosa(() => import("./pages/EventFormPage"));
+const SettingsPage = paginaPerezosa(() => import("./pages/SettingsPage"));
+const WorkspacePage = paginaPerezosa(() => import("./pages/WorkspacePage"));
 import type { CalendarEvent, EventKind } from "./types/event";
 import { toDate } from "./lib/dateUtils";
 import { Spinner } from "./components/ui/Spinner";
 import { authService } from "./services/authService";
 import { workspaceService } from "./services/workspaceService";
 import { AGENDA_AVISOS, sincronizarPush } from "./lib/push";
+import { paginaPerezosa } from "./lib/paginaPerezosa";
 import type { AppTheme } from "./types/theme";
 
 function AppContent() {
