@@ -470,7 +470,9 @@ function EstadoContable({
     );
   }
 
-  const deuda = estado.deuda_total ?? 0;
+  // Sin dato no es "debe $0": si el ERP no alcanzo a leer la deuda, se dice asi
+  // (antes salia $0 en verde, como si la persona estuviera al dia).
+  const deuda = estado.deuda_total;
   const saldo = estado.saldo_a_favor ?? 0;
   const coach = estado.coach;
 
@@ -486,8 +488,8 @@ function EstadoContable({
       <div className="flex flex-wrap gap-2">
         <DatoErp
           etiqueta="Debe"
-          valor={formatearPesos(deuda)}
-          tono={deuda > 0 ? "deuda" : "ok"}
+          valor={deuda == null ? "sin dato" : formatearPesos(deuda)}
+          tono={deuda == null ? "neutro" : deuda > 0 ? "deuda" : "ok"}
         />
         {saldo > 0 && <DatoErp etiqueta="Saldo a favor" valor={formatearPesos(saldo)} tono="ok" />}
         {estado.cuentas_pendientes ? (

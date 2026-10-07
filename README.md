@@ -34,6 +34,27 @@ npm run dev
 Crea un `.env.local` con las variables de Firebase (usa [.env.example](.env.example) como plantilla).
 Todas deben empezar por `VITE_`.
 
+## Calidad: antes de publicar
+
+```bash
+npm run lint    # app, funciones de servidor (api/) y Azure
+npm test        # pruebas (Vitest): seguridad de api/ y hooks de la app
+npm run build   # tipos + PWA
+```
+
+GitHub Actions corre lo mismo en cada cambio ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
+Las pruebas no se suben a Vercel (`.vercelignore`): el plan admite 12 funciones en `api/` y ya
+están todas en uso.
+
+## Seguridad (servidor)
+
+- El puente con el ERP y el asistente son **solo para el equipo**: miembros de una agenda cuyo
+  dueño sea una cuenta de la fundación (`AGENDA_EQUIPO_DUENOS`). Crear una agenda propia no basta.
+- Pasar una sesión al ERP exige que el evento exista en la agenda del equipo y coincida en
+  persona y fecha.
+- El conector MCP usa OAuth con PKCE obligatorio y solo devuelve el código a Claude, ChatGPT o
+  al propio computador.
+
 ## Build de producción
 
 ```bash
