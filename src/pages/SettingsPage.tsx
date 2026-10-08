@@ -2,21 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff, LogOut, Smartphone, UserRound, Users } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { useTheme } from "../hooks/useTheme";
+import { TemaVisual } from "../components/TemaVisual";
 import { authService } from "../services/authService";
 import { activarPush, desactivarPush, estadoPush, guardarPreferencias, leerPreferencias, pushSoportado } from "../lib/push";
-import type { AppTheme } from "../types/theme";
 import type { UserProfile } from "../types/user";
 
 interface SettingsPageProps {
   profile: UserProfile;
   /** Agenda del equipo: ahí se guarda la suscripción de avisos de cada persona. */
   notifyWorkspaceId: string | null;
-  onThemeChange: (theme: AppTheme) => Promise<void>;
   onGoToWorkspaces: () => void;
 }
 
-export default function SettingsPage({ profile, notifyWorkspaceId, onThemeChange, onGoToWorkspaces }: SettingsPageProps) {
-  const { theme } = useTheme();
+export default function SettingsPage({ profile, notifyWorkspaceId, onGoToWorkspaces }: SettingsPageProps) {
+  const { isLight } = useTheme();
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
@@ -27,7 +26,7 @@ export default function SettingsPage({ profile, notifyWorkspaceId, onThemeChange
       </div>
 
       <Card className="flex items-center justify-center">
-        <img src={theme === "pink" ? "/brand/logo-gemb-blue-small.jpeg" : "/brand/logo-gemb-gold-small.jpeg"} alt="Gimnasio Emocional Mentes Brillantes" className="max-h-28 w-full object-contain" />
+        <img src={isLight ? "/brand/logo-gemb-blue-small.jpeg" : "/brand/logo-gemb-gold-small.jpeg"} alt="Gimnasio Emocional Mentes Brillantes" className="max-h-28 w-full object-contain" />
       </Card>
 
       <Card className="flex flex-col gap-5">
@@ -48,16 +47,7 @@ export default function SettingsPage({ profile, notifyWorkspaceId, onThemeChange
         </div>
       </Card>
 
-      <Card className="space-y-4">
-        <div>
-          <h3 className="m-0 text-lg font-black text-app-strong">Tema visual</h3>
-          <p className="mt-1 text-sm text-app-muted">Elige como quieres ver la agenda en este dispositivo.</p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ThemeChoice active={theme === "dark"} title="Noche Dorada" description="Azul noche, negro suave y detalles dorados." onClick={() => onThemeChange("dark")} />
-          <ThemeChoice active={theme === "pink"} title="Pink Brillante" description="Rosa suave, lavanda y acentos elegantes." onClick={() => onThemeChange("pink")} />
-        </div>
-      </Card>
+      <TemaVisual />
 
       <Card className="space-y-3">
         <div className="flex items-center gap-2">
@@ -294,15 +284,3 @@ function Interruptor({
   );
 }
 
-function ThemeChoice({ active, title, description, onClick }: { active: boolean; title: string; description: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-3xl border p-4 text-left transition ${active ? "border-app-strong bg-app-soft" : "border-app-soft bg-app-panel hover:bg-app-soft"}`}
-    >
-      <p className="m-0 text-sm font-black text-app-strong">{title}</p>
-      <p className="m-0 mt-1 text-xs leading-relaxed text-app-muted">{description}</p>
-    </button>
-  );
-}

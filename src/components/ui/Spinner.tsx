@@ -3,7 +3,7 @@ interface SpinnerProps {
   color?: string;
 }
 
-export function Spinner({ className = "w-6 h-6", color = "text-violet-600 dark:text-violet-400" }: SpinnerProps) {
+export function Spinner({ className = "w-6 h-6", color = "text-app-accent" }: SpinnerProps) {
   return (
     <svg
       className={`animate-spin ${className} ${color}`}

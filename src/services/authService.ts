@@ -15,7 +15,8 @@ import {
   setDoc
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
-import type { AppTheme } from "../types/theme";
+import type { AppTheme, CustomTheme } from "../types/theme";
+import { leerTema } from "../lib/tema";
 import type { UserProfile, UserRole } from "../types/user";
 
 export const PROFILE_SYNC_WARNING = "Ingresaste, pero no pudimos sincronizar tu perfil todavía.";
@@ -182,8 +183,13 @@ export const authService = {
 
   createFallbackProfile(user: FirebaseUser): UserProfile {
     const fallbackName = user.displayName || user.email?.split("@")[0] || "Usuario";
-    const savedTheme = typeof localStorage !== "undefined" ? localStorage.getItem("theme") : null;
-    const theme = savedTheme === "pink" || savedTheme === "dark" ? savedTheme : undefined;
+    let savedTheme: string | null = null;
+    try {
+      savedTheme = localStorage.getItem("theme");
+    } catch {
+      // Sin almacenamiento: el perfil arranca sin tema y se usa el de siempre.
+    }
+    const theme = leerTema(savedTheme) ?? undefined;
 
     return {
       uid: user.uid,
@@ -248,11 +254,12 @@ export const authService = {
     }
   },
 
-  async updateUserTheme(uid: string, theme: AppTheme): Promise<void> {
+  async updateUserTheme(uid: string, theme: AppTheme, customTheme?: CustomTheme): Promise<void> {
     await setDoc(
       doc(db, "users", uid),
       {
         theme,
+        ...(customTheme ? { customTheme } : {}),
         updatedAt: serverTimestamp()
       },
       { merge: true }

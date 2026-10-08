@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
-import { ThemeProvider, useTheme } from "./hooks/useTheme";
+import { ThemeProvider } from "./hooks/useTheme";
 import { useEvents } from "./hooks/useEvents";
 import { useReporteErp } from "./hooks/useReporteErp";
 import { useWorkspaces } from "./hooks/useWorkspaces";
@@ -28,11 +28,9 @@ import { authService } from "./services/authService";
 import { workspaceService } from "./services/workspaceService";
 import { AGENDA_AVISOS, sincronizarPush } from "./lib/push";
 import { paginaPerezosa } from "./lib/paginaPerezosa";
-import type { AppTheme } from "./types/theme";
 
 function AppContent() {
-  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
-  const { setTheme } = useTheme();
+  const { user, profile, loading: authLoading } = useAuth();
   const {
     workspaces,
     activeWorkspace,
@@ -242,18 +240,6 @@ function AppContent() {
     }
   };
 
-  const handleThemeChange = async (theme: AppTheme) => {
-    setTheme(theme);
-    if (profile?.uid) {
-      try {
-        await authService.updateUserTheme(profile.uid, theme);
-        await refreshProfile();
-      } catch (error) {
-        console.error("Error saving theme preference:", error);
-      }
-    }
-  };
-
   if (authLoading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-app text-app-strong">
@@ -385,7 +371,6 @@ function AppContent() {
           <SettingsPage
             profile={profile}
             notifyWorkspaceId={puedeRecibirAvisos ? AGENDA_AVISOS : null}
-            onThemeChange={handleThemeChange}
             onGoToWorkspaces={() => handlePageChange("workspaces")}
           />
         );

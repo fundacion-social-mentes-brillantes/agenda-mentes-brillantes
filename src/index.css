@@ -10,44 +10,62 @@
   --color-event-foundation: #ec4899;
 }
 
+/* ============================================================
+   TEMAS
+   Todo el color sale de estas variables. Hay dos bases:
+   - oscura (data-base="dark"): Noche Dorada, el azul y el dorado del logo;
+   - clara (data-base="light"): Rosa pastel, blanco con rosado suave.
+   El tema "Personalizado" usa una de las dos bases y pone encima sus
+   propias variables (las calcula src/lib/tema.ts y las aplica ThemeProvider).
+   Las reglas de más abajo SOLO usan variables: así un color nuevo se ve
+   bien en toda la app sin tocar nada más.
+   ============================================================ */
 :root {
   color-scheme: dark;
-  --app-bg: #060913;
-  --app-bg-soft: #0d1324;
-  --app-panel: rgba(14, 20, 37, 0.78);
-  --app-panel-solid: #111827;
+  --app-bg: #0a1026;
+  --app-bg-soft: #111a3d;
+  --app-panel: rgba(19, 27, 59, 0.82);
+  --app-panel-solid: #131b3b;
+  --app-panel-gradient: linear-gradient(158deg, rgba(33, 44, 92, 0.82) 0%, rgba(13, 19, 45, 0.88) 100%);
   --app-soft: rgba(255, 255, 255, 0.06);
-  --app-border: rgba(226, 196, 120, 0.18);
-  --app-border-strong: rgba(226, 196, 120, 0.36);
+  --app-border: rgba(226, 196, 120, 0.2);
+  --app-border-strong: rgba(226, 196, 120, 0.38);
   --app-strong: #fff7e6;
-  --app-muted: #b8c0d4;
-  --app-faint: #748096;
+  --app-muted: #b9c1d8;
+  --app-faint: #7f89a3;
   --app-accent: #d7b46a;
   --app-accent-strong: #f4d992;
   --app-accent-gradient: linear-gradient(135deg, #b8934a 0%, #d7b46a 45%, #f6e0a0 100%);
   --app-on-accent: #0c1020;
   --app-danger: #ef4444;
-  --app-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  --app-glow: rgba(215, 180, 106, 0.18);
+  --app-glow-2: rgba(72, 94, 196, 0.2);
+  --app-shadow: 0 26px 80px rgba(0, 0, 0, 0.5);
+  --app-backdrop: rgba(3, 6, 18, 0.6);
 }
 
-html.theme-pink {
+html[data-base="light"] {
   color-scheme: light;
-  --app-bg: #fff2ff;
-  --app-bg-soft: #ffa1ff;
-  --app-panel: rgba(255, 255, 255, 0.86);
+  --app-bg: #fff9fb;
+  --app-bg-soft: #fde9f0;
+  --app-panel: rgba(255, 255, 255, 0.9);
   --app-panel-solid: #ffffff;
-  --app-soft: rgba(232, 154, 194, 0.18);
-  --app-border: rgba(202, 126, 170, 0.24);
-  --app-border-strong: rgba(200, 58, 184, 0.4);
-  --app-strong: #362133;
-  --app-muted: #74566e;
-  --app-faint: #a9849b;
-  --app-accent: #c83ab8;
-  --app-accent-strong: #ff9ef2;
-  --app-accent-gradient: linear-gradient(135deg, #c83ab8, #ff9ef2);
-  --app-on-accent: #ffffff;
+  --app-panel-gradient: rgba(255, 255, 255, 0.9);
+  --app-soft: rgba(236, 132, 168, 0.11);
+  --app-border: rgba(222, 128, 162, 0.24);
+  --app-border-strong: rgba(194, 65, 110, 0.42);
+  --app-strong: #3f2534;
+  --app-muted: #7a5a6b;
+  --app-faint: #a4889a;
+  --app-accent: #c2416e;
+  --app-accent-strong: #f6b3c8;
+  --app-accent-gradient: linear-gradient(135deg, #f49ab9 0%, #f9c8d8 100%);
+  --app-on-accent: #4a1830;
   --app-danger: #dc2626;
-  --app-shadow: 0 24px 80px rgba(200, 58, 184, 0.16);
+  --app-glow: rgba(247, 168, 196, 0.42);
+  --app-glow-2: rgba(255, 214, 228, 0.7);
+  --app-shadow: 0 20px 60px rgba(214, 112, 150, 0.14);
+  --app-backdrop: rgba(74, 24, 48, 0.28);
 }
 
 *,
@@ -65,18 +83,13 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 50% -10%, rgba(215, 180, 106, 0.16), transparent 34rem),
-    linear-gradient(145deg, var(--app-bg), var(--app-bg-soft));
+    radial-gradient(120% 78% at 50% -12%, var(--app-glow), transparent 55%),
+    radial-gradient(90% 70% at 100% 108%, var(--app-glow-2), transparent 60%),
+    linear-gradient(160deg, var(--app-bg) 0%, var(--app-bg-soft) 100%);
   color: var(--app-strong);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: geometricPrecision;
-}
-
-.theme-pink body {
-  background:
-    radial-gradient(circle at 74% 26%, rgba(255, 255, 255, 0.95), transparent 40rem),
-    linear-gradient(155deg, #ffa1ff 0%, #fff2ff 50%, #ffb2f6 100%);
 }
 
 button,
@@ -101,27 +114,24 @@ img {
 .app-shell {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 18rem),
-    var(--app-bg);
+    radial-gradient(120% 66% at 50% -10%, var(--app-glow), transparent 55%),
+    radial-gradient(90% 70% at 100% 108%, var(--app-glow-2), transparent 60%),
+    linear-gradient(160deg, var(--app-bg) 0%, var(--app-bg-soft) 100%);
 }
 
-.theme-pink .app-shell {
-  background:
-    radial-gradient(circle at 74% 22%, rgba(255, 255, 255, 0.92), transparent 42rem),
-    linear-gradient(155deg, #ffa1ff 0%, #fff2ff 52%, #ffb2f6 100%);
-}
-
+/* Tarjetas y paneles: en la base oscura llevan un degradado sutil con brillo arriba. */
 .glass-panel {
-  background: var(--app-panel);
+  background: var(--app-panel-gradient);
   border: 1px solid var(--app-border);
   box-shadow: var(--app-shadow);
   backdrop-filter: blur(22px);
 }
 
-.theme-pink .glass-panel {
-  background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(202, 126, 170, 0.24);
-  box-shadow: 0 24px 80px rgba(190, 98, 150, 0.16);
+html[data-base="dark"] .glass-panel {
+  border-color: var(--app-border-strong);
+  box-shadow:
+    var(--app-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .bg-app {
@@ -130,6 +140,10 @@ img {
 
 .bg-app-panel {
   background: var(--app-panel);
+}
+
+html[data-base="dark"] .bg-app-panel {
+  background: var(--app-panel-gradient);
 }
 
 .bg-app-solid {
@@ -164,6 +178,10 @@ img {
   color: var(--app-accent);
 }
 
+.text-on-accent {
+  color: var(--app-on-accent);
+}
+
 .bg-app-accent {
   background: var(--app-accent);
 }
@@ -176,138 +194,148 @@ img {
   border-color: var(--app-accent);
 }
 
-/* Degradado del acento (dorado en tema oscuro, rosa en tema rosa) con su color de texto. */
-.accent-gradient {
-  background: var(--app-accent-gradient);
-  color: var(--app-on-accent);
+/* Fondo detrás de las ventanas emergentes. */
+.app-backdrop {
+  background: var(--app-backdrop);
 }
 
-/* Botón flotante "+": mismo degradado, sin borde, con un aro que late muy sutil. */
-.fab-create {
-  background: var(--app-accent-gradient);
-  color: var(--app-on-accent);
-  animation: fabPulse 2.6s ease-in-out infinite;
-}
-
-@keyframes fabPulse {
-  0% {
-    box-shadow:
-      0 8px 22px color-mix(in srgb, var(--app-accent) 42%, transparent),
-      0 0 0 0 color-mix(in srgb, var(--app-accent) 42%, transparent);
+/* Componentes (botones, campos, degradados). Van en la capa "components" para
+   que las clases de Tailwind que se les pongan al lado (rounded-full, p-0, h-10,
+   px-3...) SÍ les ganen. Antes estaban fuera de capa y las ignoraban: por eso el
+   botón redondo del asistente salía cuadrado y con el ícono diminuto. */
+@layer components {
+  /* Degradado del acento (dorado, rosa o el color propio) con su color de texto. */
+  .accent-gradient {
+    background: var(--app-accent-gradient);
+    color: var(--app-on-accent);
   }
-  70%,
-  100% {
-    box-shadow:
-      0 8px 22px color-mix(in srgb, var(--app-accent) 42%, transparent),
-      0 0 0 12px color-mix(in srgb, var(--app-accent) 0%, transparent);
-  }
-}
 
-@media (prefers-reduced-motion: reduce) {
+  /* Botón flotante "+": mismo degradado, sin borde, con un aro que late muy sutil. */
   .fab-create {
-    animation: none;
-    box-shadow: 0 8px 22px color-mix(in srgb, var(--app-accent) 42%, transparent);
+    background: var(--app-accent-gradient);
+    color: var(--app-on-accent);
+    animation: fabPulse 2.6s ease-in-out infinite;
   }
-}
 
-.btn-primary,
-.btn-secondary,
-.btn-danger,
-.btn-danger-soft {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  min-height: 2.75rem;
-  border-radius: 0.95rem;
-  padding: 0.7rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 800;
-  transition: transform 150ms ease, background 150ms ease, border-color 150ms ease, color 150ms ease;
-}
+  @keyframes fabPulse {
+    0% {
+      box-shadow:
+        0 8px 22px color-mix(in srgb, var(--app-accent) 42%, transparent),
+        0 0 0 0 color-mix(in srgb, var(--app-accent) 42%, transparent);
+    }
+    70%,
+    100% {
+      box-shadow:
+        0 8px 22px color-mix(in srgb, var(--app-accent) 42%, transparent),
+        0 0 0 12px color-mix(in srgb, var(--app-accent) 0%, transparent);
+    }
+  }
 
-.btn-primary {
-  border: 1px solid var(--app-accent);
-  background: linear-gradient(135deg, var(--app-accent), var(--app-accent-strong));
-  color: #0c1020;
-  box-shadow: 0 16px 40px rgba(215, 180, 106, 0.2);
-}
+  @media (prefers-reduced-motion: reduce) {
+    .fab-create {
+      animation: none;
+      box-shadow: 0 8px 22px color-mix(in srgb, var(--app-accent) 42%, transparent);
+    }
+  }
 
-.theme-pink .btn-primary {
-  border-color: rgba(200, 58, 184, 0.5);
-  background: linear-gradient(135deg, #c83ab8 0%, #ff9ef2 100%);
-  color: #ffffff;
-  text-shadow: 0 1px 2px rgba(120, 20, 90, 0.4);
-  box-shadow: 0 16px 40px rgba(200, 58, 184, 0.3);
-}
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .btn-danger-soft {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    border-radius: 0.95rem;
+    padding: 0.7rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 800;
+    transition: transform 150ms ease, background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  }
 
-.btn-secondary {
-  border: 1px solid var(--app-border);
-  background: var(--app-soft);
-  color: var(--app-muted);
-}
+  .btn-primary {
+    border: 1px solid color-mix(in srgb, var(--app-accent-strong) 65%, transparent);
+    background: var(--app-accent-gradient);
+    color: var(--app-on-accent);
+    box-shadow:
+      0 16px 40px color-mix(in srgb, var(--app-accent) 26%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
 
-.theme-pink .btn-secondary {
-  background: rgba(255, 255, 255, 0.64);
-  color: #74566e;
-}
+  .btn-primary:hover {
+    box-shadow:
+      0 20px 48px color-mix(in srgb, var(--app-accent) 34%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
 
-.btn-danger {
-  border: 1px solid var(--app-danger);
-  background: var(--app-danger);
-  color: #fff;
-}
+  .btn-secondary {
+    border: 1px solid var(--app-border);
+    background: var(--app-soft);
+    color: var(--app-muted);
+  }
 
-.btn-danger-soft {
-  border: 1px solid rgba(239, 68, 68, 0.22);
-  background: rgba(239, 68, 68, 0.09);
-  color: var(--app-danger);
-}
+  html[data-base="light"] .btn-secondary {
+    background: rgba(255, 255, 255, 0.7);
+  }
 
-.btn-primary:hover,
-.btn-secondary:hover,
-.btn-danger:hover,
-.btn-danger-soft:hover {
-  transform: translateY(-1px);
-}
+  .btn-danger {
+    border: 1px solid var(--app-danger);
+    background: var(--app-danger);
+    color: #fff;
+  }
 
-.input-field {
-  width: 100%;
-  border: 1px solid var(--app-border);
-  background: color-mix(in srgb, var(--app-panel-solid) 78%, transparent);
-  color: var(--app-strong);
-  border-radius: 0.95rem;
-  padding: 0.82rem 1rem;
-  outline: none;
-  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
-}
+  .btn-danger-soft {
+    border: 1px solid rgba(239, 68, 68, 0.22);
+    background: rgba(239, 68, 68, 0.09);
+    color: var(--app-danger);
+  }
 
-.theme-pink .input-field {
-  background: rgba(255, 255, 255, 0.76);
-}
+  .btn-primary:hover,
+  .btn-secondary:hover,
+  .btn-danger:hover,
+  .btn-danger-soft:hover {
+    transform: translateY(-1px);
+  }
 
-.input-field::placeholder {
-  color: var(--app-faint);
-}
+  .input-field {
+    width: 100%;
+    border: 1px solid var(--app-border);
+    background: color-mix(in srgb, var(--app-panel-solid) 78%, transparent);
+    color: var(--app-strong);
+    border-radius: 0.95rem;
+    padding: 0.82rem 1rem;
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  }
 
-.input-field:focus {
-  border-color: var(--app-accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent) 18%, transparent);
-}
+  html[data-base="light"] .input-field {
+    background: rgba(255, 255, 255, 0.85);
+  }
 
-/* Inputs con un icono a la izquierda (lupa, etc.): el texto debe arrancar
-   después del icono. Esta regla es más específica que .input-field y por eso
-   gana sobre su padding base, evitando que el texto se encime con el icono. */
-.input-field.pl-11 {
-  padding-left: 2.75rem;
-}
+  .input-field::placeholder {
+    color: var(--app-faint);
+  }
 
-.section-label {
-  color: var(--app-faint);
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0;
-  text-transform: uppercase;
+  .input-field:focus {
+    border-color: var(--app-accent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent) 18%, transparent);
+  }
+
+  /* Inputs con un icono a la izquierda (lupa, etc.): el texto debe arrancar
+     después del icono. Esta regla es más específica que .input-field y por eso
+     gana sobre su padding base, evitando que el texto se encime con el icono. */
+  .input-field.pl-11 {
+    padding-left: 2.75rem;
+  }
+
+  .section-label {
+    color: var(--app-faint);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
 }
 
 .app-scrollbar::-webkit-scrollbar,
@@ -328,84 +356,15 @@ img {
 }
 
 /* ============================================================
-   Calendario en celular estilo TimeTree (solo pantallas < 640px).
-   En PC/tablet mandan las clases normales del componente.
+   Calendario: el día elegido y "hoy".
    ============================================================ */
-@media (max-width: 639.98px) {
-  .cal-wrap {
-    border: 0;
-    border-radius: 0;
-    padding: 0;
-    box-shadow: none;
-    background: transparent !important;
-  }
-  .cal-grid {
-    gap: 1px;
-    background: var(--app-soft);
-  }
-  .cal-grid[data-weeks="4"] {
-    grid-template-rows: repeat(4, minmax(0, 1fr));
-  }
-  .cal-grid[data-weeks="5"] {
-    grid-template-rows: repeat(5, minmax(0, 1fr));
-  }
-  .cal-cell {
-    border-width: 0;
-    border-radius: 0;
-    padding: 2px;
-    background: var(--app-bg) !important;
-  }
-  .cal-cell--over {
-    background: var(--app-soft) !important;
-  }
-  .cal-cell-extra {
-    display: none;
-  }
+.cal-dia--elegido {
+  background: var(--app-accent-gradient);
+  color: var(--app-on-accent);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--app-accent) 32%, transparent);
 }
 
-/* ============================================================
-   Modo oscuro PREMIUM (solo aplica cuando NO es el tema rosa).
-   Fondos profundos con aura dorada, tarjetas con degradado y
-   dorado metálico. El tema rosa (.theme-pink) queda intacto.
-   ============================================================ */
-html:not(.theme-pink) body {
-  background:
-    radial-gradient(120% 78% at 50% -12%, rgba(215, 180, 106, 0.20), transparent 55%),
-    radial-gradient(90% 70% at 100% 108%, rgba(124, 96, 190, 0.10), transparent 60%),
-    linear-gradient(160deg, #05070e 0%, #090e1c 48%, #0c1222 100%);
-}
-
-html:not(.theme-pink) .app-shell {
-  background:
-    radial-gradient(120% 66% at 50% -10%, rgba(215, 180, 106, 0.16), transparent 55%),
-    linear-gradient(160deg, #06080f 0%, #0a1020 55%, #0b1120 100%);
-}
-
-/* Todas las tarjetas y paneles: degradado sutil con brillo arriba. */
-html:not(.theme-pink) .bg-app-panel {
-  background: linear-gradient(158deg, rgba(28, 37, 62, 0.82) 0%, rgba(12, 17, 32, 0.86) 100%);
-}
-
-html:not(.theme-pink) .glass-panel {
-  background: linear-gradient(158deg, rgba(30, 40, 68, 0.8) 0%, rgba(11, 16, 30, 0.84) 100%);
-  border: 1px solid rgba(215, 180, 106, 0.26);
-  box-shadow:
-    0 26px 80px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-/* Botón primario: dorado metálico de 3 tonos con brillo superior. */
-html:not(.theme-pink) .btn-primary {
-  background: linear-gradient(135deg, #b8934a 0%, #d7b46a 45%, #f6e0a0 100%);
-  color: #0c1020;
-  border: 1px solid rgba(246, 224, 160, 0.65);
-  box-shadow:
-    0 16px 40px rgba(215, 180, 106, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-html:not(.theme-pink) .btn-primary:hover {
-  box-shadow:
-    0 20px 48px rgba(215, 180, 106, 0.36),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+.cal-dia--hoy {
+  box-shadow: inset 0 0 0 2px var(--app-accent);
+  color: var(--app-accent);
 }

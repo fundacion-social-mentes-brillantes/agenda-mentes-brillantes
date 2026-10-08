@@ -29,7 +29,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-md" 
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-950/55 backdrop-blur-sm transition-opacity"
+        className="app-backdrop fixed inset-0 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
 

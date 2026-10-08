@@ -5,7 +5,7 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#060913" />
+    <meta name="theme-color" content="#0a1026" />
     <meta name="description" content="Agenda del Gimnasio Emocional Mentes Brillantes: sesiones, reuniones y recordatorios, en web, Android e iPhone." />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -18,12 +18,20 @@
     <title>Agenda Mentes Brillantes</title>
     <script>
       // Aplica el tema guardado ANTES de pintar, para que el splash y la app
-      // salgan del color correcto (sin destello oscuro en el tema rosa).
+      // salgan del color correcto (sin destello oscuro en el tema claro).
+      // Mismas claves que src/hooks/ThemeProvider.tsx.
       try {
         var t = localStorage.getItem("theme");
         var d = document.documentElement;
-        d.dataset.theme = t === "pink" ? "pink" : "dark";
-        d.classList.add(t === "pink" ? "theme-pink" : "dark");
+        var base = "dark";
+        if (t === "pink") base = "light";
+        if (t === "custom") {
+          var p = JSON.parse(localStorage.getItem("temaPersonal") || "{}");
+          base = p && p.base === "light" ? "light" : "dark";
+        }
+        d.dataset.theme = t === "pink" || t === "custom" ? t : "dark";
+        d.dataset.base = base;
+        if (base === "dark") d.classList.add("dark");
       } catch (e) {}
     </script>
     <style>
@@ -38,12 +46,12 @@
         gap: 16px;
         background:
           radial-gradient(120% 78% at 50% -12%, rgba(215, 180, 106, 0.2), transparent 55%),
-          linear-gradient(160deg, #05070e 0%, #090e1c 48%, #0c1222 100%);
+          linear-gradient(160deg, #0a1026 0%, #111a3d 100%);
       }
-      html.theme-pink #boot-splash {
+      html[data-base="light"] #boot-splash {
         background:
-          radial-gradient(circle at 74% 26%, rgba(255, 255, 255, 0.95), transparent 40rem),
-          linear-gradient(155deg, #ffa1ff 0%, #fff2ff 50%, #ffb2f6 100%);
+          radial-gradient(120% 78% at 50% -12%, rgba(247, 168, 196, 0.42), transparent 55%),
+          linear-gradient(160deg, #fff9fb 0%, #fde9f0 100%);
       }
       #boot-splash img {
         width: 84px;
@@ -59,9 +67,9 @@
         border-top-color: #d7b46a;
         animation: bootspin 0.9s linear infinite;
       }
-      html.theme-pink #boot-splash .ring {
-        border-color: rgba(200, 58, 184, 0.2);
-        border-top-color: #c83ab8;
+      html[data-base="light"] #boot-splash .ring {
+        border-color: rgba(194, 65, 110, 0.2);
+        border-top-color: #c2416e;
       }
       @keyframes bootspin {
         to {

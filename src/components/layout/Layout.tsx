@@ -12,15 +12,17 @@ import {
   LogOut,
   Menu,
   Moon,
+  Palette,
   Plus,
   Settings,
-  Sun,
+  Flower2,
   UserRound,
   Users,
   X
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
-import { useTheme } from "../../hooks/useTheme";
+import { useGuardarTema, useTheme } from "../../hooks/useTheme";
+import { leerTemaPersonal } from "../../lib/tema";
 import { authService } from "../../services/authService";
 import type { AppTheme } from "../../types/theme";
 import type { WorkspaceWithRole } from "../../types/workspace";
@@ -60,29 +62,26 @@ const mobileNavItems: NavItem[] = [
 ];
 
 export function Layout({ children, activePage, setActivePage, onCreate, workspaces, visibleWorkspaceIds, onToggleWorkspace }: LayoutProps) {
-  const { profile, profileSyncWarning, refreshProfile } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { profile, profileSyncWarning } = useAuth();
+  const { theme, setTheme, setCustomTheme } = useTheme();
+  const guardarTema = useGuardarTema();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Solo cuando cambia el tema GUARDADO en el perfil se aplica; cambiar el tema
-  // aqui mismo no debe re-disparar esto (por eso va como evento del efecto).
-  const aplicarTemaDelPerfil = useEffectEvent((temaPerfil: AppTheme | undefined) => {
+  // Solo cuando cambia el tema GUARDADO en el perfil se aplica (al entrar, o si
+  // la persona lo cambió en otro aparato); cambiar el tema aquí mismo no debe
+  // re-disparar esto (por eso va como evento del efecto).
+  const temaPersonalGuardado = profile?.customTheme ? JSON.stringify(profile.customTheme) : "";
+  const aplicarTemaDelPerfil = useEffectEvent((temaPerfil: AppTheme | undefined, personalCrudo: string) => {
+    const personal = personalCrudo ? leerTemaPersonal(JSON.parse(personalCrudo)) : null;
+    if (personal) setCustomTheme(personal);
     if (temaPerfil && temaPerfil !== theme) setTheme(temaPerfil);
   });
   useEffect(() => {
-    aplicarTemaDelPerfil(profile?.theme);
-  }, [profile?.theme]);
+    aplicarTemaDelPerfil(profile?.theme, temaPersonalGuardado);
+  }, [profile?.theme, temaPersonalGuardado]);
 
-  const handleThemeChange = async (nextTheme: AppTheme) => {
-    setTheme(nextTheme);
-    if (profile?.uid) {
-      try {
-        await authService.updateUserTheme(profile.uid, nextTheme);
-        await refreshProfile();
-      } catch (error) {
-        console.error("Error saving theme:", error);
-      }
-    }
+  const handleThemeChange = (nextTheme: AppTheme) => {
+    void guardarTema(nextTheme);
   };
 
   const handleLogout = async () => {
@@ -105,8 +104,12 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
         className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-app-soft bg-app-panel px-4 pb-3 backdrop-blur-xl md:hidden"
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
       >
-        <BrandBlock compact />
-        <div className="flex items-center gap-2">
+        {/* El nombre se recorta y los botones no: en un celular de 390 px el botón del
+            menú quedaba por fuera de la pantalla y la página se movía de lado. */}
+        <div className="min-w-0 flex-1">
+          <BrandBlock compact />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <WorkspaceSwitcher workspaces={workspaces} visibleIds={visibleWorkspaceIds} onToggle={onToggleWorkspace} onManage={() => goTo("workspaces")} compact />
           <button type="button" onClick={() => setSidebarOpen((value) => !value)} className="rounded-xl border border-app-soft bg-app-soft p-2 text-app-muted">
             {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
@@ -114,7 +117,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
         </div>
       </header>
 
-      {sidebarOpen && <button type="button" aria-label="Cerrar menu" className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm md:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <button type="button" aria-label="Cerrar menu" className="app-backdrop fixed inset-0 z-40 backdrop-blur-sm md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <aside
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
@@ -308,8 +311,8 @@ function WorkspaceSwitcher({
 
 function BrandBlock({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`flex items-center gap-3 ${compact ? "" : "border-b border-app-soft pb-5"}`}>
-      <img src="/brand/logo-gemb-icon.png" alt="Agenda Mentes Brillantes" className={`${compact ? "h-9 w-9" : "h-12 w-12"} rounded-2xl object-cover shadow-lg`} />
+    <div className={`flex min-w-0 items-center gap-3 ${compact ? "" : "border-b border-app-soft pb-5"}`}>
+      <img src="/brand/logo-gemb-icon.png" alt="Agenda Mentes Brillantes" className={`${compact ? "h-9 w-9" : "h-12 w-12"} shrink-0 rounded-2xl object-cover shadow-lg`} />
       <div className="min-w-0">
         <h1 className={`${compact ? "text-sm" : "text-base"} m-0 truncate font-black leading-tight text-app-strong`}>Agenda Mentes Brillantes</h1>
         {!compact && <p className="m-0 mt-1 text-xs font-semibold text-app-faint">Gimnasio Emocional</p>}
@@ -318,17 +321,29 @@ function BrandBlock({ compact = false }: { compact?: boolean }) {
   );
 }
 
+const OPCIONES_TEMA: { value: AppTheme; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
+  { value: "dark", label: "Noche", icon: Moon },
+  { value: "pink", label: "Rosa", icon: Flower2 },
+  { value: "custom", label: "Mi color", icon: Palette }
+];
+
 function ThemeSelector({ theme, onChange }: { theme: AppTheme; onChange: (theme: AppTheme) => void }) {
   return (
     <div className="rounded-3xl border border-app-soft bg-app-soft p-2">
       <p className="section-label mb-2 px-2">Tema visual</p>
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => onChange("dark")} className={`flex items-center justify-center gap-1 rounded-2xl px-3 py-2 text-xs font-black ${theme === "dark" ? "bg-app-panel text-app-accent" : "text-app-faint"}`}>
-          <Moon size={14} /> Noche
-        </button>
-        <button type="button" onClick={() => onChange("pink")} className={`flex items-center justify-center gap-1 rounded-2xl px-3 py-2 text-xs font-black ${theme === "pink" ? "bg-app-panel text-app-accent" : "text-app-faint"}`}>
-          <Sun size={14} /> Pink
-        </button>
+      <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Tema visual">
+        {OPCIONES_TEMA.map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onChange(value)}
+            aria-pressed={theme === value}
+            className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-2 text-[11px] font-black ${theme === value ? "bg-app-panel text-app-accent shadow-sm" : "text-app-faint hover:text-app-strong"}`}
+          >
+            <Icon size={15} />
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );

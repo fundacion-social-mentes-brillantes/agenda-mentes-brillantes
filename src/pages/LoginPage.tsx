@@ -6,7 +6,7 @@ import type { UserRole } from "../types/user";
 import { useTheme } from "../hooks/useTheme";
 
 export default function LoginPage() {
-  const { theme, toggleTheme, themeLabel } = useTheme();
+  const { isLight, toggleTheme, themeLabel } = useTheme();
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [role, setRole] = useState<UserRole>("family");
   const [loadingAction, setLoadingAction] = useState<"google" | "email" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const brandLogo = theme === "pink" ? "/brand/logo-gemb-blue-small.jpeg" : "/brand/logo-gemb-icon.png";
+  const brandLogo = isLight ? "/brand/logo-gemb-blue-small.jpeg" : "/brand/logo-gemb-icon.png";
 
   const handleGoogle = async () => {
     setError(null);
@@ -57,7 +57,7 @@ export default function LoginPage() {
                 <img
                   src={brandLogo}
                   alt="Gimnasio Emocional Mentes Brillantes"
-                  className={`${theme === "pink" ? "h-12 w-20 bg-white object-contain p-1" : "h-12 w-12 object-cover"} rounded-2xl shadow-lg`}
+                  className={`${isLight ? "h-12 w-20 bg-white object-contain p-1" : "h-12 w-12 object-cover"} rounded-2xl shadow-lg`}
                 />
                 <div>
                   <p className="m-0 text-xs font-black uppercase text-app-accent">Gimnasio Emocional</p>
@@ -65,7 +65,7 @@ export default function LoginPage() {
                 </div>
               </div>
               <button type="button" onClick={toggleTheme} className="btn-secondary min-h-10 px-3" aria-label="Cambiar tema">
-                {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+                {isLight ? <Moon size={16} /> : <Sun size={16} />}
                 <span className="text-xs sm:text-sm">{themeLabel}</span>
               </button>
             </div>
@@ -162,7 +162,7 @@ export default function LoginPage() {
             <div className="relative w-full max-w-xl">
               <div className="mx-auto mb-4 hidden max-w-xs justify-center rounded-3xl border border-app-soft bg-app-panel p-3 shadow-xl backdrop-blur sm:flex">
                 <img
-                  src={theme === "pink" ? "/brand/logo-gemb-blue-small.jpeg" : "/brand/logo-gemb-gold-small.jpeg"}
+                  src={isLight ? "/brand/logo-gemb-blue-small.jpeg" : "/brand/logo-gemb-gold-small.jpeg"}
                   alt="Mentes Brillantes"
                   className="max-h-20 w-full object-contain"
                 />
