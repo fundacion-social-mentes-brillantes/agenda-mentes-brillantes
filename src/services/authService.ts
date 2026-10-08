@@ -249,7 +249,12 @@ export const authService = {
     await setDoc(
       doc(db, "users", uid),
       {
-        apariencia: { modo: apariencia.modo, acento: apariencia.acento },
+        apariencia: {
+          modo: apariencia.modo,
+          acento: apariencia.acento,
+          fondo: apariencia.fondo ?? null,
+          destello: apariencia.destello ?? null
+        },
         updatedAt: serverTimestamp()
       },
       { merge: true }

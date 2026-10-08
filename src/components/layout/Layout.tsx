@@ -13,6 +13,7 @@ import {
   Menu,
   MonitorSmartphone,
   Moon,
+  Palette,
   Plus,
   Settings,
   Sun,
@@ -21,6 +22,8 @@ import {
   X
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
+import { EditorApariencia } from "../EditorApariencia";
+import { Modal } from "../ui/Modal";
 import { useGuardarApariencia, useTheme } from "../../hooks/useTheme";
 import { leerApariencia, mismaApariencia } from "../../lib/tema";
 import { authService } from "../../services/authService";
@@ -66,6 +69,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
   const { apariencia, setApariencia } = useTheme();
   const guardarApariencia = useGuardarApariencia();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [personalizando, setPersonalizando] = useState(false);
 
   // Solo cuando cambia la apariencia GUARDADA en el perfil se aplica (al entrar, o
   // si la persona la cambió en otro aparato); cambiarla aquí mismo no debe
@@ -133,7 +137,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
             <WorkspaceSwitcher workspaces={workspaces} visibleIds={visibleWorkspaceIds} onToggle={onToggleWorkspace} onManage={() => goTo("workspaces")} />
           </div>
 
-          <nav className="space-y-2">
+          <nav className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = activePage === item.id;
@@ -169,7 +173,14 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
         </div>
 
         <div className="space-y-4 border-t border-app-soft pt-4">
-          <SelectorModo modo={apariencia.modo} onChange={cambiarModo} />
+          <SelectorModo
+            modo={apariencia.modo}
+            onChange={cambiarModo}
+            onPersonalizar={() => {
+              setSidebarOpen(false);
+              setPersonalizando(true);
+            }}
+          />
           <UserSummary />
           <button type="button" onClick={handleLogout} className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-500/10">
             <LogOut size={18} />
@@ -188,6 +199,10 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
           {children}
         </div>
       </main>
+
+      <Modal isOpen={personalizando} onClose={() => setPersonalizando(false)} title="Personalizar colores" maxWidth="max-w-2xl">
+        <EditorApariencia enVentana onListo={() => setPersonalizando(false)} />
+      </Modal>
 
       {/* Barra de abajo flotante, de cristal (como las de iOS). */}
       <nav
@@ -335,7 +350,7 @@ const OPCIONES_MODO: { value: ModoTema; label: string; icon: React.ComponentType
 ];
 
 // Atajo del menú: claro, oscuro o automático. El color se elige en Ajustes.
-function SelectorModo({ modo, onChange }: { modo: ModoTema; onChange: (modo: ModoTema) => void }) {
+function SelectorModo({ modo, onChange, onPersonalizar }: { modo: ModoTema; onChange: (modo: ModoTema) => void; onPersonalizar: () => void }) {
   return (
     <div className="rounded-3xl border border-app-soft bg-app-soft p-2">
       <p className="section-label mb-2 px-2">Apariencia</p>
@@ -355,6 +370,17 @@ function SelectorModo({ modo, onChange }: { modo: ModoTema; onChange: (modo: Mod
           </button>
         ))}
       </div>
+      {/* Directo a la rueda de color (principal, fondo y destellos), sin pasar por Ajustes. */}
+      <button
+        type="button"
+        onClick={onPersonalizar}
+        className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-app-panel px-3 py-2 text-xs font-semibold text-app-strong transition hover:bg-app-soft"
+      >
+        <span className="icono-degradado">
+          <Palette size={15} />
+        </span>
+        Personalizar colores
+      </button>
     </div>
   );
 }

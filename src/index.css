@@ -457,3 +457,30 @@ img {
     inset 0 0 0 1px rgba(255, 255, 255, 0.14),
     0 0 0 3px color-mix(in srgb, var(--app-accent) 35%, transparent);
 }
+
+/* Cuadro del calendario: vidrio esmerilado muy translúcido (como el afiche de
+   referencia). Las luces van detrás, dentro del mismo cuadro, para que se vean
+   desenfocadas a través del vidrio. */
+.cristal-calendario {
+  background: color-mix(in srgb, var(--app-panel) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-highlight) 70%, transparent);
+  -webkit-backdrop-filter: blur(34px) saturate(170%);
+  backdrop-filter: blur(34px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 var(--app-highlight),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 30px 70px color-mix(in srgb, var(--app-bg) 55%, transparent);
+  overflow: hidden;
+}
+
+.luces-calendario {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(45% 40% at 18% 12%, var(--app-glow), transparent 75%),
+    radial-gradient(50% 45% at 88% 90%, var(--app-glow-2), transparent 75%);
+  filter: blur(18px);
+  opacity: 0.85;
+}

@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
 import type React from "react";
-import { Check, MonitorSmartphone, Moon, RotateCcw, Save, Sun } from "lucide-react";
+import { Check, MonitorSmartphone, Moon, RotateCcw, Save, Sparkles, Sun } from "lucide-react";
 import { Card } from "./ui/Card";
 import { useGuardarApariencia, useTheme } from "../hooks/useTheme";
 import {
   APARIENCIA_PREDETERMINADA,
   COLORES_SUGERIDOS,
+  DESTELLOS_SUGERIDOS,
+  FONDOS_SUGERIDOS,
   hexAHsv,
   hsvAHex,
   mismaApariencia,
@@ -22,17 +24,31 @@ const MODOS: { value: ModoTema; label: string; icon: typeof Sun }[] = [
   { value: "auto", label: "Automático", icon: MonitorSmartphone }
 ];
 
+/** Qué color se está cambiando con la rueda. */
+type Objetivo = "acento" | "fondo" | "destello";
+
+const OBJETIVOS: { value: Objetivo; label: string; ayuda: string }[] = [
+  { value: "acento", label: "Principal", ayuda: "Botones, día elegido y detalles." },
+  { value: "fondo", label: "Fondo", ayuda: "El fondo de toda la agenda (en modo claro, un tinte suave)." },
+  { value: "destello", label: "Destellos", ayuda: "La luz alrededor del día elegido, del «+» y de los botones." }
+];
+
+// Lo que se ve cuando el fondo está en "Automático".
+const FONDO_LOGO = "#0b0820";
+
 /**
- * Ajustes > Apariencia: modo (claro, oscuro, automático) y color principal con rueda,
- * saturación, brillo y código HEX. Lo que se mueve aquí se ve en la vista previa;
- * la app cambia al darle "Guardar" (y queda en el perfil de la persona).
+ * Apariencia: modo (claro, oscuro, automático) y tres colores (principal, fondo y
+ * destellos) con rueda, saturación, brillo y código HEX. Lo que se mueve aquí se ve
+ * en la vista previa; la app cambia al darle "Guardar" (y queda en el perfil).
+ * Vive en Ajustes y también se abre directo desde el menú, en una ventana.
  */
-export function EditorApariencia() {
+export function EditorApariencia({ enVentana = false, onListo }: { enVentana?: boolean; onListo?: () => void }) {
   const { apariencia } = useTheme();
   const guardarApariencia = useGuardarApariencia();
   // null = sin cambios: se muestra lo que está aplicado.
   const [borrador, setBorrador] = useState<Apariencia | null>(null);
   const editada = borrador ?? apariencia;
+  const [objetivo, setObjetivo] = useState<Objetivo>("acento");
   const [hsv, setHsv] = useState<Hsv>(() => hexAHsv(apariencia.acento));
   const [textoHex, setTextoHex] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -42,28 +58,50 @@ export function EditorApariencia() {
   const sistemaOscuro = typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches;
   const baseVista = resolverModo(editada.modo, Boolean(sistemaOscuro));
 
+  const acento = normalizarHex(editada.acento) ?? APARIENCIA_PREDETERMINADA.acento;
+  const fondo = normalizarHex(editada.fondo);
+  const destello = normalizarHex(editada.destello);
+  // El color que muestra la rueda: el elegido, o el automático si no hay uno propio.
+  const colorDe = (cual: Objetivo) => (cual === "acento" ? acento : cual === "fondo" ? fondo ?? FONDO_LOGO : destello ?? acento);
+  const colorActual = colorDe(objetivo);
+  const esAutomatico = (objetivo === "fondo" && !fondo) || (objetivo === "destello" && !destello);
+  const sugeridos = objetivo === "acento" ? COLORES_SUGERIDOS : objetivo === "fondo" ? FONDOS_SUGERIDOS : DESTELLOS_SUGERIDOS;
+
   const cambiar = (cambio: Partial<Apariencia>) => {
     setAvisoGuardado(false);
     setBorrador({ ...editada, ...cambio });
   };
 
-  // Rueda y barras: mandan el tono, la saturación y el brillo.
+  const elegirObjetivo = (cual: Objetivo) => {
+    setObjetivo(cual);
+    setHsv(hexAHsv(colorDe(cual)));
+    setTextoHex(null);
+  };
+
+  // Rueda y barras: mandan el tono, la saturación y el brillo del color que se está cambiando.
   const cambiarHsv = (siguiente: Hsv) => {
     setHsv(siguiente);
     setTextoHex(null);
-    cambiar({ acento: hsvAHex(siguiente) });
+    cambiar({ [objetivo]: hsvAHex(siguiente) });
   };
 
   // Colores sugeridos y código HEX: mandan el color exacto.
   const elegirColor = (hex: string) => {
     setHsv(hexAHsv(hex));
-    cambiar({ acento: hex });
+    cambiar({ [objetivo]: hex });
+  };
+
+  const usarAutomatico = () => {
+    cambiar({ [objetivo]: null });
+    setHsv(hexAHsv(objetivo === "fondo" ? FONDO_LOGO : acento));
+    setTextoHex(null);
   };
 
   const restablecer = () => {
+    setObjetivo("acento");
     setHsv(hexAHsv(APARIENCIA_PREDETERMINADA.acento));
     setTextoHex(null);
-    cambiar(APARIENCIA_PREDETERMINADA);
+    cambiar({ ...APARIENCIA_PREDETERMINADA, fondo: null, destello: null });
   };
 
   const guardar = async () => {
@@ -73,16 +111,17 @@ export function EditorApariencia() {
     setGuardando(false);
     setBorrador(null);
     setAvisoGuardado(true);
+    onListo?.();
   };
 
-  const acento = normalizarHex(editada.acento) ?? APARIENCIA_PREDETERMINADA.acento;
-
-  return (
-    <Card className="glass space-y-5">
-      <div>
-        <h3 className="m-0 text-lg font-semibold tracking-tight text-app-strong">Apariencia</h3>
-        <p className="mt-1 text-sm text-app-muted">Elige el modo y tu color. Se guarda en tu perfil, para el celular y el computador.</p>
-      </div>
+  const contenido = (
+    <div className="space-y-5">
+      {!enVentana && (
+        <div>
+          <h3 className="m-0 text-lg font-semibold tracking-tight text-app-strong">Apariencia</h3>
+          <p className="mt-1 text-sm text-app-muted">Elige el modo y tus colores. Se guarda en tu perfil, para el celular y el computador.</p>
+        </div>
+      )}
 
       <div>
         <p className="section-label mb-2">Modo</p>
@@ -95,24 +134,68 @@ export function EditorApariencia() {
                 type="button"
                 onClick={() => cambiar({ modo: value })}
                 aria-pressed={activo}
-                className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition ${
+                className={`flex min-w-0 items-center justify-center gap-1 rounded-xl px-1 py-2 text-[11px] font-semibold transition sm:gap-1.5 sm:px-2 sm:text-xs ${
                   activo ? "bg-app-panel text-app-strong shadow-sm" : "text-app-muted hover:text-app-strong"
                 }`}
               >
                 <span className={activo ? "icono-degradado" : ""}>
                   <Icon size={15} />
                 </span>
-                {label}
+                {value === "auto" ? (
+                  <>
+                    <span className="sm:hidden">Auto</span>
+                    <span className="hidden sm:inline">{label}</span>
+                  </>
+                ) : (
+                  label
+                )}
               </button>
             );
           })}
         </div>
       </div>
 
+      <div>
+        <p className="section-label mb-2">¿Qué color cambias?</p>
+        <div className="grid grid-cols-3 gap-1 rounded-2xl border border-app-soft bg-app-soft p-1" role="tablist" aria-label="Color que se cambia">
+          {OBJETIVOS.map(({ value, label }) => {
+            const activo = objetivo === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={activo}
+                onClick={() => elegirObjetivo(value)}
+                className={`flex min-w-0 items-center justify-center gap-1 rounded-xl px-1 py-2 text-[11px] font-semibold transition sm:gap-1.5 sm:px-2 sm:text-xs ${
+                  activo ? "bg-app-panel text-app-strong shadow-sm" : "text-app-muted hover:text-app-strong"
+                }`}
+              >
+                <span className="h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-white/30" style={{ background: colorDe(value) }} aria-hidden="true" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="m-0 mt-1.5 px-1 text-xs text-app-faint">{OBJETIVOS.find((o) => o.value === objetivo)?.ayuda}</p>
+      </div>
+
       <div className="grid gap-6 md:grid-cols-[auto_1fr] md:items-start">
         <div className="flex flex-col items-center gap-3">
-          <p className="section-label m-0 self-start md:self-center">Color principal</p>
-          <RuedaColor tono={hsv.h} color={acento} onTono={(h) => cambiarHsv({ ...hsv, h })} />
+          <RuedaColor tono={hsv.h} color={colorActual} onTono={(h) => cambiarHsv({ ...hsv, h })} />
+          {objetivo !== "acento" && (
+            <button
+              type="button"
+              onClick={usarAutomatico}
+              aria-pressed={esAutomatico}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                esAutomatico ? "accent-gradient border-transparent" : "border-app-soft text-app-muted hover:text-app-strong"
+              }`}
+            >
+              <Sparkles size={13} />
+              {esAutomatico ? "Automático (según el principal)" : "Volver a automático"}
+            </button>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -125,18 +208,18 @@ export function EditorApariencia() {
           <BarraColor
             etiqueta="Brillo"
             valor={hsv.v}
-            minimo={15}
-            fondo={`linear-gradient(90deg, ${hsvAHex({ ...hsv, v: 15 })}, ${hsvAHex({ ...hsv, v: 100 })})`}
+            minimo={objetivo === "fondo" ? 0 : 15}
+            fondo={`linear-gradient(90deg, ${hsvAHex({ ...hsv, v: objetivo === "fondo" ? 0 : 15 })}, ${hsvAHex({ ...hsv, v: 100 })})`}
             onCambio={(v) => cambiarHsv({ ...hsv, v })}
           />
 
           <label className="block">
             <span className="section-label mb-1.5 block">Código HEX</span>
             <span className="flex items-center gap-2">
-              <span className="h-10 w-10 shrink-0 rounded-xl border border-app-soft" style={{ background: acento }} aria-hidden="true" />
+              <span className="h-10 w-10 shrink-0 rounded-xl border border-app-soft" style={{ background: colorActual }} aria-hidden="true" />
               <input
                 className="input-field py-2 font-mono text-sm uppercase"
-                value={textoHex ?? acento}
+                value={textoHex ?? colorActual}
                 maxLength={7}
                 spellCheck={false}
                 onChange={(e) => {
@@ -145,7 +228,7 @@ export function EditorApariencia() {
                   if (hex && e.target.value.replace("#", "").length === 6) elegirColor(hex);
                 }}
                 onBlur={() => setTextoHex(null)}
-                aria-label="Código HEX del color principal"
+                aria-label="Código HEX del color"
               />
             </span>
           </label>
@@ -153,8 +236,8 @@ export function EditorApariencia() {
           <div>
             <p className="section-label mb-2">Sugeridos</p>
             <div className="flex flex-wrap gap-2">
-              {COLORES_SUGERIDOS.map((color) => {
-                const elegido = acento === color.value;
+              {sugeridos.map((color) => {
+                const elegido = !esAutomatico && colorActual === color.value;
                 return (
                   <button
                     key={color.value}
@@ -167,7 +250,7 @@ export function EditorApariencia() {
                     aria-pressed={elegido}
                     title={color.label}
                     className={`flex h-8 w-8 items-center justify-center rounded-full ring-offset-2 ring-offset-transparent transition hover:scale-110 ${
-                      elegido ? "ring-2 ring-[color:var(--app-accent)]" : "ring-1 ring-white/20"
+                      elegido ? "ring-2 ring-[color:var(--app-accent)]" : "ring-1 ring-white/25"
                     }`}
                     style={{ background: color.value }}
                   >
@@ -182,7 +265,7 @@ export function EditorApariencia() {
 
       <div>
         <p className="section-label mb-2">Vista previa {editada.modo === "auto" ? `(ahora se ve ${baseVista === "dark" ? "oscura" : "clara"})` : ""}</p>
-        <VistaPrevia acento={acento} base={baseVista} />
+        <VistaPrevia acento={acento} base={baseVista} fondo={fondo} destello={destello} />
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-app-soft pt-4">
@@ -198,8 +281,10 @@ export function EditorApariencia() {
           {guardando ? "Guardando..." : "Guardar"}
         </button>
       </div>
-    </Card>
+    </div>
   );
+
+  return enVentana ? contenido : <Card className="glass">{contenido}</Card>;
 }
 
 const TAMANO_RUEDA = 184;
@@ -323,8 +408,18 @@ function BarraColor({
 const DIAS_VISTA = [6, 7, 8, 9, 10, 11, 12];
 
 /** Muestra en pequeño cómo se verá la agenda con el color y el modo elegidos. */
-function VistaPrevia({ acento, base }: { acento: string; base: "light" | "dark" }) {
-  const variables = paleta(acento, base) as React.CSSProperties;
+function VistaPrevia({
+  acento,
+  base,
+  fondo,
+  destello
+}: {
+  acento: string;
+  base: "light" | "dark";
+  fondo: string | null;
+  destello: string | null;
+}) {
+  const variables = paleta(acento, base, { fondo, destello }) as React.CSSProperties;
   return (
     <div
       data-base={base}

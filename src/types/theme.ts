@@ -10,6 +10,10 @@ export interface Apariencia {
   modo: ModoTema;
   /** Color principal en hexadecimal, ej. "#5b2dff". */
   acento: string;
+  /** Color de fondo. Sin él, sale del índigo del logo. En modo claro se usa como un tinte suave. */
+  fondo?: string | null;
+  /** Color de los destellos (la luz alrededor del día elegido, del "+" y de los botones). Sin él, sale del principal. */
+  destello?: string | null;
 }
 
 /** Lo que se ve en pantalla después de resolver el modo automático. */

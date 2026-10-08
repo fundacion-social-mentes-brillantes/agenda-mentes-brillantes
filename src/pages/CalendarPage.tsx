@@ -1,7 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import type React from "react";
-import { CalendarPlus, ChevronLeft, ChevronRight, HeartHandshake, Plus, Sparkles } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Download, HeartHandshake, Plus, Scan, Share2, Sparkles } from "lucide-react";
 import { EventDetailModal } from "../components/events/EventDetailModal";
+import { Modal } from "../components/ui/Modal";
+import { useTheme } from "../hooks/useTheme";
+import { crearImagenDelDia, nombreDeCaptura } from "../lib/capturaDia";
 import { FilaEvento } from "../components/events/FilaEvento";
 import { isSameDay, startOfDay, toDate } from "../lib/dateUtils";
 import { useEventosEnErp } from "../hooks/useEventosEnErp";
@@ -45,6 +48,7 @@ export default function CalendarPage({
   const soloCoach = filter === "coach";
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [drag, setDrag] = useState<{ event: CalendarEvent; x: number; y: number; overKey: string | null } | null>(null);
+  const { apariencia, base } = useTheme();
   const didDragRef = useRef(false);
 
   // Qué sesiones coach ya están en la contabilidad, para verlo sin abrir nada.
@@ -234,6 +238,48 @@ export default function CalendarPage({
     setActivePage("event-form");
   };
 
+  // --- Captura del día ---
+  const [captura, setCaptura] = useState<{ url: string; blob: Blob; nombre: string } | null>(null);
+  const [generandoCaptura, setGenerandoCaptura] = useState(false);
+  const [errorCaptura, setErrorCaptura] = useState<string | null>(null);
+  const archivoCaptura = captura ? new File([captura.blob], captura.nombre, { type: "image/png" }) : null;
+  // En el celular se abre el menú de compartir (WhatsApp, etc.); si no se puede, se guarda.
+  const puedeCompartir = Boolean(archivoCaptura && typeof navigator.canShare === "function" && navigator.canShare({ files: [archivoCaptura] }));
+
+  const hacerCaptura = async () => {
+    setGenerandoCaptura(true);
+    setErrorCaptura(null);
+    try {
+      const blob = await crearImagenDelDia({
+        fecha: diaElegido,
+        eventos: eventosDelDia,
+        apariencia,
+        base,
+        nota: soloCoach ? "Solo sesiones coach" : undefined
+      });
+      setCaptura({ url: URL.createObjectURL(blob), blob, nombre: nombreDeCaptura(diaElegido) });
+    } catch (error) {
+      setErrorCaptura(error instanceof Error ? error.message : "No se pudo crear la imagen.");
+    } finally {
+      setGenerandoCaptura(false);
+    }
+  };
+
+  const cerrarCaptura = () => {
+    if (captura) URL.revokeObjectURL(captura.url);
+    setCaptura(null);
+    setErrorCaptura(null);
+  };
+
+  const compartirCaptura = async () => {
+    if (!archivoCaptura) return;
+    try {
+      await navigator.share({ files: [archivoCaptura], title: "Agenda del día" });
+    } catch {
+      // La persona cerró el menú de compartir: no pasa nada.
+    }
+  };
+
   const abrirEvento = (event: CalendarEvent) => {
     if (didDragRef.current) return;
     setSelectedEvent(event);
@@ -326,11 +372,14 @@ export default function CalendarPage({
           )}
         </div>
 
+        {/* Cuadro del mes: vidrio esmerilado muy translúcido. Detrás lleva dos luces de
+            color (principal y destello) que se ven desenfocadas a través del vidrio. */}
         <div
-          className="glass relative flex flex-col rounded-3xl border border-app-soft bg-app-panel p-2 shadow-xl lg:min-h-0 lg:flex-1 lg:p-3"
+          className="cristal-calendario relative isolate flex flex-col rounded-[1.75rem] p-2 lg:min-h-0 lg:flex-1 lg:p-3"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
+          <span className="luces-calendario" aria-hidden="true" />
           <div className="mb-1 grid grid-cols-7">
             {DAYS.map((day) => (
               <span key={day} className="py-1 text-center text-[10px] font-medium uppercase tracking-wider text-app-faint sm:text-[11px]">
@@ -363,12 +412,12 @@ export default function CalendarPage({
                   aria-label={`${date.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}${
                     dayEvents.length ? `, ${dayEvents.length} ${dayEvents.length === 1 ? "cita" : "citas"}` : ""
                   }`}
-                  className={`${beyondMonth ? "hidden lg:flex" : "flex"} h-10 min-h-0 flex-col items-center rounded-2xl pt-0.5 transition lg:h-auto lg:items-stretch lg:overflow-hidden lg:border lg:p-1 lg:text-left ${
+                  className={`${beyondMonth ? "hidden lg:flex" : "flex"} h-10 min-h-0 flex-col items-center rounded-2xl pt-0.5 transition lg:h-auto lg:items-stretch lg:overflow-hidden lg:p-1 lg:text-left ${
                     encima
-                      ? "bg-app-soft ring-2 ring-[color:var(--app-accent)] lg:border-app-accent"
+                      ? "bg-app-soft ring-2 ring-[color:var(--app-accent)]"
                       : elegido
-                        ? "lg:border-app-strong lg:bg-app-soft"
-                        : "lg:border-app-soft lg:hover:bg-app-soft"
+                        ? "lg:bg-app-soft lg:ring-1 lg:ring-[color:var(--app-border-strong)]"
+                        : "lg:hover:bg-app-soft"
                   }`}
                 >
                   <span
@@ -450,15 +499,28 @@ export default function CalendarPage({
                 : `${eventosDelDia.length} ${soloCoach ? (eventosDelDia.length === 1 ? "sesión" : "sesiones") : eventosDelDia.length === 1 ? "cita" : "citas"}`}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => handleCreateForDay(diaElegido)}
-            className="btn-primary h-10 min-h-10 w-10 shrink-0 rounded-full p-0"
-            aria-label="Crear evento este día"
-            title="Crear evento este día"
-          >
-            <Plus size={20} />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Captura: una imagen con todas las citas de este día, para compartir o guardar. */}
+            <button
+              type="button"
+              onClick={() => void hacerCaptura()}
+              disabled={generandoCaptura}
+              className="btn-secondary h-10 min-h-10 w-10 rounded-full p-0 disabled:opacity-60"
+              aria-label="Captura de la agenda de este día"
+              title="Captura de la agenda de este día"
+            >
+              <Scan size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCreateForDay(diaElegido)}
+              className="btn-primary h-10 min-h-10 w-10 rounded-full p-0"
+              aria-label="Crear evento este día"
+              title="Crear evento este día"
+            >
+              <Plus size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Abajo queda espacio para el botón del asistente (celular): la última cita se puede subir y leer completa. */}
@@ -497,6 +559,28 @@ export default function CalendarPage({
         onDuplicate={onDuplicate}
         onDeleteEvent={onDeleteEvent}
       />
+
+      <Modal isOpen={!!captura || !!errorCaptura} onClose={cerrarCaptura} title="Captura del día" maxWidth="max-w-md">
+        {captura ? (
+          <div className="space-y-4">
+            <img src={captura.url} alt="Agenda del día" className="mx-auto max-h-[55vh] w-auto rounded-2xl border border-app-soft shadow-xl" />
+            <div className="flex flex-wrap justify-end gap-2">
+              {puedeCompartir && (
+                <button type="button" onClick={() => void compartirCaptura()} className="btn-primary min-h-10 py-2 text-sm">
+                  <Share2 size={16} />
+                  Compartir
+                </button>
+              )}
+              <a href={captura.url} download={captura.nombre} className={`${puedeCompartir ? "btn-secondary" : "btn-primary"} min-h-10 py-2 text-sm`}>
+                <Download size={16} />
+                Guardar imagen
+              </a>
+            </div>
+          </div>
+        ) : (
+          <p className="m-0 text-sm text-app-muted">{errorCaptura}</p>
+        )}
+      </Modal>
 
       {drag && (
         <div

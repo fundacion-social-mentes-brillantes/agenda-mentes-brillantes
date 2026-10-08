@@ -143,15 +143,27 @@ export function resolverModo(modo: ModoTema, sistemaOscuro: boolean): ThemeBase 
  * Todas las variables de color para una apariencia ya resuelta (clara u oscura).
  * Las usan index.css y cada pantalla a través de clases como text-app-accent.
  */
-export function paleta(acentoCrudo: string, base: ThemeBase): Record<string, string> {
+export function paleta(
+  acentoCrudo: string,
+  base: ThemeBase,
+  extra: { fondo?: string | null; destello?: string | null } = {}
+): Record<string, string> {
   const acento = normalizarHex(acentoCrudo) ?? ACENTO_AGENDA_MB;
   const secundario = colorSecundario(acento);
+  const fondoElegido = normalizarHex(extra.fondo);
+  // Destellos: la luz alrededor del día elegido, del "+" y de los botones, y el brillo
+  // grande de abajo a la derecha. Sin color propio salen del principal (como en el logo).
+  const destello = normalizarHex(extra.destello);
 
   if (base === "dark") {
     // Índigo casi negro del logo (#0B0820 / #15113A), apenas teñido con el color elegido.
-    const fondo = mezclar("#0b0820", acento, 0.05);
-    const fondoSuave = mezclar("#15113a", acento, 0.1);
-    const solido = mezclar("#1a1544", acento, 0.1);
+    // Con un fondo propio se usa su tono, pero siempre muy oscuro: si no, el texto
+    // claro dejaría de leerse.
+    const tono = fondoElegido ? hexAHsv(fondoElegido) : null;
+    const oscuro = (v: number) => (tono ? hsvAHex({ h: tono.h, s: Math.min(tono.s, 85), v }) : "");
+    const fondo = tono ? oscuro(Math.min(Math.max(tono.v, 4), 14)) : mezclar("#0b0820", acento, 0.05);
+    const fondoSuave = tono ? oscuro(Math.min(Math.max(tono.v + 10, 14), 26)) : mezclar("#15113a", acento, 0.1);
+    const solido = tono ? mezclar(oscuro(Math.min(Math.max(tono.v + 14, 18), 30)), acento, 0.08) : mezclar("#1a1544", acento, 0.1);
     const fuerte = "#f3f1ff";
     const acentoTexto = legibleSobre(mezclar(acento, "#ffffff", 0.2), solido, 4.5);
     const secundarioTexto = legibleSobre(secundario, solido, 4.5);
@@ -179,17 +191,18 @@ export function paleta(acentoCrudo: string, base: ThemeBase): Record<string, str
       "--app-accent-gradient": `linear-gradient(135deg, ${inicio} 0%, ${fin} 100%)`,
       "--app-on-accent": sobreAcento,
       "--app-glow": transparente(acento, 42),
-      "--app-glow-2": transparente(secundario, 30),
-      "--app-ring": transparente(acento, 55),
+      "--app-glow-2": transparente(destello ?? secundario, destello ? 36 : 30),
+      "--app-ring": transparente(destello ?? acento, destello ? 65 : 55),
       "--app-shadow": "0 24px 60px rgba(3, 2, 14, 0.55)",
       "--app-backdrop": "rgba(5, 3, 18, 0.62)",
       "--app-danger": "#ff6b7a"
     };
   }
 
-  // Claro: blanco perlado (#F3F1FF del logo) con cristal blanco.
-  const fondo = mezclar("#f7f6fc", acento, 0.04);
-  const fondoSuave = mezclar("#ffffff", acento, 0.14);
+  // Claro: blanco perlado (#F3F1FF del logo) con cristal blanco. Un fondo propio
+  // se usa como tinte suave sobre el blanco.
+  const fondo = fondoElegido ? mezclar("#f7f6fc", fondoElegido, 0.1) : mezclar("#f7f6fc", acento, 0.04);
+  const fondoSuave = fondoElegido ? mezclar("#ffffff", fondoElegido, 0.2) : mezclar("#ffffff", acento, 0.14);
   // Se mide contra el fondo más oscuro del modo claro (no contra blanco puro).
   const acentoTexto = legibleSobre(legibleSobre(acento, fondoSuave, 4.5), fondo, 4.5);
   const secundarioTexto = legibleSobre(legibleSobre(secundario, fondoSuave, 4.5), fondo, 4.5);
@@ -217,18 +230,14 @@ export function paleta(acentoCrudo: string, base: ThemeBase): Record<string, str
     "--app-accent-gradient": `linear-gradient(135deg, ${inicio} 0%, ${fin} 100%)`,
     "--app-on-accent": sobreAcento,
     "--app-glow": transparente(acento, 24),
-    "--app-glow-2": transparente(secundario, 20),
-    "--app-ring": transparente(acento, 45),
+    "--app-glow-2": transparente(destello ?? secundario, destello ? 26 : 20),
+    "--app-ring": transparente(destello ?? acento, destello ? 55 : 45),
     "--app-shadow": `0 18px 50px ${transparente(mezclar(acento, "#1b1530", 0.5), 14)}`,
     "--app-backdrop": transparente(mezclar(acento, "#0b0820", 0.7), 30),
     "--app-danger": "#dc2626"
   };
 }
 
-/** Color de la barra del celular. */
-export function colorDeBarra(acento: string, base: ThemeBase): string {
-  return paleta(acento, base)["--app-bg"];
-}
 
 /**
  * Lee la apariencia guardada (en el perfil o en el navegador) sin confiar en su forma.
@@ -240,7 +249,7 @@ export function leerApariencia(crudo: unknown, temaViejo?: unknown, personalViej
     const fuente = crudo as Record<string, unknown>;
     const acento = normalizarHex(fuente.acento);
     const modo = fuente.modo === "claro" || fuente.modo === "oscuro" || fuente.modo === "auto" ? fuente.modo : null;
-    if (acento && modo) return { modo, acento };
+    if (acento && modo) return { modo, acento, fondo: normalizarHex(fuente.fondo), destello: normalizarHex(fuente.destello) };
   }
   if (temaViejo === "pink") return { modo: "claro", acento: "#f09ab9" };
   if (temaViejo === "custom" && personalViejo && typeof personalViejo === "object") {
@@ -252,5 +261,32 @@ export function leerApariencia(crudo: unknown, temaViejo?: unknown, personalViej
 }
 
 export function mismaApariencia(a: Apariencia, b: Apariencia): boolean {
-  return a.modo === b.modo && normalizarHex(a.acento) === normalizarHex(b.acento);
+  return (
+    a.modo === b.modo &&
+    normalizarHex(a.acento) === normalizarHex(b.acento) &&
+    normalizarHex(a.fondo) === normalizarHex(b.fondo) &&
+    normalizarHex(a.destello) === normalizarHex(b.destello)
+  );
 }
+
+/** Colores sugeridos para el fondo (en modo claro se usan como un tinte suave). */
+export const FONDOS_SUGERIDOS: { value: string; label: string }[] = [
+  { value: "#0b0820", label: "Índigo Agenda MB" },
+  { value: "#0a0a12", label: "Negro" },
+  { value: "#0a1630", label: "Azul noche" },
+  { value: "#1a0a24", label: "Ciruela" },
+  { value: "#240a18", label: "Vino" },
+  { value: "#06201a", label: "Verde noche" },
+  { value: "#1c1608", label: "Café" }
+];
+
+/** Colores sugeridos para los destellos. */
+export const DESTELLOS_SUGERIDOS: { value: string; label: string }[] = [
+  { value: "#2e9dff", label: "Azul" },
+  { value: "#46e0ff", label: "Cian" },
+  { value: "#9b6bff", label: "Violeta" },
+  { value: "#ff5fa2", label: "Rosa" },
+  { value: "#ffc857", label: "Dorado" },
+  { value: "#3ddc97", label: "Verde" },
+  { value: "#f3f1ff", label: "Blanco" }
+];

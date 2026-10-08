@@ -36,7 +36,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-md" 
       {/* Modal Container */}
       <div className={`panel-flotante relative rounded-3xl w-full ${maxWidth} overflow-hidden transform transition-all duration-300 scale-100 max-h-[90vh] flex flex-col`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-app-soft">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-app-soft">
           <h3 className="font-bold text-lg text-app-strong truncate m-0">{title}</h3>
           <button
             onClick={onClose}
@@ -47,7 +47,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-md" 
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           {children}
         </div>
       </div>

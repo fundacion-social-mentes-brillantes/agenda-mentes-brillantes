@@ -48,7 +48,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    const variables = paleta(apariencia.acento, base);
+    const extra = { fondo: apariencia.fondo, destello: apariencia.destello };
+    const variables = paleta(apariencia.acento, base, extra);
     root.dataset.base = base;
     root.dataset.modo = apariencia.modo;
     root.classList.toggle("dark", base === "dark");
@@ -59,7 +60,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // Las dos versiones (clara y oscura): el modo automático puede cambiar antes de que cargue React.
     guardar(
       CLAVE_VARIABLES,
-      JSON.stringify({ dark: paleta(apariencia.acento, "dark"), light: paleta(apariencia.acento, "light") })
+      JSON.stringify({ dark: paleta(apariencia.acento, "dark", extra), light: paleta(apariencia.acento, "light", extra) })
     );
   }, [apariencia, base]);
 
