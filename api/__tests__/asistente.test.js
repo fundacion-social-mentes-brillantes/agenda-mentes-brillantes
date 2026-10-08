@@ -44,7 +44,7 @@ vi.mock("@anthropic-ai/sdk", () => {
 
 const modulo = await import("../assistant.js");
 const handler = modulo.default;
-const { aMensajesClaude, deClaude, leerFoto } = modulo;
+const { aMensajesClaude, deClaude, leerFoto, corregirDictado } = modulo;
 
 const llamadasDeepSeek = [];
 const FOTO = { tipo: "image/jpeg", data: "aGVsbG8=" };
@@ -253,5 +253,27 @@ describe("traducción de la conversación para Claude", () => {
     expect(sinLlave.statusCode).toBe(503);
     expect(sinLlave.cuerpo.error).toMatch(/no está configurado/);
     expect(deClaude({ content: [{ type: "tool_use", id: "i1", name: "create_image", input: { prompt: "p" } }] }).tool_calls[0].function.name).toBe("create_image");
+  });
+
+  it("dictado: pide sesión, un audio de verdad y la llave de Azure", async () => {
+    const dictar = async (body) => {
+      const r = respuesta();
+      await handler(peticion({ body: { accion: "voz", ...body } }), r);
+      return r;
+    };
+    const audio = "QUFB".repeat(100);
+    expect((await dictar({ audio, tipo: "audio/mp4" })).statusCode).toBe(401);
+    expect((await dictar({ idToken: "t", audio, tipo: "video/mp4" })).statusCode).toBe(400);
+    expect((await dictar({ idToken: "t", audio: "<script>", tipo: "audio/webm" })).statusCode).toBe(400);
+    const sinLlave = await dictar({ idToken: "t", audio, tipo: "audio/webm;codecs=opus" });
+    expect(sinLlave.statusCode).toBe(503);
+    expect(sinLlave.cuerpo.error).toMatch(/no está configurado/);
+  });
+
+  it("dictado: lo que se oye mal de 'sesión coach' se arregla, y lo demás no se toca", () => {
+    expect(corregirDictado("Ponme una sesión, pues con Catalina")).toBe("Ponme una sesión coach con Catalina");
+    expect(corregirDictado("Sesión Cox con Jorge el lunes")).toBe("Sesión coach con Jorge el lunes");
+    expect(corregirDictado("la sesión coche de mañana")).toBe("la sesión coach de mañana");
+    expect(corregirDictado("pues mañana tengo sesión con Ana")).toBe("pues mañana tengo sesión con Ana");
   });
 });

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Brain, Camera, Send, Sparkles, X, Zap } from "lucide-react";
+import { Bot, Brain, Camera, Mic, Send, Sparkles, Square, X, Zap } from "lucide-react";
 import { auth } from "../lib/firebase";
 import { toDate } from "../lib/dateUtils";
 import { DEFAULT_EVENT_COLOR } from "../lib/eventMeta";
 import { resolveMeetingLink } from "../lib/meetingLinks";
 import { prepararFoto, type FotoChat } from "../lib/foto";
+import { MAX_SEGUNDOS_DICTADO, audioABase64, empezarGrabacion, mensajeErrorMicrofono, puedeGrabar, type Grabacion } from "../lib/dictado";
 import { Spinner } from "./ui/Spinner";
 import { normalizeText } from "../services/clientsService";
 import { storageService } from "../services/storageService";
@@ -180,6 +181,13 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
   const [foto, setFoto] = useState<FotoChat | null>(null);
   const [fotoAviso, setFotoAviso] = useState("");
   const fotoRef = useRef<HTMLInputElement>(null);
+  // Dictado: se graba, el servidor lo pasa a texto y el texto queda en la caja para revisarlo.
+  const [dictado, setDictado] = useState<"inactivo" | "grabando" | "transcribiendo">("inactivo");
+  const [segundos, setSegundos] = useState(0);
+  const [avisoVoz, setAvisoVoz] = useState("");
+  const grabacionRef = useRef<Grabacion | null>(null);
+  const relojRef = useRef<number | null>(null);
+  const cajaRef = useRef<HTMLTextAreaElement>(null);
   const convoRef = useRef<MensajeIA[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Caché de eventos creados/duplicados en ESTE turno: permite mover/duplicar/borrar
@@ -251,6 +259,88 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
     if (modo !== "experto") cambiarModo("experto");
     fotoRef.current?.click();
   };
+
+  const pararReloj = () => {
+    if (relojRef.current !== null) window.clearInterval(relojRef.current);
+    relojRef.current = null;
+  };
+
+  /** Termina de grabar, pasa la voz a texto y la deja en la caja (no la envía sola). */
+  const terminarDictado = async () => {
+    const grabacion = grabacionRef.current;
+    grabacionRef.current = null;
+    pararReloj();
+    if (!grabacion) return;
+    setDictado("transcribiendo");
+    try {
+      const audio = await grabacion.detener();
+      if (!audio || audio.size < 1500) {
+        setAvisoVoz("No alcancé a escuchar nada. Toca el micrófono y habla otra vez.");
+        return;
+      }
+      const idToken = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "voz", idToken, audio: await audioABase64(audio), tipo: audio.type })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAvisoVoz(data?.error || "No pude pasar el audio a texto. Intenta otra vez.");
+        return;
+      }
+      const texto = typeof data?.texto === "string" ? data.texto.trim() : "";
+      if (!texto) {
+        setAvisoVoz("No entendí lo que dijiste. Intenta otra vez, un poco más cerca del celular.");
+        return;
+      }
+      setInput((previo) => (previo.trim() ? `${previo.trim()} ${texto}` : texto));
+      window.setTimeout(() => cajaRef.current?.focus(), 0);
+    } catch {
+      setAvisoVoz("No pude pasar el audio a texto. Revisa tu conexión e intenta otra vez.");
+    } finally {
+      setDictado("inactivo");
+    }
+  };
+
+  const empezarDictado = async () => {
+    setAvisoVoz("");
+    if (!puedeGrabar()) {
+      setAvisoVoz("Este navegador no deja grabar aquí. Usa el micrófono 🎙️ del teclado.");
+      return;
+    }
+    try {
+      grabacionRef.current = await empezarGrabacion();
+    } catch (error) {
+      setAvisoVoz(mensajeErrorMicrofono(error));
+      return;
+    }
+    setSegundos(0);
+    setDictado("grabando");
+    const inicio = Date.now();
+    relojRef.current = window.setInterval(() => {
+      const transcurridos = Math.floor((Date.now() - inicio) / 1000);
+      setSegundos(transcurridos);
+      // Un dictado no pasa de un minuto: se termina solo.
+      if (transcurridos >= MAX_SEGUNDOS_DICTADO) void terminarDictado();
+    }, 500);
+  };
+
+  const cancelarDictado = () => {
+    pararReloj();
+    grabacionRef.current?.cancelar();
+    grabacionRef.current = null;
+    setDictado("inactivo");
+  };
+
+  // Si la pantalla se cierra grabando, se suelta el micrófono.
+  useEffect(
+    () => () => {
+      if (relojRef.current !== null) window.clearInterval(relojRef.current);
+      grabacionRef.current?.cancelar();
+    },
+    []
+  );
 
   const elegirFoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const archivo = event.target.files?.[0];
@@ -621,7 +711,10 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
                 <p className="m-0 text-[11px] text-app-faint">{workspaceName || "Tu agenda"}</p>
               </div>
             </div>
-            <button type="button" onClick={() => setOpen(false)} className="rounded-xl bg-app-soft p-1.5 text-app-muted hover:text-app-strong" aria-label="Cerrar">
+            <button type="button" onClick={() => {
+                cancelarDictado();
+                setOpen(false);
+              }} className="rounded-xl bg-app-soft p-1.5 text-app-muted hover:text-app-strong" aria-label="Cerrar">
               <X size={18} />
             </button>
           </div>
@@ -712,6 +805,29 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
               </div>
             )}
 
+            {(dictado !== "inactivo" || avisoVoz) && (
+              <div className="flex items-center gap-2 rounded-2xl border border-app-soft bg-app-soft p-2 text-xs" role="status">
+                {dictado === "grabando" && <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-rose-500" aria-hidden="true" />}
+                {dictado === "transcribiendo" && <Spinner className="h-3.5 w-3.5 shrink-0" />}
+                <p className={`m-0 min-w-0 flex-1 ${dictado === "inactivo" ? "font-bold text-app-accent" : "text-app-muted"}`}>
+                  {dictado === "grabando"
+                    ? `Escuchando… ${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}. Toca ■ para terminar.`
+                    : dictado === "transcribiendo"
+                      ? "Pasando tu voz a texto…"
+                      : avisoVoz}
+                </p>
+                {dictado === "grabando" ? (
+                  <button type="button" onClick={cancelarDictado} aria-label="Cancelar el dictado" className="shrink-0 rounded-lg p-1 text-app-muted hover:text-app-strong">
+                    <X size={16} />
+                  </button>
+                ) : dictado === "inactivo" ? (
+                  <button type="button" onClick={() => setAvisoVoz("")} aria-label="Cerrar el aviso" className="shrink-0 rounded-lg p-1 text-app-muted hover:text-app-strong">
+                    <X size={16} />
+                  </button>
+                ) : null}
+              </div>
+            )}
+
             <div className="flex items-end gap-2">
               <input ref={fotoRef} type="file" accept="image/*" className="hidden" onChange={(e) => void elegirFoto(e)} />
               <button
@@ -725,6 +841,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
                 <Camera size={18} />
               </button>
               <textarea
+                ref={cajaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -734,18 +851,40 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
                   }
                 }}
                 rows={1}
-                placeholder={foto ? "Ej: agenda todo esto" : "Escribe tu pedido..."}
+                placeholder={foto ? "Ej: agenda todo esto" : "Escribe o dicta..."}
                 className="input-field max-h-28 min-h-11 flex-1 resize-none py-2.5"
               />
-              <button
-                type="button"
-                onClick={send}
-                disabled={loading || (!input.trim() && !(modo === "experto" && foto))}
-                className="btn-primary min-h-11 px-3"
-                aria-label="Enviar"
-              >
-                <Send size={18} />
-              </button>
+              {dictado === "grabando" ? (
+                <button
+                  type="button"
+                  onClick={() => void terminarDictado()}
+                  className="min-h-11 shrink-0 animate-pulse rounded-xl bg-rose-500 px-3 text-white"
+                  aria-label="Terminar y pasar a texto"
+                >
+                  <Square size={18} fill="currentColor" />
+                </button>
+              ) : !input.trim() && !(modo === "experto" && foto) ? (
+                <button
+                  type="button"
+                  onClick={() => void empezarDictado()}
+                  disabled={loading || dictado === "transcribiendo"}
+                  className="btn-primary min-h-11 px-3"
+                  aria-label="Dictar por voz"
+                  title="Dictar: toca, habla y toca ■ para terminar"
+                >
+                  {dictado === "transcribiendo" ? <Spinner className="h-[18px] w-[18px]" /> : <Mic size={18} />}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={send}
+                  disabled={loading || dictado !== "inactivo"}
+                  className="btn-primary min-h-11 px-3"
+                  aria-label="Enviar"
+                >
+                  <Send size={18} />
+                </button>
+              )}
             </div>
           </div>
         </div>

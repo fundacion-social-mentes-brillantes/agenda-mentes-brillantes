@@ -45,6 +45,30 @@ const MAX_PROMPT_IMAGEN = 3_000;
 // Freno por persona (memoria de la instancia): el modelo de imagen admite unas 2 por minuto.
 const IMAGENES_POR_MINUTO = 3;
 const usoImagenes = new Map();
+
+// Dictado (botón de micrófono): Azure Speech de la fundación (recurso speech-gemb, créditos de
+// Azure, ~US$1 la hora de audio), español de Colombia. La API de Claude no recibe audio.
+// Llave en AZURE_VOZ_KEY (Vercel). Medido el 8/10/2026: ~1 s por un pedido de 8 s.
+const VOZ_REGION = process.env.AZURE_VOZ_REGION || "eastus";
+// 2025-10-15: la primera versión que acepta lista de palabras (con 2024-11-15 "coach" salía "Cox").
+const VOZ_VERSION = "2025-10-15";
+// Palabras de la fundación que el dictado debe reconocer tal cual.
+const VOZ_PALABRAS = [
+  "sesión coach",
+  "coach",
+  "Sala de reducción del ego",
+  "Entrega de pasos",
+  "Gimnasio Emocional",
+  "Mentes Brillantes",
+  "GEMB",
+  "Meet",
+  "WhatsApp"
+];
+const VOZ_MAX_CHARS = 3_000_000; // ~2,2 MB de audio: de sobra para un minuto
+const VOZ_TIPOS = /^audio\/(webm|mp4|ogg|mpeg|wav|x-m4a|aac)\b/;
+const VOZ_TIEMPO_MS = 25_000;
+const DICTADOS_POR_MINUTO = 12;
+const usoDictado = new Map();
 const MAX_MESSAGES = 16;
 // Cuántas acciones puede pedir el modelo en un solo turno. Debe ser holgado: si se
 // recortan, sobran respuestas sin pregunta y la API rechaza la conversación entera.
@@ -565,6 +589,7 @@ function buildSystem({ workspaceName, userName, today, events, clients, conFotos
     `- Usa el "id" exacto de la lista para mover/duplicar/borrar. Si hay varias coincidencias reales y no puedes elegir, SOLO ahí pregunta (corto).`,
     `- Si acabas de crear algo y en el mismo pedido debes moverlo/duplicarlo, usa el id que devuelve la herramienta (texto "id=...").`,
     `- TEXTO DEL EVENTO: puedes escribir y guardar texto en el evento: listas de cosas que llevar, orden del día, guion de una sesión, el mensaje para mandar por WhatsApp, enlaces, notas. Para "anota / agrega / guarda en el evento" usa addToDescription (no borra lo que había); description solo si piden reemplazarlo todo. Al crear un evento con notas, pásalas en description.`,
+    `- DICTADO: muchos pedidos llegan dictados por voz: puede haber palabras mal oídas o signos de más ("sesión pues", "sesión Cox" = sesión coach; "las 16:00 h de la tarde" = 4:00 p. m.). Entiende la intención; si un nombre o una hora no tiene sentido, pregunta corto.`,
     `- HECHO: "márcalo como hecho / listo / ya se hizo" → update_event con done=true (false para desmarcar). Los eventos con hecho=true ya se hicieron.`,
     `- IMÁGENES NUEVAS: si piden crear o diseñar una imagen (invitación, flyer, afiche, tarjeta de cumpleaños, ilustración, fondo), usa create_image con un prompt detallado en inglés. Si debe llevar texto, ponlo literal entre comillas y pide "and no other text"; estilo cálido, de imprenta y hecho a mano (flat inks, paper grain), nunca brillos plásticos ni 3D. Si dicen en qué evento guardarla, pasa su id (si el evento se crea en este pedido, créalo primero). Si después piden guardarla, usa attach_photo. Si la herramienta falla, dilo; nunca digas que la creaste si no fue así.`,
     `- GUARDAR: attach_photo guarda la última foto que mandó la persona o la última imagen que creaste, en el evento que diga. Si no hay ninguna, pide que la manden.`,
@@ -848,6 +873,83 @@ async function crearImagen(prompt, formato) {
   }
 }
 
+/**
+ * Arreglos de lo que el dictado suele oír mal. "Coach" es inglés y a veces sale
+ * "sesión, pues" o "sesión Cox" aunque esté en la lista de palabras.
+ */
+export function corregirDictado(texto) {
+  return String(texto || "").replace(/\bsesi[oó]n,?\s+(pues|cox|coch|couch|cosh|cuch|coche|cops)\b/gi, (encontrado) =>
+    /^S/.test(encontrado) ? "Sesión coach" : "sesión coach"
+  );
+}
+
+/** Pasa a texto un dictado. Nunca lanza: devuelve el motivo para mostrárselo a la persona. */
+async function transcribir(base64, tipo) {
+  const llave = process.env.AZURE_VOZ_KEY;
+  if (!llave) return { ok: false, status: 503, error: "El dictado no está configurado todavía." };
+  const extension = /mp4|m4a|aac/.test(tipo) ? "m4a" : tipo.includes("ogg") ? "ogg" : tipo.includes("mpeg") ? "mp3" : tipo.includes("wav") ? "wav" : "webm";
+  const formulario = new FormData();
+  formulario.append("audio", new Blob([Buffer.from(base64, "base64")], { type: tipo.split(";")[0] }), `dictado.${extension}`);
+  formulario.append("definition", JSON.stringify({ locales: ["es-CO"], phraseList: { phrases: VOZ_PALABRAS } }));
+  const controlador = new AbortController();
+  const reloj = setTimeout(() => controlador.abort(), VOZ_TIEMPO_MS);
+  const inicio = Date.now();
+  try {
+    const r = await fetch(`https://${VOZ_REGION}.api.cognitive.microsoft.com/speechtotext/transcriptions:transcribe?api-version=${VOZ_VERSION}`, {
+      method: "POST",
+      headers: { "Ocp-Apim-Subscription-Key": llave },
+      body: formulario,
+      signal: controlador.signal
+    });
+    if (!r.ok) {
+      console.error("El dictado falló", { status: r.status, ms: Date.now() - inicio });
+      return { ok: false, status: r.status === 429 ? 429 : 502, error: "No pude pasar el audio a texto. Intenta otra vez." };
+    }
+    const datos = await r.json().catch(() => ({}));
+    const texto = corregirDictado(trimText(datos?.combinedPhrases?.[0]?.text || "", MAX_MESSAGE_CHARS));
+    console.log("Dictado listo", { ms: Date.now() - inicio, audioMs: datos?.durationMilliseconds, largo: texto.length });
+    return { ok: true, texto };
+  } catch (error) {
+    const tarde = error?.name === "AbortError";
+    console.error("El dictado falló", { motivo: tarde ? "tiempo" : String(error?.name || "error"), ms: Date.now() - inicio });
+    return { ok: false, status: 504, error: tarde ? "El audio tardó demasiado en pasarse a texto. Intenta otra vez." : "No pude pasar el audio a texto. Intenta otra vez." };
+  } finally {
+    clearTimeout(reloj);
+  }
+}
+
+/** POST /api/assistant con accion "voz": el dictado del botón de micrófono. Devuelve solo el texto. */
+async function atenderVoz(body, res) {
+  const user = await verifyIdToken(body.idToken);
+  if (!user) {
+    res.status(401).json({ error: "Tu sesión no es válida. Cierra y vuelve a iniciar sesión." });
+    return;
+  }
+  if (!(await esDelEquipo(new UserFirestore(body.idToken), user.localId))) {
+    res.status(403).json({ error: "El dictado es solo para el equipo de la fundación." });
+    return;
+  }
+  const tipo = String(body.tipo || "");
+  const audio = String(body.audio || "");
+  if (!VOZ_TIPOS.test(tipo) || audio.length < 200 || audio.length > VOZ_MAX_CHARS || !/^[A-Za-z0-9+/=]+$/.test(audio)) {
+    res.status(400).json({ error: "No pude leer ese audio. Intenta grabarlo otra vez." });
+    return;
+  }
+  const ahora = Date.now();
+  const recientes = (usoDictado.get(user.localId) || []).filter((t) => ahora - t < 60_000);
+  if (recientes.length >= DICTADOS_POR_MINUTO) {
+    res.status(429).json({ error: "Van muchos dictados seguidos. Espera un momento." });
+    return;
+  }
+  usoDictado.set(user.localId, [...recientes, ahora]);
+  const r = await transcribir(audio, tipo);
+  if (!r.ok) {
+    res.status(r.status).json({ error: r.error });
+    return;
+  }
+  res.status(200).json({ texto: r.texto });
+}
+
 /** POST /api/assistant con accion "imagen": la pide el navegador cuando el modelo usa create_image. */
 async function atenderImagen(body, res) {
   const user = await verifyIdToken(body.idToken);
@@ -902,6 +1004,10 @@ export default async function handler(req, res) {
   }
   if (body.accion === "imagen") {
     await atenderImagen(body, res);
+    return;
+  }
+  if (body.accion === "voz") {
+    await atenderVoz(body, res);
     return;
   }
   // "model" es opcional: "experto" (Claude) o, para DeepSeek, "flash" o "pro" (lo demás se trata como flash).
