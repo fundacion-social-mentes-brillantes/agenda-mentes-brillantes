@@ -2,6 +2,7 @@ import { collection, doc, getDocs, onSnapshot, query, serverTimestamp, setDoc, w
 import { auth, db } from "../lib/firebase";
 import { toDateSafe } from "../lib/dateUtils";
 import type { Client } from "../types/client";
+import { choqueConErp } from "../lib/personas";
 
 // Las personas (asistentes para sesiones coach) se guardan como documentos en la
 // colección "events" con recordType: "client". Así reutilizamos las reglas de eventos
@@ -92,6 +93,11 @@ export const clientsService = {
           const c = Number(d.data().clientCode) || 0;
           return c > m ? c : m;
         }, 0) + 1;
+
+    // El código es lo que cruza a la persona con el ERP: si allá ese número ya es de
+    // OTRA persona, no se crea (sus sesiones se descontarían del paquete equivocado).
+    const choque = await choqueConErp(code, clean);
+    if (choque) throw new Error(choque);
 
     await setDoc(doc(db, "events", clientDocId(workspaceId, code)), buildDocData(workspaceId, code, clean, true, uid));
     return { id: clientDocId(workspaceId, code), workspaceId, code, name: clean, nameLower: normalizeText(clean), active: true, createdAt: new Date() };

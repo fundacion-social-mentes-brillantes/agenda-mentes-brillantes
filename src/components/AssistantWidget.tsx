@@ -8,6 +8,7 @@ import { prepararFoto, type FotoChat } from "../lib/foto";
 import { MAX_SEGUNDOS_DICTADO, audioABase64, empezarGrabacion, mensajeErrorMicrofono, puedeGrabar, type Grabacion } from "../lib/dictado";
 import { Spinner } from "./ui/Spinner";
 import { normalizeText } from "../services/clientsService";
+import { personasParecidas } from "../lib/personas";
 import { storageService } from "../services/storageService";
 import type { EventWriteResult } from "../services/eventsService";
 import type { CalendarEvent } from "../types/event";
@@ -55,6 +56,7 @@ interface ArgumentosHerramienta {
   paidAmount?: number;
   clientCode?: number;
   clientName?: string;
+  esNueva?: boolean;
   description?: string;
   addToDescription?: string;
   done?: boolean;
@@ -98,6 +100,7 @@ function leerArgumentos(crudo: unknown): ArgumentosHerramienta {
   }
   if (typeof fuente.allDay === "boolean") salida.allDay = fuente.allDay;
   if (typeof fuente.done === "boolean") salida.done = fuente.done;
+  if (typeof fuente.esNueva === "boolean") salida.esNueva = fuente.esNueva;
   return salida;
 }
 
@@ -221,18 +224,28 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
   const findEvent = (id: string | undefined): CalendarEvent | undefined =>
     id ? events.find((e) => e.id === id) || localCacheRef.current.find((e) => e.id === id) : undefined;
 
-  const findClient = (codeOrName: { code?: number; name?: string }): Client | undefined => {
+  /**
+   * La persona por su código (lo que la cruza con el ERP) o por su nombre. Si el nombre
+   * coincide con varias, NO se elige una al azar: se devuelven para preguntar cuál.
+   */
+  const buscarPersona = (codeOrName: { code?: number; name?: string }): { persona?: Client; varias?: Client[] } => {
     const all = [...clients, ...localClientsRef.current];
     if (typeof codeOrName.code === "number") {
       const byCode = all.find((c) => c.code === codeOrName.code);
-      if (byCode) return byCode;
+      if (byCode) return { persona: byCode };
     }
     if (codeOrName.name) {
       const q = normalizeText(codeOrName.name);
-      return all.find((c) => c.nameLower === q) || all.find((c) => c.nameLower.includes(q));
+      const exactas = all.filter((c) => c.nameLower === q);
+      if (exactas.length === 1) return { persona: exactas[0] };
+      if (exactas.length > 1) return { varias: exactas };
+      const parciales = all.filter((c) => c.nameLower.includes(q));
+      if (parciales.length === 1) return { persona: parciales[0] };
+      if (parciales.length > 1) return { varias: parciales.slice(0, 6) };
     }
-    return undefined;
+    return {};
   };
+  const listaPersonas = (lista: Client[]) => lista.map((c) => `${c.name} (#${c.code})`).join(", ");
 
   useEffect(() => {
     if (open && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -465,8 +478,14 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
 
       if (name === "create_coach_session") {
         if (!workspaceId) return "No hay agenda seleccionada.";
-        const client = findClient({ code: typeof args.clientCode === "number" ? args.clientCode : undefined, name: args.clientName });
-        if (!client) return "No encontré a esa persona en la base de datos. Si es nueva, créala primero con add_client.";
+        const { persona: client, varias } = buscarPersona({ code: typeof args.clientCode === "number" ? args.clientCode : undefined, name: args.clientName });
+        if (varias) return `Hay varias personas con ese nombre: ${listaPersonas(varias)}. Pregunta cuál es y usa su código.`;
+        if (!client) {
+          const parecidas = personasParecidas(args.clientName || "", [...clients, ...localClientsRef.current]);
+          return parecidas.length
+            ? `No encontré a "${args.clientName}". Hay nombres parecidos: ${listaPersonas(parecidas)}. Pregunta si es alguna de ellas (el dictado puede oír mal) antes de crear a alguien nuevo.`
+            : `No encontré a "${args.clientName}" en la lista de personas. Pregunta si es alguien nuevo; solo si lo confirma, créala con add_client (esNueva=true).`;
+        }
         const date = String(args.date || "");
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "La fecha no es válida (formato YYYY-MM-DD).";
         const allDay = !!args.allDay;
@@ -506,11 +525,21 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
         if (!workspaceId) return "No hay agenda seleccionada.";
         const nm = String(args.name || "").trim();
         if (!nm) return "Falta el nombre de la persona.";
-        const existing = findClient({ name: nm });
-        if (existing && existing.nameLower === normalizeText(nm)) return `Esa persona ya existe: ${existing.name} (#${existing.code}).`;
+        const todas = [...clients, ...localClientsRef.current];
+        const iguales = todas.filter((c) => c.nameLower === normalizeText(nm));
+        if (iguales.length) return `Esa persona ya existe: ${listaPersonas(iguales)}. Usa su código.`;
+        // El dictado puede oír mal ("Katalina"): antes de crear otra, se pregunta si es una de las parecidas.
+        const parecidas = personasParecidas(nm, todas);
+        if (parecidas.length && !args.esNueva) {
+          return `Hay personas con nombre parecido: ${listaPersonas(parecidas)}. Pregunta si es alguna de ellas; si dice que es alguien nuevo, vuelve a llamar add_client con esNueva=true.`;
+        }
+        const ok = window.confirm(
+          `¿Crear a "${nm}" como persona nueva?\n\nTendrá el siguiente código de la agenda, y debe ser el MISMO que tenga en el ERP (la app revisa que allá ese número no sea de otra persona).`
+        );
+        if (!ok) return "La persona canceló: no se creó a nadie.";
         const created = await onCreateClient(nm);
         localClientsRef.current.push(created);
-        return `OK: persona creada ${created.name} con código #${created.code}.`;
+        return `OK: persona creada ${created.name} con código #${created.code}. Recuérdale que en el ERP debe tener ese mismo código.`;
       }
 
       if (name === "attach_photo") {

@@ -539,11 +539,12 @@ const TOOLS = [
     function: {
       name: "add_client",
       description:
-        "Crea una PERSONA nueva en la base de datos de sesiones coach. Se le asigna automáticamente el siguiente código consecutivo. Úsalo solo si la persona no existe ya en la lista PERSONAS.",
+        "Crea una PERSONA nueva para sesiones coach (con el siguiente código consecutivo, que debe coincidir con el del ERP; la app revisa el ERP y pide confirmación). Úsalo SOLO si la persona confirmó que es alguien nuevo que no está en PERSONAS.",
       parameters: {
         type: "object",
         properties: {
-          name: { type: "string", description: "Nombre completo de la persona." }
+          name: { type: "string", description: "Nombre completo de la persona." },
+          esNueva: { type: "boolean", description: "true solo si ya le preguntaste por las personas de nombre parecido y confirmó que es alguien nuevo." }
         },
         required: ["name"]
       }
@@ -580,7 +581,7 @@ function buildSystem({ workspaceName, userName, today, events, clients, conFotos
     ``,
     `Reglas (síguelas al pie de la letra):`,
     `- SÉ AUTOSUFICIENTE Y DECIDIDO: si la intención está clara, ACTÚA de una con la herramienta; NO pidas permiso ni propongas opciones. La única excepción es ELIMINAR (el navegador pedirá confirmación solo).`,
-    `- SESIONES COACH: cuando el pedido es sobre una sesión con una PERSONA (ej. "agenda sesión con Catalina", "sesión coach de Jorge el lunes"), usa create_coach_session e identifica a la persona por su código de la lista PERSONAS (o por nombre). Si la persona NO está en la lista, primero créala con add_client y luego agenda. Las sesiones coach son VIRTUALES por defecto; usa presencial solo si el usuario lo dice.`,
+    `- SESIONES COACH: cuando el pedido es sobre una sesión con una PERSONA (ej. "agenda sesión con Catalina", "sesión coach de Jorge el lunes"), usa create_coach_session e identifica a la persona por su CÓDIGO de la lista PERSONAS: las personas son las mismas del ERP y se cruzan por ese código, así que equivocarse de persona descuenta del paquete de otra. Si hay varias con el mismo nombre, pregunta cuál (di sus códigos). Si el nombre no aparece exacto, busca parecidos (el dictado puede oír mal: "Katalina" = "Catalina") y pregunta si es esa. Solo si confirma que es alguien nuevo, créala con add_client (esNueva=true) y luego agenda. Las sesiones coach son VIRTUALES por defecto; usa presencial solo si el usuario lo dice.`,
     `- ENLACES FIJOS: "Sala de reducción del ego" virtual usa https://meet.google.com/pgk-svvh-brp; "Entrega de pasos" virtual usa https://meet.google.com/zrt-matj-dwe; toda sesión coach virtual usa https://meet.google.com/ouz-vnmr-fma. La app los asigna automáticamente y nunca debes proponer cambiarlos.`,
     `- "Duplicar/copiar X" → duplicate_event. "Mover/pasar/cambiar X" → update_event. "Agenda una reunión/recordatorio" (sin persona) → create_event.`,
     `- Si piden a varias fechas ("los próximos 3 martes", "toda la semana"), haz VARIAS llamadas, una por fecha.`,
