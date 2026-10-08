@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 import { CalendarDays, HeartHandshake, Plus, Sparkles, UserRound } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { EventDetailModal } from "../components/events/EventDetailModal";
-import { endOfDay, formatCOP, formatEventTime, isSameDay, startOfDay, toDate } from "../lib/dateUtils";
+import { FilaEvento } from "../components/events/FilaEvento";
+import { useEventosEnErp } from "../hooks/useEventosEnErp";
+import { endOfDay, startOfDay, toDate } from "../lib/dateUtils";
 import type { CalendarEvent } from "../types/event";
 import type { UserProfile } from "../types/user";
 
@@ -42,6 +44,8 @@ export default function DashboardPage({
     .sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime());
 
   const shownEvents = filter === "coach" ? todayEvents.filter((e) => e.kind === "coach") : todayEvents;
+  // Sesiones coach de hoy que ya están en la contabilidad (marca verde en la fila).
+  const { registrados: enErp } = useEventosEnErp(todayEvents);
 
   const greeting = getGreeting(now);
   const hasNoEvents = events.length === 0;
@@ -54,13 +58,13 @@ export default function DashboardPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="glass-panel overflow-hidden rounded-[2rem] p-5 sm:p-7">
-        <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
-          <div className="flex items-center gap-4">
+      <section className="glass-panel overflow-hidden rounded-[2rem] p-4 sm:p-7">
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="flex items-center gap-3 sm:gap-4">
             {profile?.photoURL ? (
-              <img src={profile.photoURL} alt={profile.name} referrerPolicy="no-referrer" className="h-16 w-16 rounded-full object-cover shadow-lg" />
+              <img src={profile.photoURL} alt={profile.name} referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-full object-cover shadow-lg sm:h-16 sm:w-16" />
             ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-full text-xl font-black text-white shadow-lg" style={{ backgroundColor: profile?.color || "#d7b46a" }}>
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-black text-white shadow-lg sm:h-16 sm:w-16 sm:text-xl" style={{ backgroundColor: profile?.color || "#d7b46a" }}>
                 {profile?.name ? profile.name.slice(0, 2).toUpperCase() : <UserRound size={24} />}
               </div>
             )}
@@ -69,14 +73,14 @@ export default function DashboardPage({
                 {now.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}
                 {workspaceName ? ` · ${workspaceName}` : ""}
               </p>
-              <h2 className="m-0 text-3xl font-black tracking-tight text-app-strong sm:text-4xl">
+              <h2 className="m-0 text-2xl font-black tracking-tight text-app-strong sm:text-4xl">
                 {greeting}, {profile?.name?.split(" ")[0] || "Brillante"}
               </h2>
-              <p className="mt-2 text-sm text-app-muted">Organiza tu día con calma, claridad y conciencia.</p>
+              <p className="mt-1 text-sm text-app-muted sm:mt-2">Organiza tu día con calma, claridad y conciencia.</p>
             </div>
           </div>
 
-          <button type="button" onClick={() => setActivePage("event-form")} className="btn-primary w-full lg:w-auto">
+          <button type="button" onClick={() => setActivePage("event-form")} className="btn-primary hidden w-full sm:flex lg:w-auto">
             <Plus size={18} />
             Nuevo evento
           </button>
@@ -121,9 +125,15 @@ export default function DashboardPage({
               onAction={() => setActivePage("event-form")}
             />
           ) : (
-            <div className="grid gap-3">
+            <div className="space-y-1.5">
               {shownEvents.map((event) => (
-                <EventRow key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
+                <FilaEvento
+                  key={event.id}
+                  event={event}
+                  ahora={now}
+                  enErp={event.kind === "coach" && Boolean(event.id && enErp.has(event.id))}
+                  onClick={() => setSelectedEvent(event)}
+                />
               ))}
             </div>
           )}
@@ -142,27 +152,6 @@ export default function DashboardPage({
   );
 }
 
-function EventRow({ event, onClick }: { event: CalendarEvent; onClick: () => void }) {
-  const eventDate = toDate(event.startAt);
-  const firstImage = event.attachments?.find((att) => att.kind === "image");
-
-  return (
-    <Card onClick={onClick} className="border-l-4 p-4 hover:-translate-y-0.5" style={{ borderLeftColor: event.color }}>
-      <div className="flex gap-4">
-        {firstImage && <img src={firstImage.url} alt={event.title} referrerPolicy="no-referrer" className="hidden h-20 w-24 rounded-2xl object-cover sm:block" />}
-        <div className="min-w-0 flex-1">
-          <h3 className="m-0 truncate text-lg font-black text-app-strong">{event.title}</h3>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-bold text-app-muted">
-            <span>{formatEventTime(event)}</span>
-            <span className="capitalize">{event.modality}</span>
-            {!isSameDay(eventDate, new Date()) && <span>{eventDate.toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>}
-          </div>
-          <Amounts event={event} />
-        </div>
-      </div>
-    </Card>
-  );
-}
 
 function SectionHeader({ icon, title, count }: { icon: ReactNode; title: string; count: number }) {
   return (
@@ -196,15 +185,3 @@ function getGreeting(date: Date): string {
   return "Buenas noches";
 }
 
-function Amounts({ event, compact = false }: { event: CalendarEvent; compact?: boolean }) {
-  const hasTotal = typeof event.totalAmount === "number";
-  const hasPaid = typeof event.paidAmount === "number";
-  if (!hasTotal && !hasPaid) return null;
-
-  return (
-    <div className={`mt-3 flex flex-wrap gap-2 ${compact ? "text-[11px]" : "text-xs"} font-black text-app-muted`}>
-      {hasTotal && <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1">Valor: {formatCOP(event.totalAmount)}</span>}
-      {hasPaid && <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1">Abono: {formatCOP(event.paidAmount)}</span>}
-    </div>
-  );
-}

@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { Plus, Search, Sparkles } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { EventDetailModal } from "../components/events/EventDetailModal";
-import { formatCOP, formatEventTime, toDate } from "../lib/dateUtils";
+import { FilaEvento } from "../components/events/FilaEvento";
+import { useEventosEnErp } from "../hooks/useEventosEnErp";
+import { isSameDay, startOfDay, toDate } from "../lib/dateUtils";
 import type { CalendarEvent } from "../types/event";
 
 interface DayPageProps {
@@ -26,6 +28,58 @@ export default function DayPage({ events, setActivePage, setEditingEvent, onDupl
       })
       .sort((a, b) => toDate(b.startAt).getTime() - toDate(a.startAt).getTime());
   }, [events, searchQuery]);
+
+  // Agrupadas por día. Arriba lo que viene (de hoy en adelante, en orden) y abajo lo
+  // anterior (lo más reciente primero): antes la lista arrancaba en el último evento
+  // agendado (años adelante) y había que bajar mucho para llegar a hoy.
+  // Dentro de cada día, siempre en orden de hora.
+  const hoy = new Date();
+  const inicioDeHoy = startOfDay(hoy).getTime();
+  // Cálculo directo (sin memoria): depende de la fecha de hoy, que cambia sola.
+  const agrupar = (lista: CalendarEvent[]) => {
+    const grupos: { clave: string; fecha: Date; eventos: CalendarEvent[] }[] = [];
+    for (const event of lista) {
+      const fecha = toDate(event.startAt);
+      const clave = `${fecha.getFullYear()}-${fecha.getMonth()}-${fecha.getDate()}`;
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.clave === clave) ultimo.eventos.push(event);
+      else grupos.push({ clave, fecha, eventos: [event] });
+    }
+    for (const grupo of grupos) grupo.eventos.sort((a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime());
+    return grupos;
+  };
+  const desdeHoy = filteredEvents.filter((e) => toDate(e.startAt).getTime() >= inicioDeHoy).reverse();
+  const antes = filteredEvents.filter((e) => toDate(e.startAt).getTime() < inicioDeHoy);
+  const proximos = agrupar(desdeHoy);
+  const anteriores = agrupar(antes);
+
+  const { registrados: enErp } = useEventosEnErp(filteredEvents);
+
+  const pintarGrupos = (grupos: typeof proximos) =>
+    grupos.map((grupo) => (
+      <section key={grupo.clave} className="space-y-1.5">
+        <h3
+          className="sticky top-0 z-10 m-0 -mx-1 flex items-baseline justify-between gap-2 rounded-xl px-1 py-1.5 text-sm font-black text-app-strong backdrop-blur-sm"
+          style={{ background: "color-mix(in srgb, var(--app-bg) 86%, transparent)" }}
+        >
+          <span className="truncate">
+            {capitalizar(grupo.fecha.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}
+            {isSameDay(grupo.fecha, hoy) && <span className="ml-2 text-xs font-black text-app-accent">Hoy</span>}
+          </span>
+          <span className="shrink-0 text-xs font-bold text-app-faint">
+            {grupo.eventos.length} {grupo.eventos.length === 1 ? "cita" : "citas"}
+          </span>
+        </h3>
+        {grupo.eventos.map((event) => (
+          <FilaEvento
+            key={event.id}
+            event={event}
+            enErp={event.kind === "coach" && Boolean(event.id && enErp.has(event.id))}
+            onClick={() => setSelectedEvent(event)}
+          />
+        ))}
+      </section>
+    ));
 
   const handleEdit = (event: CalendarEvent) => {
     setEditingEvent(event);
@@ -67,10 +121,11 @@ export default function DayPage({ events, setActivePage, setEditingEvent, onDupl
           </button>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredEvents.map((event) => (
-            <AgendaCard key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
-          ))}
+        <div className="space-y-4">
+          {proximos.length > 0 && <p className="section-label m-0">Desde hoy</p>}
+          {pintarGrupos(proximos)}
+          {anteriores.length > 0 && <p className="section-label m-0 border-t border-app-soft pt-4">Anteriores</p>}
+          {pintarGrupos(anteriores)}
         </div>
       )}
 
@@ -86,36 +141,6 @@ export default function DayPage({ events, setActivePage, setEditingEvent, onDupl
   );
 }
 
-function AgendaCard({ event, onClick }: { event: CalendarEvent; onClick: () => void }) {
-  const date = toDate(event.startAt);
-  const firstImage = event.attachments?.find((att) => att.kind === "image");
-
-  return (
-    <button type="button" onClick={onClick} className="overflow-hidden rounded-3xl border border-app-soft bg-app-panel text-left transition hover:-translate-y-0.5 hover:bg-app-soft">
-      {firstImage && <img src={firstImage.url} alt={event.title} referrerPolicy="no-referrer" className="h-36 w-full object-cover" />}
-      <div className="space-y-3 p-4">
-        <div className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full" style={{ backgroundColor: event.color }} />
-          <span className="text-xs font-black uppercase tracking-wide text-app-faint">{event.modality}</span>
-        </div>
-        <h3 className="m-0 line-clamp-2 text-lg font-black leading-tight text-app-strong">{event.title}</h3>
-        <p className="m-0 text-xs font-bold uppercase text-app-faint">{date.toLocaleDateString("es-CO", { weekday: "short", day: "numeric", month: "short" })}</p>
-        <p className="m-0 text-sm font-bold text-app-muted">{formatEventTime(event)}</p>
-        <Amounts event={event} />
-      </div>
-    </button>
-  );
-}
-
-function Amounts({ event }: { event: CalendarEvent }) {
-  const hasTotal = typeof event.totalAmount === "number";
-  const hasPaid = typeof event.paidAmount === "number";
-  if (!hasTotal && !hasPaid) return null;
-
-  return (
-    <div className="flex flex-wrap gap-2 text-xs font-black text-app-muted">
-      {hasTotal && <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1">Valor: {formatCOP(event.totalAmount)}</span>}
-      {hasPaid && <span className="rounded-full border border-app-soft bg-app-soft px-2.5 py-1">Abono: {formatCOP(event.paidAmount)}</span>}
-    </div>
-  );
+function capitalizar(texto: string): string {
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
