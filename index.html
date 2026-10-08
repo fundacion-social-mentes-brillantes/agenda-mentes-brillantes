@@ -44,49 +44,153 @@
       } catch (e) {}
     </script>
     <style>
-      /* Splash instantáneo mientras carga el código (React lo reemplaza al montar).
-         Usa los mismos colores que la app (los pone el script de arriba). */
-      #boot-splash {
+      /* Pantalla de carga: el logo de Agenda MB animado y "GEMB" debajo, mientras la app
+         carga. Va aquí (y no en React) para que salga al instante, antes de que llegue el
+         código. Usa los colores de la app (los pone el script de arriba). La app la quita
+         con window.__arranque.listo() cuando ya hay algo que mostrar (src/lib/arranque.ts). */
+      #arranque {
         position: fixed;
         inset: 0;
+        z-index: 2147483000;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 16px;
+        gap: 22px;
         background:
           radial-gradient(60% 50% at 0% 0%, var(--app-glow, rgba(91, 45, 255, 0.42)), transparent 72%),
           radial-gradient(60% 55% at 100% 100%, var(--app-glow-2, rgba(46, 157, 255, 0.3)), transparent 72%),
           linear-gradient(160deg, var(--app-bg, #0f0a2b) 0%, var(--app-bg-soft, #1c144e) 100%);
+        transition: opacity 0.35s ease;
+        /* Seguro: si el script de abajo no llegara a correr, la pantalla se quita sola a los 20 s. */
+        animation: ag-seguro 0.35s ease 20s forwards;
       }
-      #boot-splash img {
-        width: 84px;
-        height: 84px;
-        border-radius: 22px;
-        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+      #arranque.fuera { opacity: 0; pointer-events: none; }
+      #arranque svg {
+        width: min(34vw, 132px);
+        height: auto;
+        overflow: visible;
+        filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.38));
+        animation: ag-teja 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
       }
-      #boot-splash .ring {
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        border: 3px solid rgba(150, 121, 255, 0.25);
-        border-top-color: var(--app-accent, #9679ff);
-        animation: bootspin 0.9s linear infinite;
+      #arranque .punto,
+      #arranque .centro {
+        transform-box: fill-box;
+        transform-origin: center;
+        opacity: 0;
+        animation: ag-punto 0.42s cubic-bezier(0.3, 1.5, 0.5, 1) forwards;
+        animation-delay: calc(0.18s + var(--i) * 0.07s);
       }
-      @keyframes bootspin {
-        to {
-          transform: rotate(360deg);
-        }
+      #arranque .anillo {
+        fill: none;
+        stroke: #ffffff;
+        stroke-width: 6;
+        stroke-linecap: round;
+        stroke-dasharray: 277;
+        stroke-dashoffset: 277;
+        transform-box: fill-box;
+        transform-origin: center;
+        animation:
+          ag-traza 0.6s ease-out 0.85s forwards,
+          ag-late 1.6s ease-in-out 1.45s infinite;
+      }
+      #arranque .halo {
+        transform-box: fill-box;
+        transform-origin: center;
+        opacity: 0;
+        animation: ag-halo 1.6s ease-in-out 1.45s infinite;
+      }
+      #arranque .sigla {
+        margin: 0;
+        padding-left: 0.55em;
+        font: 600 15px/1 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+        letter-spacing: 0.55em;
+        color: var(--app-muted, #b5acdf);
+        opacity: 0;
+        animation: ag-sube 0.6s ease 0.75s forwards;
+      }
+      /* Lista: el anillo destella y todo se desvanece. */
+      #arranque.lleno .anillo { animation: ag-destello 0.45s ease-out forwards; stroke-dashoffset: 0; }
+      @keyframes ag-seguro { to { opacity: 0; visibility: hidden; } }
+      @keyframes ag-teja { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: none; } }
+      @keyframes ag-punto { from { opacity: 0; transform: scale(0.2); } to { opacity: 1; transform: none; } }
+      @keyframes ag-traza { to { stroke-dashoffset: 0; } }
+      @keyframes ag-late { 0%, 100% { transform: scale(1); opacity: 0.95; } 50% { transform: scale(1.14); opacity: 0.55; } }
+      @keyframes ag-halo { 0%, 100% { opacity: 0.25; transform: scale(0.9); } 50% { opacity: 0.6; transform: scale(1.25); } }
+      @keyframes ag-sube { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+      @keyframes ag-destello { from { transform: scale(1); opacity: 1; } to { transform: scale(1.7); opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        #arranque svg, #arranque .punto, #arranque .centro, #arranque .sigla { animation: none; opacity: 1; }
+        #arranque .anillo { animation: none; stroke-dashoffset: 0; }
+        #arranque .halo { animation: none; opacity: 0.3; }
       }
     </style>
   </head>
   <body>
-    <div id="root">
-      <div id="boot-splash">
-        <img src="/icons/icon-192.png" alt="Agenda Mentes Brillantes" />
-        <div class="ring"></div>
-      </div>
+    <div id="arranque" role="status" aria-label="Cargando Agenda Mentes Brillantes">
+      <!-- El icono de Agenda MB (public/icons/icon-512.png) dibujado a mano para animarlo:
+           la cuadrícula de 3x3 y el punto elegido con su anillo, en las mismas posiciones. -->
+      <svg viewBox="0 0 512 512" aria-hidden="true">
+        <defs>
+          <clipPath id="ag-forma"><rect width="512" height="512" rx="114" /></clipPath>
+          <radialGradient id="ag-violeta" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(40 40) scale(470)">
+            <stop offset="0" stop-color="#6a36ff" stop-opacity="0.95" /><stop offset="1" stop-color="#5b2dff" stop-opacity="0" />
+          </radialGradient>
+          <radialGradient id="ag-azul" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(500 500) scale(400)">
+            <stop offset="0" stop-color="#2ea4ff" stop-opacity="0.95" /><stop offset="1" stop-color="#2e8ed9" stop-opacity="0" />
+          </radialGradient>
+          <radialGradient id="ag-lila" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(480 30) scale(300)">
+            <stop offset="0" stop-color="#8c6bc0" stop-opacity="0.7" /><stop offset="1" stop-color="#7b5ba9" stop-opacity="0" />
+          </radialGradient>
+          <filter id="ag-brillo" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="14" /></filter>
+        </defs>
+        <g clip-path="url(#ag-forma)">
+          <rect width="512" height="512" fill="#0b0421" />
+          <rect width="512" height="512" fill="url(#ag-violeta)" />
+          <rect width="512" height="512" fill="url(#ag-lila)" />
+          <rect width="512" height="512" fill="url(#ag-azul)" />
+        </g>
+        <g fill="#c9c2dd">
+          <circle class="punto" style="--i: 0" cx="181" cy="181" r="10" />
+          <circle class="punto" style="--i: 1" cx="256" cy="181" r="10" />
+          <circle class="punto" style="--i: 1" cx="181" cy="256" r="10" />
+          <circle class="punto" style="--i: 2" cx="330" cy="181" r="10" />
+          <circle class="punto" style="--i: 2" cx="256" cy="256" r="10" />
+          <circle class="punto" style="--i: 2" cx="181" cy="330" r="10" />
+          <circle class="punto" style="--i: 3" cx="256" cy="330" r="10" />
+          <circle class="punto" style="--i: 4" cx="330" cy="330" r="10" />
+        </g>
+        <circle class="halo" cx="330" cy="256" r="52" fill="#9fd4ff" filter="url(#ag-brillo)" />
+        <circle class="centro" style="--i: 5" cx="330" cy="256" r="21" fill="#ffffff" />
+        <circle class="anillo" cx="330" cy="256" r="44" />
+      </svg>
+      <p class="sigla">GEMB</p>
     </div>
+    <script>
+      // La app avisa cuando ya hay algo que mostrar: window.__arranque.listo() (src/lib/arranque.ts).
+      (function () {
+        var raiz = document.getElementById("arranque");
+        if (!raiz) return;
+        var inicio = performance.now();
+        var cerrando = false;
+        function cerrar() {
+          if (cerrando) return;
+          cerrando = true;
+          raiz.classList.add("lleno");
+          setTimeout(function () {
+            raiz.classList.add("fuera");
+            setTimeout(function () { raiz.remove(); }, 380);
+          }, 260);
+        }
+        window.__arranque = {
+          // Se deja ver al menos 1,2 s: lo que tarda el logo en armarse.
+          listo: function () { setTimeout(cerrar, Math.max(0, 1200 - (performance.now() - inicio))); }
+        };
+        // Si algo falla y nadie avisa, no se queda tapando la app.
+        setTimeout(cerrar, 12000);
+      })();
+    </script>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -7,6 +7,7 @@ import { resolveMeetingLink } from "../lib/meetingLinks";
 import { prepararFoto, type FotoChat } from "../lib/foto";
 import { Spinner } from "./ui/Spinner";
 import { normalizeText } from "../services/clientsService";
+import { storageService } from "../services/storageService";
 import type { EventWriteResult } from "../services/eventsService";
 import type { CalendarEvent } from "../types/event";
 import type { Client } from "../types/client";
@@ -82,8 +83,17 @@ const CLAVE_MODO = "asistenteModo";
 
 const OPCIONES_MODO: { valor: ModoAsistente; etiqueta: string; descripcion: string; icono: typeof Zap }[] = [
   { valor: "basico", etiqueta: "Básico", descripcion: "Rápido, para el día a día.", icono: Zap },
-  { valor: "experto", etiqueta: "Experto", descripcion: "Más a fondo; lee fotos (no se guardan).", icono: Brain }
+  { valor: "experto", etiqueta: "Experto", descripcion: "Más a fondo; lee fotos y, si se lo pides, las guarda en un evento.", icono: Brain }
 ];
+
+/** La foto del chat (JPEG en base64) como archivo, para subirla a los adjuntos de un evento. */
+function archivoDeFoto(foto: FotoChat, nombre: string): File {
+  const binario = atob(foto.data);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  const base = nombre.trim().slice(0, 60) || "Foto del asistente";
+  return new File([bytes], `${base}.jpg`, { type: foto.tipo });
+}
 
 // Texto que acompaña una foto mandada sin escribir nada.
 const MENSAJE_SOLO_FOTO = "Te mando esta foto. Mira qué hay que agendar y hazlo.";
@@ -146,6 +156,10 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
   const localCacheRef = useRef<CalendarEvent[]>([]);
   // Caché de personas creadas este turno (para agendar coach justo después de crearlas).
   const localClientsRef = useRef<Client[]>([]);
+  // La foto de ESTE pedido (para guardarla en un evento si la persona lo pide) y en qué
+  // eventos ya quedó, para no subirla dos veces si el modelo repite la acción.
+  const fotoTurnoRef = useRef<FotoChat | null>(null);
+  const fotoGuardadaEnRef = useRef<Set<string>>(new Set());
 
   const findEvent = (id: string | undefined): CalendarEvent | undefined =>
     id ? events.find((e) => e.id === id) || localCacheRef.current.find((e) => e.id === id) : undefined;
@@ -353,6 +367,21 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
         return `OK: persona creada ${created.name} con código #${created.code}.`;
       }
 
+      if (name === "attach_photo") {
+        const fotoTurno = fotoTurnoRef.current;
+        if (!fotoTurno) return "No hay ninguna foto en este mensaje: pídele a la persona que la mande otra vez junto con el pedido, en modo Experto.";
+        if (!storageService.isConfigured()) return "Guardar archivos no está disponible todavía en esta agenda.";
+        const id = String(args.id || "");
+        const ev = findEvent(id);
+        if (!ev) return "No encontré ese evento.";
+        if (fotoGuardadaEnRef.current.has(id)) return `OK: la foto ya estaba guardada en "${ev.title}".`;
+        const adjunto = await storageService.uploadAttachment(archivoDeFoto(fotoTurno, args.name || ev.title), ev.workspaceId || workspaceId || "", id);
+        const adjuntos = [...(ev.attachments || []), adjunto];
+        await onUpdateEvent(id, { attachments: adjuntos });
+        fotoGuardadaEnRef.current.add(id);
+        return `OK: foto guardada en los adjuntos de "${ev.title}".`;
+      }
+
       if (name === "delete_event") {
         const ok = window.confirm(`¿Eliminar "${args.title || "este evento"}"? No se puede deshacer.`);
         if (!ok) return "El usuario canceló la eliminación.";
@@ -397,6 +426,8 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
     setStatus(fotoTurno ? "Mirando la foto..." : pensando);
     localCacheRef.current = [];
     localClientsRef.current = [];
+    fotoTurnoRef.current = fotoTurno;
+    fotoGuardadaEnRef.current = new Set();
 
     try {
       const idToken = await auth.currentUser?.getIdToken();
@@ -446,7 +477,9 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
                         ? "Duplicando evento..."
                         : name === "delete_event"
                           ? "Eliminando evento..."
-                          : "Trabajando..."
+                          : name === "attach_photo"
+                            ? "Guardando la foto en el evento..."
+                            : "Trabajando..."
             );
             let parsed: ArgumentosHerramienta = {};
             try {
@@ -479,6 +512,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
     } catch {
       setUiMessages((prev) => [...prev, { role: "assistant", content: "No pude conectar con el asistente. Revisa tu conexión e intenta de nuevo." }]);
     } finally {
+      fotoTurnoRef.current = null;
       setLoading(false);
     }
   };

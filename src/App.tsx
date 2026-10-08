@@ -28,6 +28,7 @@ import { authService } from "./services/authService";
 import { workspaceService } from "./services/workspaceService";
 import { AGENDA_AVISOS, sincronizarPush } from "./lib/push";
 import { paginaPerezosa } from "./lib/paginaPerezosa";
+import { arranque } from "./lib/arranque";
 
 function AppContent() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -117,6 +118,18 @@ function AppContent() {
   // dueno pueda revisar diferencias. No cambia nada en la contabilidad. Siempre
   // la del equipo y no la activa: con "Mi agenda" activa el ERP lo rechazaba.
   useReporteErp(puedeRecibirAvisos ? AGENDA_AVISOS : null, events);
+
+  // El logo animado de index.html se quita cuando ya hay algo que mostrar: la
+  // pantalla de ingreso, la agenda con sus eventos, o el aviso de que no cargo.
+  const arranqueListo =
+    !authLoading &&
+    (!user ||
+      !profile ||
+      (!workspacesLoading && workspaces.length === 0) ||
+      (Boolean(activeWorkspace) && !(eventsLoading && events.length === 0)));
+  useEffect(() => {
+    if (arranqueListo) arranque.listo();
+  }, [arranqueListo]);
 
   const [activePage, setActivePage] = useState<PageType>("calendar");
   const [assistantHasOpened, setAssistantHasOpened] = useState(false);

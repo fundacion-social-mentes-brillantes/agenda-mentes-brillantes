@@ -229,4 +229,15 @@ describe("traducción de la conversación para Claude", () => {
     expect(leerFoto({ tipo: "image/png", data: "a".repeat(4_000_001) })).toBeNull();
     expect(leerFoto(null)).toBeNull();
   });
+
+  it("guardar la foto en un evento es una acción permitida (y una inventada no)", () => {
+    const m = deClaude({
+      content: [
+        { type: "text", text: "Listo." },
+        { type: "tool_use", id: "t1", name: "attach_photo", input: { id: "ev1", name: "Invitación" } },
+        { type: "tool_use", id: "t2", name: "borrar_todo", input: {} }
+      ]
+    });
+    expect(m.tool_calls).toEqual([{ id: "t1", type: "function", function: { name: "attach_photo", arguments: JSON.stringify({ id: "ev1", name: "Invitación" }) } }]);
+  });
 });
