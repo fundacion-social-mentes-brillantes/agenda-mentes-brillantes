@@ -64,7 +64,7 @@ export default function DashboardPage({
             {profile?.photoURL ? (
               <img src={profile.photoURL} alt={profile.name} referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-full object-cover shadow-lg sm:h-16 sm:w-16" />
             ) : (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-black text-white shadow-lg sm:h-16 sm:w-16 sm:text-xl" style={{ backgroundColor: profile?.color || "#d7b46a" }}>
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-black text-white shadow-lg sm:h-16 sm:w-16 sm:text-xl" style={{ backgroundColor: profile?.color || "var(--app-accent)" }}>
                 {profile?.name ? profile.name.slice(0, 2).toUpperCase() : <UserRound size={24} />}
               </div>
             )}

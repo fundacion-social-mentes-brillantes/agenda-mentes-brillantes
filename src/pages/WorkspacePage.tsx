@@ -259,7 +259,7 @@ function WorkspaceCard({
   return (
     <Card className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="h-4 w-4 rounded-full" style={{ backgroundColor: workspace.color || "#d7b46a" }} />
+        <span className="h-4 w-4 rounded-full" style={{ backgroundColor: workspace.color || "var(--app-accent)" }} />
         {renaming ? (
           <div className="flex flex-1 items-center gap-2">
             <input className="input-field min-h-10 flex-1" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />

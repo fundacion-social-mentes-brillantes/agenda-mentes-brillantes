@@ -1,34 +1,29 @@
 import { createContext } from "react";
-import type { AppTheme, CustomTheme } from "../types/theme";
-import { TEMA_PERSONAL_INICIAL } from "../lib/tema";
+import type { Apariencia, ThemeBase } from "../types/theme";
+import { APARIENCIA_PREDETERMINADA } from "../lib/tema";
 
 // El contexto del tema vive aparte del proveedor (ThemeProvider.tsx) para que
 // la recarga en caliente de Vite funcione: un archivo con componentes no debe
 // exportar tambien otras cosas.
 export interface ThemeContextType {
-  theme: AppTheme;
-  setTheme: (theme: AppTheme) => void;
+  /** Lo que la persona eligió: modo (claro, oscuro, automático) y color principal. */
+  apariencia: Apariencia;
+  /** Cambia la apariencia en pantalla (guardarla en el perfil es aparte). */
+  setApariencia: (apariencia: Apariencia) => void;
+  /** Lo que se ve de verdad, ya resuelto el modo automático. */
+  base: ThemeBase;
+  /** true si lo que se ve es claro. */
+  isLight: boolean;
+  /** Pasa de claro a oscuro y viceversa (botón de la pantalla de entrada). */
   toggleTheme: () => void;
   themeLabel: string;
-  /** El tema que arma cada persona (se usa cuando theme es "custom"). */
-  customTheme: CustomTheme;
-  setCustomTheme: (custom: CustomTheme) => void;
-  /** true si lo que se ve es claro (Rosa pastel o un personalizado claro). */
-  isLight: boolean;
 }
 
 export const ThemeContext = createContext<ThemeContextType>({
-  theme: "dark",
-  setTheme: () => {},
+  apariencia: APARIENCIA_PREDETERMINADA,
+  setApariencia: () => {},
+  base: "dark",
+  isLight: false,
   toggleTheme: () => {},
-  themeLabel: "Noche Dorada",
-  customTheme: TEMA_PERSONAL_INICIAL,
-  setCustomTheme: () => {},
-  isLight: false
+  themeLabel: "Oscuro"
 });
-
-export const NOMBRES_TEMA: Record<AppTheme, string> = {
-  dark: "Noche Dorada",
-  pink: "Rosa pastel",
-  custom: "Mi color"
-};

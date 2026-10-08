@@ -81,8 +81,8 @@ function leerArgumentos(crudo: unknown): ArgumentosHerramienta {
 const CLAVE_MODO = "asistenteModo";
 
 const OPCIONES_MODO: { valor: ModoAsistente; etiqueta: string; descripcion: string; icono: typeof Zap }[] = [
-  { valor: "basico", etiqueta: "Básico", descripcion: "Básico: rápido, para el día a día.", icono: Zap },
-  { valor: "experto", etiqueta: "Experto", descripcion: "Experto: piensa más a fondo y lee fotos (no se guardan).", icono: Brain }
+  { valor: "basico", etiqueta: "Básico", descripcion: "Rápido, para el día a día.", icono: Zap },
+  { valor: "experto", etiqueta: "Experto", descripcion: "Más a fondo; lee fotos (no se guardan).", icono: Brain }
 ];
 
 // Texto que acompaña una foto mandada sin escribir nada.
@@ -500,7 +500,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
       )}
 
       {open && (
-        <div className="fixed bottom-24 left-3 right-3 z-50 flex h-[70vh] max-h-[560px] flex-col overflow-hidden rounded-3xl border border-app-soft bg-app-panel shadow-2xl backdrop-blur-xl sm:left-auto sm:w-[400px] md:bottom-6 md:right-6">
+        <div className="panel-flotante fixed bottom-24 left-3 right-3 z-50 flex h-[70vh] max-h-[560px] flex-col overflow-hidden rounded-3xl sm:left-auto sm:w-[400px] md:bottom-6 md:right-6">
           <div className="flex items-center justify-between border-b border-app-soft px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-app-soft text-app-accent">
@@ -613,7 +613,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
                   }
                 }}
                 rows={1}
-                placeholder={foto ? "Ej: agenda todo esto en la agenda" : "Pídele o pregúntale a tu agenda..."}
+                placeholder={foto ? "Ej: agenda todo esto" : "Escribe tu pedido..."}
                 className="input-field max-h-28 min-h-11 flex-1 resize-none py-2.5"
               />
               <button

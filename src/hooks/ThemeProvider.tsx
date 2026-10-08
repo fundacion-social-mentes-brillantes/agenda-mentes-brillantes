@@ -1,21 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import type { AppTheme, CustomTheme } from "../types/theme";
-import { NOMBRES_TEMA, ThemeContext, type ThemeContextType } from "./themeContext";
-import { TEMA_PERSONAL_INICIAL, baseDelTema, colorDeBarra, leerTema, leerTemaPersonal, paletaPersonal } from "../lib/tema";
+import type { Apariencia } from "../types/theme";
+import { ThemeContext, type ThemeContextType } from "./themeContext";
+import { APARIENCIA_PREDETERMINADA, leerApariencia, paleta, resolverModo } from "../lib/tema";
 
-// Lo que se recuerda en este navegador. index.html lee las mismas claves antes
-// de pintar, para que la pantalla no parpadee con el tema equivocado.
-const CLAVE_TEMA = "theme";
-const CLAVE_TEMA_PERSONAL = "temaPersonal";
+// Lo que se recuerda en este navegador. index.html lee "aparienciaVars" antes de
+// pintar, para que la pantalla no parpadee con otro color mientras carga.
+const CLAVE_APARIENCIA = "apariencia";
+const CLAVE_VARIABLES = "aparienciaVars";
 
-function leerGuardado<T>(clave: string, leer: (crudo: unknown) => T | null): T | null {
+function leerGuardada(): Apariencia {
   try {
-    const crudo = localStorage.getItem(clave);
-    if (!crudo) return null;
-    return leer(clave === CLAVE_TEMA ? crudo : JSON.parse(crudo));
+    const nueva = localStorage.getItem(CLAVE_APARIENCIA);
+    // Formato anterior (temas "dark" / "pink" / "custom"): se convierte una vez.
+    const viejo = localStorage.getItem("theme");
+    const personalViejo = localStorage.getItem("temaPersonal");
+    return (
+      leerApariencia(nueva ? JSON.parse(nueva) : null, viejo, personalViejo ? JSON.parse(personalViejo) : null) ??
+      APARIENCIA_PREDETERMINADA
+    );
   } catch {
-    return null;
+    return APARIENCIA_PREDETERMINADA;
   }
 }
 
@@ -23,46 +28,51 @@ function guardar(clave: string, valor: string) {
   try {
     localStorage.setItem(clave, valor);
   } catch {
-    // Sin almacenamiento (modo privado): el tema vale solo en esta visita.
+    // Sin almacenamiento (modo privado): vale solo en esta visita.
   }
 }
 
+// ¿El celular o el computador está en modo oscuro? (para el modo automático)
+const consultaOscuro = () => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null);
+function suscribirse(avisar: () => void) {
+  const consulta = consultaOscuro();
+  consulta?.addEventListener("change", avisar);
+  return () => consulta?.removeEventListener("change", avisar);
+}
+const sistemaEsOscuro = () => Boolean(consultaOscuro()?.matches);
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<AppTheme>(() => leerGuardado(CLAVE_TEMA, leerTema) ?? "dark");
-  const [customTheme, setCustomThemeState] = useState<CustomTheme>(
-    () => leerGuardado(CLAVE_TEMA_PERSONAL, leerTemaPersonal) ?? TEMA_PERSONAL_INICIAL
-  );
+  const [apariencia, setApariencia] = useState<Apariencia>(leerGuardada);
+  const sistemaOscuro = useSyncExternalStore(suscribirse, sistemaEsOscuro, () => true);
+  const base = resolverModo(apariencia.modo, sistemaOscuro);
 
   useEffect(() => {
     const root = document.documentElement;
-    const base = baseDelTema(theme, customTheme);
-    root.dataset.theme = theme;
+    const variables = paleta(apariencia.acento, base);
     root.dataset.base = base;
+    root.dataset.modo = apariencia.modo;
     root.classList.toggle("dark", base === "dark");
-
-    // El tema personal se pone encima de su base; los fijos usan solo index.css.
-    const variables = theme === "custom" ? paletaPersonal(customTheme) : {};
-    for (const nombre of Array.from(root.style)) {
-      if (nombre.startsWith("--app-") && !(nombre in variables)) root.style.removeProperty(nombre);
-    }
     for (const [nombre, valor] of Object.entries(variables)) root.style.setProperty(nombre, valor);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", variables["--app-bg"]);
 
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", colorDeBarra(theme, customTheme));
-    guardar(CLAVE_TEMA, theme);
-    guardar(CLAVE_TEMA_PERSONAL, JSON.stringify(customTheme));
-  }, [theme, customTheme]);
+    guardar(CLAVE_APARIENCIA, JSON.stringify(apariencia));
+    // Las dos versiones (clara y oscura): el modo automático puede cambiar antes de que cargue React.
+    guardar(
+      CLAVE_VARIABLES,
+      JSON.stringify({ dark: paleta(apariencia.acento, "dark"), light: paleta(apariencia.acento, "light") })
+    );
+  }, [apariencia, base]);
 
   const value = useMemo<ThemeContextType>(
     () => ({
-      theme,
-      setTheme: setThemeState,
-      toggleTheme: () => setThemeState((current) => (current === "dark" ? "pink" : "dark")),
-      themeLabel: NOMBRES_TEMA[theme],
-      customTheme,
-      setCustomTheme: setCustomThemeState,
-      isLight: baseDelTema(theme, customTheme) === "light"
+      apariencia,
+      setApariencia,
+      base,
+      isLight: base === "light",
+      toggleTheme: () => setApariencia((actual) => ({ ...actual, modo: base === "dark" ? "claro" : "oscuro" })),
+      themeLabel: base === "dark" ? "Oscuro" : "Claro"
     }),
-    [theme, customTheme]
+    [apariencia, base]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

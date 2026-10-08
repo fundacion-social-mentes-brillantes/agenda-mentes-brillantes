@@ -15,7 +15,6 @@ export default function LoginPage() {
   const [role, setRole] = useState<UserRole>("family");
   const [loadingAction, setLoadingAction] = useState<"google" | "email" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const brandLogo = isLight ? "/brand/logo-gemb-blue-small.jpeg" : "/brand/logo-gemb-icon.png";
 
   const handleGoogle = async () => {
     setError(null);
@@ -48,20 +47,16 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-app px-4 py-6 text-app-strong sm:px-6 lg:px-8">
+    <main className="app-shell relative min-h-screen overflow-hidden px-4 py-6 text-app-strong sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl items-center">
         <div className="grid w-full items-center gap-8 lg:grid-cols-[0.92fr_1.08fr]">
           <section className="glass-panel order-2 rounded-[2rem] p-5 sm:p-7 lg:order-1">
             <div className="mb-7 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <img
-                  src={brandLogo}
-                  alt="Gimnasio Emocional Mentes Brillantes"
-                  className={`${isLight ? "h-12 w-20 bg-white object-contain p-1" : "h-12 w-12 object-cover"} rounded-2xl shadow-lg`}
-                />
+                <img src="/icons/icon-192.png" alt="Agenda MB" className="h-12 w-12 rounded-2xl object-cover shadow-lg ring-1 ring-white/10" />
                 <div>
-                  <p className="m-0 text-xs font-black uppercase text-app-accent">Gimnasio Emocional</p>
-                  <p className="m-0 text-sm font-bold text-app-muted">Mentes Brillantes</p>
+                  <p className="m-0 text-xs font-semibold uppercase tracking-wider text-app-accent">Agenda MB</p>
+                  <p className="m-0 text-sm font-medium text-app-muted">Gimnasio Emocional Mentes Brillantes</p>
                 </div>
               </div>
               <button type="button" onClick={toggleTheme} className="btn-secondary min-h-10 px-3" aria-label="Cambiar tema">

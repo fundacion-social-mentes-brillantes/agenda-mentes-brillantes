@@ -5,7 +5,8 @@
 import { UserFirestore, Ts } from "./firestore.js";
 
 const TZ = process.env.AGENDA_TZ_OFFSET || "-05:00";
-const DEFAULT_COLOR = "#d7b46a";
+// Violeta del logo de Agenda MB (el mismo de la app: src/lib/eventMeta.ts).
+const DEFAULT_COLOR = "#5b2dff";
 const COACH_COLOR = "#ec4899";
 
 const FIXED_MEETINGS = {

@@ -15,8 +15,7 @@ import {
   setDoc
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
-import type { AppTheme, CustomTheme } from "../types/theme";
-import { leerTema } from "../lib/tema";
+import type { Apariencia } from "../types/theme";
 import type { UserProfile, UserRole } from "../types/user";
 
 export const PROFILE_SYNC_WARNING = "Ingresaste, pero no pudimos sincronizar tu perfil todavía.";
@@ -183,22 +182,13 @@ export const authService = {
 
   createFallbackProfile(user: FirebaseUser): UserProfile {
     const fallbackName = user.displayName || user.email?.split("@")[0] || "Usuario";
-    let savedTheme: string | null = null;
-    try {
-      savedTheme = localStorage.getItem("theme");
-    } catch {
-      // Sin almacenamiento: el perfil arranca sin tema y se usa el de siempre.
-    }
-    const theme = leerTema(savedTheme) ?? undefined;
-
     return {
       uid: user.uid,
       name: fallbackName,
       email: user.email || "",
       photoURL: user.photoURL || null,
       role: "family",
-      color: "#d7b46a",
-      theme,
+      color: "#5b2dff",
       active: true,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -217,7 +207,8 @@ export const authService = {
       photoURL: user.photoURL || existing?.photoURL || null,
       role: existing?.role || "family",
       color: existing?.color || fallback.color,
-      theme: existing?.theme || fallback.theme,
+      // El tema ya no se escribe aquí: va en "apariencia" (ver updateApariencia). Además,
+      // sin tema guardado se mandaba "undefined", que Firestore no acepta en setDoc.
       active: true,
       updatedAt: serverTimestamp(),
       ...(existing?.createdAt ? {} : { createdAt: serverTimestamp() })
@@ -254,12 +245,11 @@ export const authService = {
     }
   },
 
-  async updateUserTheme(uid: string, theme: AppTheme, customTheme?: CustomTheme): Promise<void> {
+  async updateApariencia(uid: string, apariencia: Apariencia): Promise<void> {
     await setDoc(
       doc(db, "users", uid),
       {
-        theme,
-        ...(customTheme ? { customTheme } : {}),
+        apariencia: { modo: apariencia.modo, acento: apariencia.acento },
         updatedAt: serverTimestamp()
       },
       { merge: true }

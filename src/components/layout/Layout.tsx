@@ -11,20 +11,20 @@ import {
   Lock,
   LogOut,
   Menu,
+  MonitorSmartphone,
   Moon,
-  Palette,
   Plus,
   Settings,
-  Flower2,
+  Sun,
   UserRound,
   Users,
   X
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
-import { useGuardarTema, useTheme } from "../../hooks/useTheme";
-import { leerTemaPersonal } from "../../lib/tema";
+import { useGuardarApariencia, useTheme } from "../../hooks/useTheme";
+import { leerApariencia, mismaApariencia } from "../../lib/tema";
 import { authService } from "../../services/authService";
-import type { AppTheme } from "../../types/theme";
+import type { ModoTema } from "../../types/theme";
 import type { WorkspaceWithRole } from "../../types/workspace";
 
 export type PageType = "dashboard" | "calendar" | "coach" | "day" | "event-form" | "settings" | "workspaces";
@@ -63,25 +63,25 @@ const mobileNavItems: NavItem[] = [
 
 export function Layout({ children, activePage, setActivePage, onCreate, workspaces, visibleWorkspaceIds, onToggleWorkspace }: LayoutProps) {
   const { profile, profileSyncWarning } = useAuth();
-  const { theme, setTheme, setCustomTheme } = useTheme();
-  const guardarTema = useGuardarTema();
+  const { apariencia, setApariencia } = useTheme();
+  const guardarApariencia = useGuardarApariencia();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Solo cuando cambia el tema GUARDADO en el perfil se aplica (al entrar, o si
-  // la persona lo cambió en otro aparato); cambiar el tema aquí mismo no debe
-  // re-disparar esto (por eso va como evento del efecto).
-  const temaPersonalGuardado = profile?.customTheme ? JSON.stringify(profile.customTheme) : "";
-  const aplicarTemaDelPerfil = useEffectEvent((temaPerfil: AppTheme | undefined, personalCrudo: string) => {
-    const personal = personalCrudo ? leerTemaPersonal(JSON.parse(personalCrudo)) : null;
-    if (personal) setCustomTheme(personal);
-    if (temaPerfil && temaPerfil !== theme) setTheme(temaPerfil);
+  // Solo cuando cambia la apariencia GUARDADA en el perfil se aplica (al entrar, o
+  // si la persona la cambió en otro aparato); cambiarla aquí mismo no debe
+  // re-disparar esto (por eso va como evento del efecto). Entiende también el
+  // formato anterior (temas "dark" / "pink" / "custom").
+  const guardadaEnPerfil = JSON.stringify(leerApariencia(profile?.apariencia, profile?.theme, profile?.customTheme));
+  const aplicarAparienciaDelPerfil = useEffectEvent((cruda: string) => {
+    const delPerfil = leerApariencia(JSON.parse(cruda));
+    if (delPerfil && !mismaApariencia(delPerfil, apariencia)) setApariencia(delPerfil);
   });
   useEffect(() => {
-    aplicarTemaDelPerfil(profile?.theme, temaPersonalGuardado);
-  }, [profile?.theme, temaPersonalGuardado]);
+    aplicarAparienciaDelPerfil(guardadaEnPerfil);
+  }, [guardadaEnPerfil]);
 
-  const handleThemeChange = (nextTheme: AppTheme) => {
-    void guardarTema(nextTheme);
+  const cambiarModo = (modo: ModoTema) => {
+    void guardarApariencia({ ...apariencia, modo });
   };
 
   const handleLogout = async () => {
@@ -100,6 +100,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
 
   return (
     <div className="app-shell flex min-h-screen flex-col text-app-strong md:flex-row">
+      <DegradadoAcento />
       <header
         className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-app-soft bg-app-panel px-4 pb-3 backdrop-blur-xl md:hidden"
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
@@ -121,7 +122,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
 
       <aside
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
-        className={`fixed bottom-0 left-0 top-0 z-50 flex w-72 flex-col justify-between overflow-y-auto border-r border-app-soft bg-app-panel p-5 shadow-2xl backdrop-blur-xl transition-transform duration-300 md:sticky md:translate-x-0 ${
+        className={`panel-flotante fixed bottom-0 left-0 top-0 z-50 flex w-72 flex-col justify-between overflow-y-auto rounded-none border-y-0 border-l-0 p-5 transition-transform duration-300 md:sticky md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -141,11 +142,13 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
                   key={item.id}
                   type="button"
                   onClick={() => goTo(item.id)}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-extrabold transition ${
-                    active ? "bg-app-soft text-app-accent" : "text-app-muted hover:bg-app-soft hover:text-app-strong"
+                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm font-semibold transition ${
+                    active ? "bg-app-panel text-app-strong" : "text-app-muted hover:bg-app-soft hover:text-app-strong"
                   }`}
                 >
-                  <Icon size={18} />
+                  <span className={active ? "icono-degradado" : ""}>
+                    <Icon size={18} />
+                  </span>
                   {item.label}
                 </button>
               );
@@ -166,7 +169,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
         </div>
 
         <div className="space-y-4 border-t border-app-soft pt-4">
-          <ThemeSelector theme={theme} onChange={handleThemeChange} />
+          <SelectorModo modo={apariencia.modo} onChange={cambiarModo} />
           <UserSummary />
           <button type="button" onClick={handleLogout} className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-500/10">
             <LogOut size={18} />
@@ -186,12 +189,16 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-app-soft bg-app-panel px-2 py-2 shadow-2xl backdrop-blur-xl md:hidden">
+      {/* Barra de abajo flotante, de cristal (como las de iOS). */}
+      <nav
+        className="glass fixed left-3 right-3 z-40 flex items-center justify-around rounded-[1.75rem] border border-app-soft bg-app-panel px-2 py-1.5 shadow-2xl md:hidden"
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.6rem)" }}
+      >
         {mobileNavItems.slice(0, 2).map((item) => (
           <MobileNavItem key={item.id} item={item} active={activePage === item.id} onClick={() => setActivePage(item.id)} />
         ))}
 
-        <div className="relative flex min-w-12 flex-col items-center gap-1 text-[10px] font-black text-app-accent">
+        <div className="relative flex min-w-12 flex-col items-center gap-1 text-[10px] font-semibold text-app-accent">
           <button
             type="button"
             onClick={onCreate}
@@ -247,7 +254,7 @@ function WorkspaceSwitcher({
         : selected.length === 1
           ? selected[0].name
           : `${selected.length} agendas`;
-  const dotColor = selected.length === 1 ? selected[0].color || "#d7b46a" : "#d7b46a";
+  const dotColor = selected.length === 1 ? selected[0].color || "var(--app-accent)" : "var(--app-accent)";
   const onlyOneSelected = selected.length === 1;
 
   return (
@@ -263,7 +270,7 @@ function WorkspaceSwitcher({
       </button>
 
       {open && (
-        <div className={`glass-panel absolute z-50 mt-2 rounded-2xl p-2 ${compact ? "right-0 w-64" : "left-0 right-0"}`}>
+        <div className={`panel-flotante absolute z-50 mt-2 rounded-2xl p-2 ${compact ? "right-0 w-64" : "left-0 right-0"}`}>
           <p className="section-label px-2 py-1">Ver agendas</p>
           <div className="max-h-64 space-y-1 overflow-y-auto">
             {workspaces.map((ws) => {
@@ -282,7 +289,7 @@ function WorkspaceSwitcher({
                 >
                   <span
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${checked ? "border-app-accent" : "border-app-soft"}`}
-                    style={checked ? { backgroundColor: ws.color || "#d7b46a", borderColor: ws.color || "#d7b46a" } : undefined}
+                    style={checked ? { backgroundColor: ws.color || "var(--app-accent)", borderColor: ws.color || "var(--app-accent)" } : undefined}
                   >
                     {checked && <Check size={13} className="text-slate-950" />}
                   </span>
@@ -312,35 +319,38 @@ function WorkspaceSwitcher({
 function BrandBlock({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`flex min-w-0 items-center gap-3 ${compact ? "" : "border-b border-app-soft pb-5"}`}>
-      <img src="/brand/logo-gemb-icon.png" alt="Agenda Mentes Brillantes" className={`${compact ? "h-9 w-9" : "h-12 w-12"} shrink-0 rounded-2xl object-cover shadow-lg`} />
+      <img src="/icons/icon-192.png" alt="Agenda MB" className={`${compact ? "h-9 w-9 rounded-xl" : "h-12 w-12 rounded-2xl"} shrink-0 object-cover shadow-lg ring-1 ring-white/10`} />
       <div className="min-w-0">
-        <h1 className={`${compact ? "text-sm" : "text-base"} m-0 truncate font-black leading-tight text-app-strong`}>Agenda Mentes Brillantes</h1>
+        <h1 className={`${compact ? "text-sm" : "text-base"} m-0 truncate font-semibold leading-tight tracking-tight text-app-strong`}>Agenda Mentes Brillantes</h1>
         {!compact && <p className="m-0 mt-1 text-xs font-semibold text-app-faint">Gimnasio Emocional</p>}
       </div>
     </div>
   );
 }
 
-const OPCIONES_TEMA: { value: AppTheme; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
-  { value: "dark", label: "Noche", icon: Moon },
-  { value: "pink", label: "Rosa", icon: Flower2 },
-  { value: "custom", label: "Mi color", icon: Palette }
+const OPCIONES_MODO: { value: ModoTema; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
+  { value: "claro", label: "Claro", icon: Sun },
+  { value: "oscuro", label: "Oscuro", icon: Moon },
+  { value: "auto", label: "Auto", icon: MonitorSmartphone }
 ];
 
-function ThemeSelector({ theme, onChange }: { theme: AppTheme; onChange: (theme: AppTheme) => void }) {
+// Atajo del menú: claro, oscuro o automático. El color se elige en Ajustes.
+function SelectorModo({ modo, onChange }: { modo: ModoTema; onChange: (modo: ModoTema) => void }) {
   return (
     <div className="rounded-3xl border border-app-soft bg-app-soft p-2">
-      <p className="section-label mb-2 px-2">Tema visual</p>
-      <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Tema visual">
-        {OPCIONES_TEMA.map(({ value, label, icon: Icon }) => (
+      <p className="section-label mb-2 px-2">Apariencia</p>
+      <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Modo de la pantalla">
+        {OPCIONES_MODO.map(({ value, label, icon: Icon }) => (
           <button
             key={value}
             type="button"
             onClick={() => onChange(value)}
-            aria-pressed={theme === value}
-            className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-2 text-[11px] font-black ${theme === value ? "bg-app-panel text-app-accent shadow-sm" : "text-app-faint hover:text-app-strong"}`}
+            aria-pressed={modo === value}
+            className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-2 text-[11px] font-semibold transition ${modo === value ? "bg-app-panel text-app-strong" : "text-app-faint hover:text-app-strong"}`}
           >
-            <Icon size={15} />
+            <span className={modo === value ? "icono-degradado" : ""}>
+              <Icon size={15} />
+            </span>
             {label}
           </button>
         ))}
@@ -358,7 +368,7 @@ function UserSummary() {
       {profile?.photoURL ? (
         <img src={profile.photoURL} alt={profile.name} referrerPolicy="no-referrer" className="h-11 w-11 rounded-full object-cover" />
       ) : (
-        <div className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-black text-white" style={{ backgroundColor: profile?.color || "#d7b46a" }}>
+        <div className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-black text-white" style={{ backgroundColor: profile?.color || "var(--app-accent)" }}>
           {profile?.name || profile?.email ? initials : <UserRound size={18} />}
         </div>
       )}
@@ -373,10 +383,33 @@ function UserSummary() {
 function MobileNavItem({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
   const Icon = item.icon;
   return (
-    <button type="button" onClick={onClick} className={`flex min-w-12 flex-col items-center gap-1 rounded-2xl px-2 py-1 text-[10px] font-black ${active ? "text-app-accent" : "text-app-faint"}`}>
-      <Icon size={20} />
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      className={`flex min-w-14 flex-col items-center gap-0.5 rounded-2xl px-2 py-1.5 text-[10px] font-semibold transition ${active ? "bg-app-soft text-app-strong" : "text-app-faint"}`}
+    >
+      <span className={active ? "icono-degradado" : ""}>
+        <Icon size={20} />
+      </span>
       <span>{item.label}</span>
     </button>
+  );
+}
+
+// Degradado violeta -> azul del logo para los íconos activos (clase .icono-degradado).
+// En coordenadas del dibujo (0-24) y no de cada trazo: así también pinta las líneas
+// rectas, que con las coordenadas por trazo quedarían invisibles.
+function DegradadoAcento() {
+  return (
+    <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>
+      <defs>
+        <linearGradient id="degradado-acento" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="24" y2="24">
+          <stop offset="0" style={{ stopColor: "var(--app-accent)" }} />
+          <stop offset="1" style={{ stopColor: "var(--app-accent-2)" }} />
+        </linearGradient>
+      </defs>
+    </svg>
   );
 }
 

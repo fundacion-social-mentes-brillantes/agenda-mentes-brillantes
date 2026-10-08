@@ -1,16 +1,25 @@
 /**
- * Temas de la agenda:
- * - "dark": Noche Dorada, el azul y el dorado del logo (el de siempre).
- * - "pink": Rosa pastel, blanco con rosado suave.
- * - "custom": cada persona elige su color y si lo quiere claro u oscuro.
+ * Apariencia de la agenda (la elige cada persona en Ajustes y se guarda en su perfil):
+ * - modo: claro, oscuro o automático (sigue al celular / computador).
+ * - acento: el color principal. Por defecto, el violeta del logo de Agenda MB; de él
+ *   salen el color secundario (azul), los brillos y todo lo demás.
  */
-export type AppTheme = "dark" | "pink" | "custom";
+export type ModoTema = "auto" | "claro" | "oscuro";
 
+export interface Apariencia {
+  modo: ModoTema;
+  /** Color principal en hexadecimal, ej. "#5b2dff". */
+  acento: string;
+}
+
+/** Lo que se ve en pantalla después de resolver el modo automático. */
 export type ThemeBase = "light" | "dark";
 
-/** Tema que arma cada persona: un color principal sobre fondo claro u oscuro. */
+/** @deprecated formato anterior (octubre 2026); solo se lee para convertirlo. */
+export type AppTheme = "dark" | "pink" | "custom";
+
+/** @deprecated formato anterior (octubre 2026); solo se lee para convertirlo. */
 export interface CustomTheme {
   base: ThemeBase;
-  /** Color principal en hexadecimal, ej. "#e5739b". */
   accent: string;
 }

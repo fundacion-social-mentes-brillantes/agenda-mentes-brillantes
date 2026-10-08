@@ -5,7 +5,7 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0a1026" />
+    <meta name="theme-color" content="#0f0a2b" />
     <meta name="description" content="Agenda del Gimnasio Emocional Mentes Brillantes: sesiones, reuniones y recordatorios, en web, Android e iPhone." />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -16,26 +16,36 @@
     <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
     <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin />
     <title>Agenda Mentes Brillantes</title>
+    <!-- Letra estilo iOS: en iPhone y Mac se usa la del sistema; en el resto, Inter. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet" />
     <script>
-      // Aplica el tema guardado ANTES de pintar, para que el splash y la app
-      // salgan del color correcto (sin destello oscuro en el tema claro).
+      // Aplica la apariencia guardada ANTES de pintar, para que el splash y la app
+      // salgan del color y el modo correctos (sin destellos mientras carga).
       // Mismas claves que src/hooks/ThemeProvider.tsx.
       try {
-        var t = localStorage.getItem("theme");
         var d = document.documentElement;
-        var base = "dark";
-        if (t === "pink") base = "light";
-        if (t === "custom") {
-          var p = JSON.parse(localStorage.getItem("temaPersonal") || "{}");
-          base = p && p.base === "light" ? "light" : "dark";
-        }
-        d.dataset.theme = t === "pink" || t === "custom" ? t : "dark";
+        var a = JSON.parse(localStorage.getItem("apariencia") || "null");
+        var viejo = localStorage.getItem("theme");
+        var modo = a && a.modo ? a.modo : viejo === "pink" ? "claro" : "oscuro";
+        var oscuro = modo === "oscuro" || (modo === "auto" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        var base = oscuro ? "dark" : "light";
         d.dataset.base = base;
-        if (base === "dark") d.classList.add("dark");
+        d.dataset.modo = modo;
+        if (oscuro) d.classList.add("dark");
+        var vars = JSON.parse(localStorage.getItem("aparienciaVars") || "null");
+        var lista = vars && vars[base];
+        if (lista) {
+          for (var k in lista) if (k.indexOf("--app-") === 0) d.style.setProperty(k, lista[k]);
+          var meta = document.querySelector("meta[name=theme-color]");
+          if (meta && lista["--app-bg"]) meta.setAttribute("content", lista["--app-bg"]);
+        }
       } catch (e) {}
     </script>
     <style>
-      /* Splash instantáneo mientras carga el código (React lo reemplaza al montar). */
+      /* Splash instantáneo mientras carga el código (React lo reemplaza al montar).
+         Usa los mismos colores que la app (los pone el script de arriba). */
       #boot-splash {
         position: fixed;
         inset: 0;
@@ -45,13 +55,9 @@
         justify-content: center;
         gap: 16px;
         background:
-          radial-gradient(120% 78% at 50% -12%, rgba(215, 180, 106, 0.2), transparent 55%),
-          linear-gradient(160deg, #0a1026 0%, #111a3d 100%);
-      }
-      html[data-base="light"] #boot-splash {
-        background:
-          radial-gradient(120% 78% at 50% -12%, rgba(247, 168, 196, 0.42), transparent 55%),
-          linear-gradient(160deg, #fff9fb 0%, #fde9f0 100%);
+          radial-gradient(60% 50% at 0% 0%, var(--app-glow, rgba(91, 45, 255, 0.42)), transparent 72%),
+          radial-gradient(60% 55% at 100% 100%, var(--app-glow-2, rgba(46, 157, 255, 0.3)), transparent 72%),
+          linear-gradient(160deg, var(--app-bg, #0f0a2b) 0%, var(--app-bg-soft, #1c144e) 100%);
       }
       #boot-splash img {
         width: 84px;
@@ -63,13 +69,9 @@
         width: 26px;
         height: 26px;
         border-radius: 50%;
-        border: 3px solid rgba(215, 180, 106, 0.25);
-        border-top-color: #d7b46a;
+        border: 3px solid rgba(150, 121, 255, 0.25);
+        border-top-color: var(--app-accent, #9679ff);
         animation: bootspin 0.9s linear infinite;
-      }
-      html[data-base="light"] #boot-splash .ring {
-        border-color: rgba(194, 65, 110, 0.2);
-        border-top-color: #c2416e;
       }
       @keyframes bootspin {
         to {

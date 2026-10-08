@@ -1,25 +1,28 @@
-import type { AppTheme, CustomTheme, ThemeBase } from "../types/theme";
+import type { Apariencia, ModoTema, ThemeBase } from "../types/theme";
 
-// Colores del tema que arma cada persona. De UN color elegido se sacan todos los
-// demas (fondo, bordes, botones, textos) cuidando que siempre se puedan leer: si
-// el color es muy claro para escribir encima del blanco, se oscurece lo justo, y
-// al reves en el fondo oscuro.
+// Colores de la agenda. La identidad sale del logo de Agenda MB: fondo índigo casi
+// negro, violeta eléctrico como color principal y azul brillante / cian como
+// secundario, con brillos blancos suaves. De UN color principal se calculan todos
+// los demás (fondo, cristal, bordes, botones, textos) cuidando que siempre se
+// puedan leer: si el color no se lee sobre el fondo, se aclara u oscurece lo justo.
 
-/** Tema personal con el que arranca quien abre "Personalizado" por primera vez. */
-export const TEMA_PERSONAL_INICIAL: CustomTheme = { base: "light", accent: "#8b7cf6" };
+/** Violeta eléctrico del logo de Agenda MB. */
+export const ACENTO_AGENDA_MB = "#5b2dff";
 
-/** Colores para elegir con un toque (el selector libre permite cualquier otro). */
+export const APARIENCIA_PREDETERMINADA: Apariencia = { modo: "oscuro", acento: ACENTO_AGENDA_MB };
+
+/** Colores para elegir con un toque (la rueda permite cualquier otro). */
 export const COLORES_SUGERIDOS: { value: string; label: string }[] = [
+  { value: ACENTO_AGENDA_MB, label: "Violeta Agenda MB" },
+  { value: "#7a4dff", label: "Morado brillante" },
+  { value: "#2196f3", label: "Azul" },
+  { value: "#46b8ff", label: "Cian" },
+  { value: "#a78bfa", label: "Lavanda" },
+  { value: "#f09ab9", label: "Rosa pastel" },
   { value: "#e5739b", label: "Rosa" },
-  { value: "#f0a3c0", label: "Rosa claro" },
-  { value: "#c084fc", label: "Lila" },
-  { value: "#8b7cf6", label: "Lavanda" },
-  { value: "#5b8def", label: "Azul" },
-  { value: "#2b3a7a", label: "Azul del logo" },
-  { value: "#38b2ac", label: "Turquesa" },
-  { value: "#4caf7d", label: "Verde" },
-  { value: "#d7b46a", label: "Dorado" },
-  { value: "#f08a5d", label: "Coral" }
+  { value: "#f08a5d", label: "Coral" },
+  { value: "#34c3a0", label: "Verde menta" },
+  { value: "#d7b46a", label: "Dorado GEMB" }
 ];
 
 type Rgb = [number, number, number];
@@ -49,6 +52,53 @@ export function mezclar(a: string, b: string, t: number): string {
   return aHex([x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t]);
 }
 
+// --- Tono, saturación y brillo (la rueda de color y sus dos barras) ---
+
+export interface Hsv {
+  /** Tono, 0-360 (la vuelta de la rueda). */
+  h: number;
+  /** Saturación, 0-100. */
+  s: number;
+  /** Brillo, 0-100. */
+  v: number;
+}
+
+export function hexAHsv(hex: string): Hsv {
+  const [r, g, b] = aRgb(hex).map((c) => c / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h: Math.round(h), s: Math.round(max ? (d / max) * 100 : 0), v: Math.round(max * 100) };
+}
+
+export function hsvAHex({ h, s, v }: Hsv): string {
+  const sat = Math.min(100, Math.max(0, s)) / 100;
+  const val = Math.min(100, Math.max(0, v)) / 100;
+  const c = val * sat;
+  const hh = (((h % 360) + 360) % 360) / 60;
+  const x = c * (1 - Math.abs((hh % 2) - 1));
+  const m = val - c;
+  const [r, g, b] =
+    hh < 1 ? [c, x, 0] : hh < 2 ? [x, c, 0] : hh < 3 ? [0, c, x] : hh < 4 ? [0, x, c] : hh < 5 ? [x, 0, c] : [c, 0, x];
+  return aHex([(r + m) * 255, (g + m) * 255, (b + m) * 255]);
+}
+
+/** Color secundario: el mismo color girado hacia el azul (violeta -> azul brillante, como en el logo). */
+export function colorSecundario(acento: string): string {
+  const { h, s, v } = hexAHsv(acento);
+  return hsvAHex({ h: h - 45, s: Math.max(s, 55), v: Math.max(v, 85) });
+}
+
+// --- Contraste ---
+
 function luminancia(hex: string): number {
   const canal = (v: number) => {
     const c = v / 255;
@@ -65,7 +115,7 @@ export function contraste(a: string, b: string): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-/** Oscurece (o aclara) el color lo justo para que se lea sobre el fondo. */
+/** Aclara (u oscurece) el color lo justo para que se lea sobre el fondo. */
 export function legibleSobre(color: string, fondo: string, minimo = 4.5): string {
   if (contraste(color, fondo) >= minimo) return color;
   const hacia = luminancia(fondo) > 0.4 ? "#000000" : "#ffffff";
@@ -80,97 +130,127 @@ function transparente(color: string, porcentaje: number): string {
   return `color-mix(in srgb, ${color} ${porcentaje}%, transparent)`;
 }
 
-/** Base que corresponde a cada tema (para saber si la pantalla es clara u oscura). */
-export function baseDelTema(tema: AppTheme, personal: CustomTheme): ThemeBase {
-  if (tema === "pink") return "light";
-  if (tema === "custom") return personal.base;
-  return "dark";
-}
+// --- Modo ---
 
-/** Color de la barra del celular para cada tema. */
-export function colorDeBarra(tema: AppTheme, personal: CustomTheme): string {
-  if (tema === "pink") return "#fff9fb";
-  if (tema === "custom") return paletaPersonal(personal)["--app-bg"];
-  return "#0a1026";
+/** Claro u oscuro según lo elegido; "auto" sigue al aparato. */
+export function resolverModo(modo: ModoTema, sistemaOscuro: boolean): ThemeBase {
+  if (modo === "claro") return "light";
+  if (modo === "oscuro") return "dark";
+  return sistemaOscuro ? "dark" : "light";
 }
 
 /**
- * Todas las variables de color de un tema personal. Las de los temas fijos
- * (Noche Dorada y Rosa pastel) viven en index.css; estas se ponen encima.
+ * Todas las variables de color para una apariencia ya resuelta (clara u oscura).
+ * Las usan index.css y cada pantalla a través de clases como text-app-accent.
  */
-export function paletaPersonal(tema: CustomTheme): Record<string, string> {
-  const acento = normalizarHex(tema.accent) ?? TEMA_PERSONAL_INICIAL.accent;
+export function paleta(acentoCrudo: string, base: ThemeBase): Record<string, string> {
+  const acento = normalizarHex(acentoCrudo) ?? ACENTO_AGENDA_MB;
+  const secundario = colorSecundario(acento);
 
-  if (tema.base === "dark") {
-    const fondo = mezclar("#0a1026", acento, 0.06);
-    const fondoSuave = mezclar("#111a3d", acento, 0.12);
-    const panel = mezclar("#151d40", acento, 0.1);
-    const acentoTexto = legibleSobre(acento, panel, 4.5);
-    const gradienteMedio = mezclar(acento, "#ffffff", 0.15);
-    const sobreAcento = contraste("#0c1020", gradienteMedio) >= contraste("#ffffff", gradienteMedio) ? "#0c1020" : "#ffffff";
+  if (base === "dark") {
+    // Índigo casi negro del logo (#0B0820 / #15113A), apenas teñido con el color elegido.
+    const fondo = mezclar("#0b0820", acento, 0.05);
+    const fondoSuave = mezclar("#15113a", acento, 0.1);
+    const solido = mezclar("#1a1544", acento, 0.1);
+    const fuerte = "#f3f1ff";
+    const acentoTexto = legibleSobre(mezclar(acento, "#ffffff", 0.2), solido, 4.5);
+    const secundarioTexto = legibleSobre(secundario, solido, 4.5);
+    const inicio = acento;
+    const fin = mezclar(acento, secundario, 0.55);
+    const medio = mezclar(inicio, fin, 0.5);
+    const sobreAcento = contraste("#ffffff", medio) >= 3.2 ? "#ffffff" : "#0b0820";
     return {
       "--app-bg": fondo,
       "--app-bg-soft": fondoSuave,
-      "--app-panel": transparente(panel, 84),
-      "--app-panel-solid": panel,
-      "--app-panel-gradient": `linear-gradient(158deg, ${transparente(mezclar(panel, acento, 0.08), 86)} 0%, ${transparente(fondo, 90)} 100%)`,
-      "--app-soft": "rgba(255, 255, 255, 0.06)",
-      "--app-border": transparente(acentoTexto, 22),
-      "--app-border-strong": transparente(acentoTexto, 42),
-      "--app-strong": "#f8f6f2",
-      "--app-muted": legibleSobre(mezclar("#b9c1d8", acento, 0.12), panel, 4.5),
-      "--app-faint": legibleSobre(mezclar("#7f89a3", acento, 0.12), panel, 3),
+      // Cristal: casi transparente, se ve lo de atrás desenfocado.
+      "--app-panel": "rgba(255, 255, 255, 0.055)",
+      "--app-panel-strong": "rgba(255, 255, 255, 0.09)",
+      "--app-panel-solid": solido,
+      "--app-soft": "rgba(255, 255, 255, 0.07)",
+      "--app-border": "rgba(255, 255, 255, 0.11)",
+      "--app-border-strong": transparente(acentoTexto, 55),
+      "--app-highlight": "rgba(255, 255, 255, 0.14)",
+      "--app-strong": fuerte,
+      "--app-muted": legibleSobre(mezclar("#bdb7dc", acento, 0.08), solido, 4.5),
+      "--app-faint": legibleSobre(mezclar("#8c86ad", acento, 0.08), solido, 3),
       "--app-accent": acentoTexto,
       "--app-accent-strong": mezclar(acentoTexto, "#ffffff", 0.35),
-      "--app-accent-gradient": `linear-gradient(135deg, ${mezclar(acento, "#000000", 0.12)} 0%, ${gradienteMedio} 50%, ${mezclar(acento, "#ffffff", 0.4)} 100%)`,
+      "--app-accent-2": secundarioTexto,
+      "--app-accent-gradient": `linear-gradient(135deg, ${inicio} 0%, ${fin} 100%)`,
       "--app-on-accent": sobreAcento,
-      "--app-glow": transparente(acento, 20),
-      "--app-glow-2": transparente(mezclar(acento, "#4f63d6", 0.5), 14),
-      "--app-shadow": "0 26px 80px rgba(0, 0, 0, 0.5)",
-      "--app-backdrop": "rgba(3, 6, 18, 0.6)"
+      "--app-glow": transparente(acento, 42),
+      "--app-glow-2": transparente(secundario, 30),
+      "--app-ring": transparente(acento, 55),
+      "--app-shadow": "0 24px 60px rgba(3, 2, 14, 0.55)",
+      "--app-backdrop": "rgba(5, 3, 18, 0.62)",
+      "--app-danger": "#ff6b7a"
     };
   }
 
-  const fondo = mezclar("#ffffff", acento, 0.04);
+  // Claro: blanco perlado (#F3F1FF del logo) con cristal blanco.
+  const fondo = mezclar("#f7f6fc", acento, 0.04);
   const fondoSuave = mezclar("#ffffff", acento, 0.14);
-  const acentoTexto = legibleSobre(acento, "#ffffff", 4.5);
-  const gradienteInicio = mezclar(acento, "#ffffff", 0.2);
-  const gradienteFin = mezclar(acento, "#ffffff", 0.55);
-  const gradienteMedio = mezclar(gradienteInicio, gradienteFin, 0.5);
-  const textoOscuro = mezclar("#1d1720", acento, 0.25);
-  const sobreAcento = contraste(textoOscuro, gradienteMedio) >= 4.5 ? textoOscuro : "#ffffff";
+  // Se mide contra el fondo más oscuro del modo claro (no contra blanco puro).
+  const acentoTexto = legibleSobre(legibleSobre(acento, fondoSuave, 4.5), fondo, 4.5);
+  const secundarioTexto = legibleSobre(legibleSobre(secundario, fondoSuave, 4.5), fondo, 4.5);
+  const inicio = acento;
+  const fin = mezclar(acento, secundario, 0.55);
+  const medio = mezclar(inicio, fin, 0.5);
+  const textoOscuro = mezclar("#1b1530", acento, 0.2);
+  const sobreAcento = contraste("#ffffff", medio) >= 3.2 ? "#ffffff" : textoOscuro;
   return {
     "--app-bg": fondo,
     "--app-bg-soft": fondoSuave,
-    "--app-panel": "rgba(255, 255, 255, 0.9)",
+    "--app-panel": "rgba(255, 255, 255, 0.62)",
+    "--app-panel-strong": "rgba(255, 255, 255, 0.8)",
     "--app-panel-solid": "#ffffff",
-    "--app-panel-gradient": "rgba(255, 255, 255, 0.9)",
-    "--app-soft": transparente(acento, 11),
-    "--app-border": transparente(acento, 24),
+    "--app-soft": transparente(acento, 9),
+    "--app-border": transparente(acento, 16),
     "--app-border-strong": transparente(acentoTexto, 45),
-    "--app-strong": legibleSobre(mezclar("#2a2230", acento, 0.18), fondoSuave, 7),
-    "--app-muted": legibleSobre(mezclar("#6a5f70", acento, 0.2), fondoSuave, 4.5),
-    "--app-faint": legibleSobre(mezclar("#9d93a3", acento, 0.2), fondo, 3),
+    "--app-highlight": "rgba(255, 255, 255, 0.9)",
+    "--app-strong": legibleSobre(mezclar("#1b1530", acento, 0.12), fondoSuave, 7),
+    "--app-muted": legibleSobre(mezclar("#5d5774", acento, 0.12), fondoSuave, 4.5),
+    "--app-faint": legibleSobre(mezclar("#8f89a6", acento, 0.12), fondo, 3),
     "--app-accent": acentoTexto,
     "--app-accent-strong": mezclar(acento, "#ffffff", 0.55),
-    "--app-accent-gradient": `linear-gradient(135deg, ${gradienteInicio} 0%, ${gradienteFin} 100%)`,
+    "--app-accent-2": secundarioTexto,
+    "--app-accent-gradient": `linear-gradient(135deg, ${inicio} 0%, ${fin} 100%)`,
     "--app-on-accent": sobreAcento,
-    "--app-glow": transparente(acento, 26),
-    "--app-glow-2": transparente(mezclar(acento, "#ffffff", 0.5), 40),
-    "--app-shadow": `0 20px 60px ${transparente(acento, 14)}`,
-    "--app-backdrop": transparente(mezclar(acento, "#000000", 0.6), 28)
+    "--app-glow": transparente(acento, 24),
+    "--app-glow-2": transparente(secundario, 20),
+    "--app-ring": transparente(acento, 45),
+    "--app-shadow": `0 18px 50px ${transparente(mezclar(acento, "#1b1530", 0.5), 14)}`,
+    "--app-backdrop": transparente(mezclar(acento, "#0b0820", 0.7), 30),
+    "--app-danger": "#dc2626"
   };
 }
 
-/** Lee un tema personal guardado (en el perfil o en el navegador) sin confiar en su forma. */
-export function leerTemaPersonal(crudo: unknown): CustomTheme | null {
-  if (!crudo || typeof crudo !== "object") return null;
-  const fuente = crudo as Record<string, unknown>;
-  const accent = normalizarHex(fuente.accent);
-  if (!accent) return null;
-  return { base: fuente.base === "dark" ? "dark" : "light", accent };
+/** Color de la barra del celular. */
+export function colorDeBarra(acento: string, base: ThemeBase): string {
+  return paleta(acento, base)["--app-bg"];
 }
 
-export function leerTema(crudo: unknown): AppTheme | null {
-  return crudo === "dark" || crudo === "pink" || crudo === "custom" ? crudo : null;
+/**
+ * Lee la apariencia guardada (en el perfil o en el navegador) sin confiar en su forma.
+ * También entiende el formato anterior: "dark" (Noche Dorada), "pink" (rosa) y
+ * "custom" con su color: así nadie pierde lo que había elegido.
+ */
+export function leerApariencia(crudo: unknown, temaViejo?: unknown, personalViejo?: unknown): Apariencia | null {
+  if (crudo && typeof crudo === "object") {
+    const fuente = crudo as Record<string, unknown>;
+    const acento = normalizarHex(fuente.acento);
+    const modo = fuente.modo === "claro" || fuente.modo === "oscuro" || fuente.modo === "auto" ? fuente.modo : null;
+    if (acento && modo) return { modo, acento };
+  }
+  if (temaViejo === "pink") return { modo: "claro", acento: "#f09ab9" };
+  if (temaViejo === "custom" && personalViejo && typeof personalViejo === "object") {
+    const viejo = personalViejo as Record<string, unknown>;
+    const acento = normalizarHex(viejo.accent);
+    if (acento) return { modo: viejo.base === "dark" ? "oscuro" : "claro", acento };
+  }
+  return null;
+}
+
+export function mismaApariencia(a: Apariencia, b: Apariencia): boolean {
+  return a.modo === b.modo && normalizarHex(a.acento) === normalizarHex(b.acento);
 }

@@ -1,22 +1,25 @@
 import type { EventModality } from "../types/event";
 
-/** Color por defecto para un evento nuevo (dorado de la marca). */
-export const DEFAULT_EVENT_COLOR = "#d7b46a";
+/** Color por defecto para un evento nuevo (violeta del logo de Agenda MB). */
+export const DEFAULT_EVENT_COLOR = "#5b2dff";
 
 /** Color por defecto para una sesión coach (rosa). */
 export const COACH_EVENT_COLOR = "#ec4899";
 
-/** Paleta de colores suaves y bonitos para elegir rápido. */
+/**
+ * Colores para elegir rápido: distintos entre sí (para reconocer cada cita de un
+ * vistazo) y de la familia del logo. Todos llevan texto blanco encima en el calendario.
+ */
 export const COLOR_PRESETS: { value: string; label: string }[] = [
-  { value: "#d7b46a", label: "Dorado" },
-  { value: "#3b82f6", label: "Azul" },
+  { value: "#5b2dff", label: "Violeta" },
+  { value: "#2196f3", label: "Azul" },
+  { value: "#0891b2", label: "Cian" },
   { value: "#8b5cf6", label: "Morado" },
   { value: "#ec4899", label: "Rosa" },
   { value: "#10b981", label: "Verde" },
   { value: "#f59e0b", label: "Ámbar" },
   { value: "#ef4444", label: "Rojo" },
-  { value: "#14b8a6", label: "Turquesa" },
-  { value: "#6366f1", label: "Índigo" },
+  { value: "#d7b46a", label: "Dorado" },
   { value: "#64748b", label: "Gris" }
 ];
 

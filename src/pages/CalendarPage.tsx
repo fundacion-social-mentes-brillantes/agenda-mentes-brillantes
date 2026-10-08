@@ -246,25 +246,25 @@ export default function CalendarPage({
       {/* ---------- El mes ---------- */}
       <section className="flex shrink-0 flex-col gap-2 px-3 sm:px-0 lg:min-h-0 lg:min-w-0 lg:flex-1">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="m-0 text-xl font-black tracking-tight text-app-strong sm:text-2xl">
-            {MONTHS[month]} <span className="font-bold text-app-faint">{year}</span>
+          <h2 className="m-0 min-w-0 truncate text-xl font-semibold tracking-tight text-app-strong sm:text-3xl">
+            {MONTHS[month]} <span className="font-light text-app-faint">{year}</span>
           </h2>
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
             <button
               type="button"
               onClick={() => irAMes(year, month - 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-app-soft bg-app-soft text-app-accent transition hover:bg-app-panel"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-app-soft bg-app-panel text-app-accent transition hover:border-app-strong sm:h-9 sm:w-9"
               aria-label="Mes anterior"
             >
               <ChevronLeft size={18} />
             </button>
-            <button type="button" onClick={irAHoy} className="btn-secondary min-h-9 rounded-full px-3.5 py-1.5 text-xs">
+            <button type="button" onClick={irAHoy} className="btn-secondary min-h-8 rounded-full px-3 py-1 text-xs sm:min-h-9 sm:px-3.5">
               Hoy
             </button>
             <button
               type="button"
               onClick={() => irAMes(year, month + 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-app-soft bg-app-soft text-app-accent transition hover:bg-app-panel"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-app-soft bg-app-panel text-app-accent transition hover:border-app-strong sm:h-9 sm:w-9"
               aria-label="Mes siguiente"
             >
               <ChevronRight size={18} />
@@ -277,8 +277,8 @@ export default function CalendarPage({
               aria-pressed={soloCoach}
               aria-label={soloCoach ? "Ver toda la agenda" : "Ver solo sesiones coach"}
               title={soloCoach ? "Ver toda la agenda" : "Ver solo sesiones coach"}
-              className={`flex h-9 w-9 items-center justify-center rounded-full border transition lg:hidden ${
-                soloCoach ? "accent-gradient border-transparent shadow-sm" : "border-app-soft bg-app-soft text-app-accent"
+              className={`flex h-8 w-8 items-center justify-center rounded-full border transition sm:h-9 sm:w-9 lg:hidden ${
+                soloCoach ? "accent-gradient border-transparent shadow-sm" : "border-app-soft bg-app-panel text-app-accent"
               }`}
             >
               <HeartHandshake size={17} />
@@ -301,7 +301,7 @@ export default function CalendarPage({
               type="button"
               onClick={() => setFilter("all")}
               aria-pressed={!soloCoach}
-              className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${!soloCoach ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
+              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${!soloCoach ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
             >
               Todo
             </button>
@@ -309,7 +309,7 @@ export default function CalendarPage({
               type="button"
               onClick={() => setFilter("coach")}
               aria-pressed={soloCoach}
-              className={`flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-black transition ${soloCoach ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
+              className={`flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${soloCoach ? "bg-app-panel text-app-accent shadow-sm" : "text-app-muted"}`}
             >
               <HeartHandshake size={13} />
               Sesiones coach
@@ -327,13 +327,13 @@ export default function CalendarPage({
         </div>
 
         <div
-          className="relative flex flex-col rounded-3xl border border-app-soft bg-app-panel p-2 shadow-sm lg:min-h-0 lg:flex-1 lg:p-3"
+          className="glass relative flex flex-col rounded-3xl border border-app-soft bg-app-panel p-2 shadow-xl lg:min-h-0 lg:flex-1 lg:p-3"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
           <div className="mb-1 grid grid-cols-7">
             {DAYS.map((day) => (
-              <span key={day} className="py-1 text-center text-[10px] font-black uppercase text-app-faint sm:text-xs">
+              <span key={day} className="py-1 text-center text-[10px] font-medium uppercase tracking-wider text-app-faint sm:text-[11px]">
                 {day}
               </span>
             ))}
@@ -367,12 +367,12 @@ export default function CalendarPage({
                     encima
                       ? "bg-app-soft ring-2 ring-[color:var(--app-accent)] lg:border-app-accent"
                       : elegido
-                        ? "lg:border-app-accent lg:bg-app-soft"
+                        ? "lg:border-app-strong lg:bg-app-soft"
                         : "lg:border-app-soft lg:hover:bg-app-soft"
                   }`}
                 >
                   <span
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-black lg:mb-0.5 lg:h-6 lg:w-6 lg:text-xs ${
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-medium tabular-nums lg:mb-0.5 lg:h-6 lg:w-6 lg:text-xs ${
                       elegido ? "cal-dia--elegido" : today ? "cal-dia--hoy" : currentMonth ? "text-app-strong" : "text-app-faint opacity-60"
                     }`}
                   >
@@ -438,10 +438,10 @@ export default function CalendarPage({
       <section className="flex min-h-0 flex-1 flex-col gap-2 px-3 sm:px-0 lg:w-[22rem] lg:flex-none xl:w-[24rem]">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="m-0 truncate text-base font-black text-app-strong">
+            <p className="m-0 truncate text-lg font-semibold tracking-tight text-app-strong">
               {capitalize(diaElegido.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" }))}
             </p>
-            <p className="m-0 text-xs font-semibold text-app-faint">
+            <p className="m-0 text-xs text-app-faint">
               {elegidoEsHoy ? "Hoy · " : ""}
               {eventosDelDia.length === 0
                 ? soloCoach

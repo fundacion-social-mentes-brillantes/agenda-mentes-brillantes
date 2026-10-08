@@ -49,21 +49,21 @@ export function FilaEvento({ event, onClick, enErp = false, ahora, onPointerDown
 
       <span className="flex w-[4.25rem] shrink-0 flex-col justify-center">
         {event.allDay ? (
-          <span className="text-[11px] font-black leading-tight text-app-muted">Todo el día</span>
+          <span className="text-[11px] font-semibold leading-tight text-app-muted">Todo el día</span>
         ) : (
           <>
-            <span className="text-[13px] font-black leading-tight text-app-strong">{hora(inicio)}</span>
-            <span className="text-[11px] leading-tight text-app-faint">{hora(fin)}</span>
+            <span className="text-[13px] font-semibold tabular-nums leading-tight text-app-strong">{hora(inicio)}</span>
+            <span className="text-[11px] tabular-nums leading-tight text-app-faint">{hora(fin)}</span>
           </>
         )}
       </span>
 
       <span className="flex min-w-0 flex-1 flex-col justify-center">
-        <span className={`truncate text-sm font-bold leading-snug text-app-strong ${event.done ? "line-through opacity-70" : ""}`}>
+        <span className={`truncate text-sm font-semibold leading-snug text-app-strong ${event.done ? "line-through opacity-70" : ""}`}>
           {event.title}
         </span>
-        <span className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px] font-semibold leading-tight text-app-faint">
-          {enCurso && <span className="shrink-0 rounded-full bg-app-soft px-1.5 font-black text-app-accent">Ahora</span>}
+        <span className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px] font-medium leading-tight text-app-faint">
+          {enCurso && <span className="shrink-0 rounded-full bg-app-soft px-1.5 font-semibold text-app-accent-2">Ahora</span>}
           {esCoach && (
             <span className="inline-flex shrink-0 items-center gap-0.5">
               <HeartHandshake size={11} /> Coach

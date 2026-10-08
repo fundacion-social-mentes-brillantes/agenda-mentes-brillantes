@@ -879,7 +879,7 @@ function ClientPicker({
       )}
       {err && <p className="m-0 mt-2 text-xs font-bold text-red-500">{err}</p>}
       {open && (
-        <div className="glass-panel absolute left-0 right-0 z-50 mt-2 max-h-64 overflow-y-auto rounded-2xl p-1.5">
+        <div className="panel-flotante absolute left-0 right-0 z-50 mt-2 max-h-64 overflow-y-auto rounded-2xl p-1.5">
           {matches.map((c) => (
             <button
               key={c.id}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff, LogOut, Smartphone, UserRound, Users } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { useTheme } from "../hooks/useTheme";
-import { TemaVisual } from "../components/TemaVisual";
+import { EditorApariencia } from "../components/EditorApariencia";
 import { authService } from "../services/authService";
 import { activarPush, desactivarPush, estadoPush, guardarPreferencias, leerPreferencias, pushSoportado } from "../lib/push";
 import type { UserProfile } from "../types/user";
@@ -35,7 +35,7 @@ export default function SettingsPage({ profile, notifyWorkspaceId, onGoToWorkspa
           {profile.photoURL ? (
             <img src={profile.photoURL} alt={profile.name} referrerPolicy="no-referrer" className="h-16 w-16 rounded-full object-cover" />
           ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full text-xl font-black text-white" style={{ backgroundColor: profile.color || "#d7b46a" }}>
+            <div className="flex h-16 w-16 items-center justify-center rounded-full text-xl font-black text-white" style={{ backgroundColor: profile.color || "var(--app-accent)" }}>
               {profile.name ? profile.name.slice(0, 2).toUpperCase() : <UserRound size={24} />}
             </div>
           )}
@@ -47,7 +47,7 @@ export default function SettingsPage({ profile, notifyWorkspaceId, onGoToWorkspa
         </div>
       </Card>
 
-      <TemaVisual />
+      <EditorApariencia />
 
       <Card className="space-y-3">
         <div className="flex items-center gap-2">
