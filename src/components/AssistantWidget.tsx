@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Sparkles, X } from "lucide-react";
+import { Bot, Brain, Camera, Send, Sparkles, X, Zap } from "lucide-react";
 import { auth } from "../lib/firebase";
 import { toDate } from "../lib/dateUtils";
 import { DEFAULT_EVENT_COLOR } from "../lib/eventMeta";
 import { resolveMeetingLink } from "../lib/meetingLinks";
+import { prepararFoto, type FotoChat } from "../lib/foto";
 import { Spinner } from "./ui/Spinner";
 import { normalizeText } from "../services/clientsService";
 import type { EventWriteResult } from "../services/eventsService";
@@ -13,11 +14,17 @@ import type { Client } from "../types/client";
 interface UiMessage {
   role: "assistant" | "user";
   content: string;
+  /** Foto que mandó la persona (solo para verla en el chat; no se guarda). */
+  foto?: string;
+  /** Aclaración pequeña debajo de la respuesta (ej. que contestó el modo Básico). */
+  nota?: string;
 }
 
-// Las dos formas de pensar del asistente. Al servidor solo le mandamos esta palabra
-// ("flash" o "pro"); él decide qué modelo usar de verdad.
-type ModeloBot = "flash" | "pro";
+// Los dos modos del asistente. Al servidor solo le mandamos una palabra; él decide
+// qué modelo usar de verdad:
+// - Básico: DeepSeek, el de siempre ("flash").
+// - Experto: Claude Haiku 5.5, piensa más a fondo y lee fotos ("experto").
+type ModoAsistente = "basico" | "experto";
 
 /** Un mensaje de la conversacion con el modelo (formato de la API de chat). */
 interface MensajeIA {
@@ -71,27 +78,22 @@ function leerArgumentos(crudo: unknown): ArgumentosHerramienta {
 }
 
 // Dónde se recuerda la elección en este navegador.
-const CLAVE_MODELO = "asistenteModelo";
+const CLAVE_MODO = "asistenteModo";
 
-const OPCIONES_MODELO: { valor: ModeloBot; etiqueta: string; descripcion: string }[] = [
-  { valor: "flash", etiqueta: "Rápido", descripcion: "Al instante, para el día a día" },
-  { valor: "pro", etiqueta: "Inteligente", descripcion: "Piensa más, para peticiones difíciles" }
+const OPCIONES_MODO: { valor: ModoAsistente; etiqueta: string; descripcion: string; icono: typeof Zap }[] = [
+  { valor: "basico", etiqueta: "Básico", descripcion: "Básico: rápido, para el día a día.", icono: Zap },
+  { valor: "experto", etiqueta: "Experto", descripcion: "Experto: piensa más a fondo y lee fotos (no se guardan).", icono: Brain }
 ];
 
-// ¿Se ofrece el modo "Inteligente" (v4-pro razonando)? HOY NO.
-// DeepSeek-V4-Flash-0731 puntúa 50 en el índice de Artificial Analysis y v4-pro solo 44: Flash
-// es más capaz Y ~3x más barato. Cuando actualicen Pro y valga la pena, se enciende poniendo
-// VITE_MODO_PENSAR = 1 en Vercel (la misma variable que lee el servidor) y volviendo a desplegar.
-const MODO_PENSAR_HABILITADO = import.meta.env.VITE_MODO_PENSAR === "1";
+// Texto que acompaña una foto mandada sin escribir nada.
+const MENSAJE_SOLO_FOTO = "Te mando esta foto. Mira qué hay que agendar y hazlo.";
 
-// Lee la opción guardada. Si el navegador no deja (modo privado), usa "Rápido".
-// Con el modo pensar apagado siempre es "Rápido", aunque quedara una elección vieja guardada.
-function leerModeloGuardado(): ModeloBot {
-  if (!MODO_PENSAR_HABILITADO) return "flash";
+// Lee la opción guardada. Si el navegador no deja (modo privado), usa "Básico".
+function leerModoGuardado(): ModoAsistente {
   try {
-    return localStorage.getItem(CLAVE_MODELO) === "pro" ? "pro" : "flash";
+    return localStorage.getItem(CLAVE_MODO) === "experto" ? "experto" : "basico";
   } catch {
-    return "flash";
+    return "basico";
   }
 }
 
@@ -133,7 +135,10 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("Pensando...");
-  const [modelo, setModelo] = useState<ModeloBot>(leerModeloGuardado);
+  const [modo, setModo] = useState<ModoAsistente>(leerModoGuardado);
+  const [foto, setFoto] = useState<FotoChat | null>(null);
+  const [fotoAviso, setFotoAviso] = useState("");
+  const fotoRef = useRef<HTMLInputElement>(null);
   const convoRef = useRef<MensajeIA[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Caché de eventos creados/duplicados en ESTE turno: permite mover/duplicar/borrar
@@ -162,13 +167,38 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
     if (open && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [uiMessages, open, loading, status]);
 
-  // Cambiar de opción NO borra la conversación: solo aplica desde el siguiente mensaje.
-  const cambiarModelo = (valor: ModeloBot) => {
-    setModelo(valor);
+  // Cambiar de modo NO borra la conversación: solo aplica desde el siguiente mensaje.
+  const cambiarModo = (valor: ModoAsistente) => {
+    setModo(valor);
     try {
-      localStorage.setItem(CLAVE_MODELO, valor);
+      localStorage.setItem(CLAVE_MODO, valor);
     } catch {
       // Si el navegador no deja guardar (modo privado), igual funciona en esta sesión.
+    }
+    // El Básico no lee fotos: se quita la que estaba lista para no mandarla en vano.
+    if (valor === "basico" && foto) {
+      setFoto(null);
+      setFotoAviso("Las fotos solo las lee el modo Experto.");
+    }
+  };
+
+  // Adjuntar una foto pasa al modo Experto, que es el que las lee.
+  const abrirFoto = () => {
+    setFotoAviso("");
+    if (modo !== "experto") cambiarModo("experto");
+    fotoRef.current?.click();
+  };
+
+  const elegirFoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = event.target.files?.[0];
+    event.target.value = "";
+    if (!archivo) return;
+    try {
+      setFoto(await prepararFoto(archivo));
+      setFotoAviso("");
+    } catch (error) {
+      setFoto(null);
+      setFotoAviso(error instanceof Error ? error.message : "No pude abrir esa foto.");
     }
   };
 
@@ -337,25 +367,34 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
   }
 
   const send = async () => {
-    const question = input.trim();
-    if (!question || loading) return;
+    const escrito = input.trim();
+    // La foto solo viaja en modo Experto (cambiarModo ya la quita al pasar a Básico).
+    const fotoTurno = modo === "experto" ? foto : null;
+    if ((!escrito && !fotoTurno) || loading) return;
+    const question = escrito || MENSAJE_SOLO_FOTO;
 
     // La agenda activa aún no terminó de cargar: evita el error y pide reintentar.
+    // La foto se queda lista para el siguiente intento.
     if (!workspaceId) {
       setUiMessages((prev) => [
         ...prev,
-        { role: "user", content: question },
+        { role: "user", content: escrito || "(foto)" },
         { role: "assistant", content: "Dame un momento: todavía estoy terminando de cargar tu agenda. Vuelve a intentarlo en unos segundos. 🙂" }
       ]);
       setInput("");
       return;
     }
 
-    setUiMessages((prev) => [...prev, { role: "user", content: question }]);
-    convoRef.current.push({ role: "user", content: question });
+    setUiMessages((prev) => [...prev, { role: "user", content: escrito, ...(fotoTurno ? { foto: fotoTurno.vista } : {}) }]);
+    // En la conversación queda la marca de que hubo foto: en los turnos siguientes
+    // la foto ya no se manda, pero el asistente sabe que existió.
+    convoRef.current.push({ role: "user", content: fotoTurno ? `${question}\n\n[Adjunté una foto]` : question });
     setInput("");
+    setFoto(null);
+    setFotoAviso("");
     setLoading(true);
-    setStatus("Pensando...");
+    const pensando = modo === "experto" ? "Pensando a fondo..." : "Pensando...";
+    setStatus(fotoTurno ? "Mirando la foto..." : pensando);
     localCacheRef.current = [];
     localClientsRef.current = [];
 
@@ -363,11 +402,21 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
       const idToken = await auth.currentUser?.getIdToken();
 
       let answered = false;
+      // Si el Experto no pudo y contestó el Básico, se avisa debajo de la respuesta.
+      let contestoElBasico = false;
       for (let i = 0; i < 6 && !answered; i++) {
         const res = await fetch("/api/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idToken, messages: convoRef.current, workspaceId, model: modelo })
+          body: JSON.stringify({
+            idToken,
+            messages: convoRef.current,
+            workspaceId,
+            model: modo === "experto" ? "experto" : "flash",
+            // La foto va en cada vuelta de ESTE turno: el Experto puede necesitar mirarla
+            // otra vez después de crear los primeros eventos.
+            ...(fotoTurno ? { foto: { data: fotoTurno.data, tipo: fotoTurno.tipo } } : {})
+          })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -377,6 +426,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
         }
 
         const message: MensajeIA = data.message || { role: "assistant", content: "No pude generar una respuesta." };
+        if (data.respaldo) contestoElBasico = true;
         convoRef.current.push(message);
 
         const toolCalls = message.tool_calls || [];
@@ -407,13 +457,17 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
             const result = await execTool(name, parsed);
             convoRef.current.push({ role: "tool", tool_call_id: tc.id, content: result });
           }
-          setStatus("Pensando...");
+          setStatus(pensando);
         } else {
           // Si por lo que sea llega vacío, decimos algo: nunca dejar al usuario mirando
           // una pantalla muda (se leería como "la app se dañó").
           setUiMessages((prev) => [
             ...prev,
-            { role: "assistant", content: message.content || "No me salió la respuesta. ¿Me lo repites?" }
+            {
+              role: "assistant",
+              content: message.content || "No me salió la respuesta. ¿Me lo repites?",
+              ...(contestoElBasico ? { nota: "Contestó el modo Básico: el Experto no respondió esta vez." } : {})
+            }
           ]);
           answered = true;
         }
@@ -439,7 +493,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
             setOpen(true);
           }}
           aria-label="Abrir asistente"
-          className="btn-primary fixed bottom-24 right-4 z-50 h-14 w-14 rounded-full p-0 shadow-2xl md:bottom-6 md:right-6"
+          className="btn-primary fixed bottom-24 right-4 z-30 h-14 w-14 rounded-full p-0 shadow-2xl md:bottom-6 md:right-6"
         >
           <Bot size={24} />
         </button>
@@ -464,14 +518,18 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
 
           <div ref={scrollRef} className="app-scrollbar flex-1 space-y-3 overflow-y-auto p-3">
             {uiMessages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-relaxed ${
-                    m.role === "user" ? "bg-app-accent text-slate-950" : "border border-app-soft bg-app-soft text-app-strong"
-                  }`}
-                >
-                  {m.content}
-                </div>
+              <div key={i} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
+                {m.foto && <img src={m.foto} alt="Foto enviada" className="mb-1 max-h-40 max-w-[70%] rounded-2xl border border-app-soft object-cover" />}
+                {m.content && (
+                  <div
+                    className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+                      m.role === "user" ? "accent-gradient" : "border border-app-soft bg-app-soft text-app-strong"
+                    }`}
+                  >
+                    {m.content}
+                  </div>
+                )}
+                {m.nota && <p className="m-0 mt-1 max-w-[85%] px-1 text-[11px] text-app-faint">{m.nota}</p>}
               </div>
             ))}
             {loading && (
@@ -484,41 +542,67 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
             )}
           </div>
 
-          <div className="border-t border-app-soft p-2">
-            {/* Cómo quieres que piense: rápido para lo del día a día, inteligente para lo difícil.
-                Hoy el selector está OCULTO porque v4-flash es más capaz y más barato que v4-pro.
-                Reaparece solo con la variable VITE_MODO_PENSAR = 1 (la misma que usa el servidor). */}
-            {MODO_PENSAR_HABILITADO && (
-            <div role="group" aria-label="Cómo quieres que piense el asistente" className="flex items-center gap-1.5 px-1">
-              {OPCIONES_MODELO.map((opcion) => {
-                const activa = modelo === opcion.valor;
-                return (
-                  <button
-                    key={opcion.valor}
-                    type="button"
-                    onClick={() => cambiarModelo(opcion.valor)}
-                    aria-pressed={activa}
-                    title={opcion.descripcion}
-                    // Mientras responde no se puede cambiar: el turno en curso ya salió con
-                    // el modo anterior y encender la otra pastilla sería mentir.
-                    disabled={loading}
-                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-black transition disabled:opacity-50 ${
-                      activa ? "border-app-accent bg-app-soft text-app-accent" : "border-app-soft text-app-muted hover:text-app-strong"
-                    }`}
-                  >
-                    {opcion.etiqueta}
-                  </button>
-                );
-              })}
+          <div className="space-y-2 border-t border-app-soft p-2">
+            {/* Básico (DeepSeek) para el día a día; Experto (Claude) piensa más y lee fotos.
+                La descripción va VISIBLE: en el celular no existen los tooltips del ratón. */}
+            <div className="flex items-center gap-1.5 px-1">
+              <p className="m-0 min-w-0 flex-1 truncate text-[11px] text-app-muted">{OPCIONES_MODO.find((o) => o.valor === modo)?.descripcion}</p>
+              <div role="group" aria-label="Modo del asistente" className="flex shrink-0 gap-1 rounded-full border border-app-soft bg-app-soft p-0.5">
+                {OPCIONES_MODO.map(({ valor, etiqueta, icono: Icono }) => {
+                  const activa = modo === valor;
+                  return (
+                    <button
+                      key={valor}
+                      type="button"
+                      onClick={() => cambiarModo(valor)}
+                      aria-pressed={activa}
+                      // Mientras responde no se puede cambiar: el turno en curso ya salió con
+                      // el modo anterior y encender la otra pastilla sería mentir.
+                      disabled={loading}
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black transition disabled:opacity-50 ${
+                        activa ? "accent-gradient shadow-sm" : "text-app-muted hover:text-app-strong"
+                      }`}
+                    >
+                      <Icono size={12} />
+                      {etiqueta}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            {(foto || fotoAviso) && (
+              <div className="flex items-center gap-2 rounded-2xl border border-app-soft bg-app-soft p-2 text-xs">
+                {foto && <img src={foto.vista} alt="Foto lista para enviar" className="h-12 w-12 shrink-0 rounded-xl object-cover" />}
+                <p className={`m-0 min-w-0 flex-1 ${foto ? "text-app-muted" : "font-bold text-app-accent"}`}>
+                  {foto ? "Foto lista. Escribe qué hacer con ella, o envíala así." : fotoAviso}
+                </p>
+                {foto && (
+                  <button
+                    type="button"
+                    onClick={() => setFoto(null)}
+                    disabled={loading}
+                    aria-label="Quitar la foto"
+                    className="shrink-0 rounded-lg p-1 text-app-muted hover:text-app-strong disabled:opacity-50"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
             )}
-            {/* La descripción va VISIBLE: en el celular no existen los tooltips del ratón. */}
-            {MODO_PENSAR_HABILITADO && (
-              <p className="m-0 mb-2 px-1 text-[11px] text-app-muted">
-                {OPCIONES_MODELO.find((o) => o.valor === modelo)?.descripcion}
-              </p>
-            )}
+
             <div className="flex items-end gap-2">
+              <input ref={fotoRef} type="file" accept="image/*" className="hidden" onChange={(e) => void elegirFoto(e)} />
+              <button
+                type="button"
+                onClick={abrirFoto}
+                disabled={loading}
+                aria-label="Adjuntar una foto (horario, lista de citas, pantallazo)"
+                title="Adjuntar una foto: la lee el modo Experto"
+                className="btn-secondary min-h-11 shrink-0 px-3"
+              >
+                <Camera size={18} />
+              </button>
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -529,10 +613,16 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
                   }
                 }}
                 rows={1}
-                placeholder="Pídele o pregúntale a tu agenda..."
+                placeholder={foto ? "Ej: agenda todo esto en la agenda" : "Pídele o pregúntale a tu agenda..."}
                 className="input-field max-h-28 min-h-11 flex-1 resize-none py-2.5"
               />
-              <button type="button" onClick={send} disabled={loading || !input.trim()} className="btn-primary min-h-11 px-3" aria-label="Enviar">
+              <button
+                type="button"
+                onClick={send}
+                disabled={loading || (!input.trim() && !(modo === "experto" && foto))}
+                className="btn-primary min-h-11 px-3"
+                aria-label="Enviar"
+              >
                 <Send size={18} />
               </button>
             </div>
