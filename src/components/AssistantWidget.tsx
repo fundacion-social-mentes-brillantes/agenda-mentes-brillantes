@@ -15,8 +15,10 @@ import type { Client } from "../types/client";
 interface UiMessage {
   role: "assistant" | "user";
   content: string;
-  /** Foto que mandó la persona (solo para verla en el chat; no se guarda). */
+  /** Foto que mandó la persona, o imagen que creó el asistente (para verla en el chat). */
   foto?: string;
+  /** La imagen la creó el asistente: se ofrece descargarla. */
+  descargable?: boolean;
   /** Aclaración pequeña debajo de la respuesta (ej. que contestó el modo Básico). */
   nota?: string;
 }
@@ -52,9 +54,28 @@ interface ArgumentosHerramienta {
   paidAmount?: number;
   clientCode?: number;
   clientName?: string;
+  description?: string;
+  addToDescription?: string;
+  done?: boolean;
+  prompt?: string;
+  formato?: string;
 }
 
-const CAMPOS_TEXTO = ["id", "title", "name", "date", "startTime", "endTime", "color", "modality", "clientName"] as const;
+const CAMPOS_TEXTO = [
+  "id",
+  "title",
+  "name",
+  "date",
+  "startTime",
+  "endTime",
+  "color",
+  "modality",
+  "clientName",
+  "description",
+  "addToDescription",
+  "prompt",
+  "formato"
+] as const;
 const CAMPOS_NUMERO = ["reminderMinutes", "totalAmount", "paidAmount", "clientCode"] as const;
 
 /**
@@ -75,6 +96,7 @@ function leerArgumentos(crudo: unknown): ArgumentosHerramienta {
     if (typeof valor === "number" && Number.isFinite(valor)) salida[campo] = valor;
   }
   if (typeof fuente.allDay === "boolean") salida.allDay = fuente.allDay;
+  if (typeof fuente.done === "boolean") salida.done = fuente.done;
   return salida;
 }
 
@@ -94,6 +116,15 @@ function archivoDeFoto(foto: FotoChat, nombre: string): File {
   const base = nombre.trim().slice(0, 60) || "Foto del asistente";
   return new File([bytes], `${base}.jpg`, { type: foto.tipo });
 }
+
+/** Una foto recibida o una imagen creada, y en qué eventos quedó guardada (para no subirla dos veces). */
+type ImagenGuardable = FotoChat & { guardadaEn: Set<string> };
+
+// Imágenes que puede crear el asistente: por pedido y por conversación (cada una cuesta ~US$0,013).
+const MAX_IMAGENES_TURNO = 3;
+const MAX_IMAGENES_SESION = 20;
+// El texto de un evento no crece sin fin.
+const MAX_DESCRIPCION = 6000;
 
 // Texto que acompaña una foto mandada sin escribir nada.
 const MENSAJE_SOLO_FOTO = "Te mando esta foto. Mira qué hay que agendar y hazlo.";
@@ -123,7 +154,7 @@ interface AssistantWidgetProps {
 const GREETING: UiMessage = {
   role: "assistant",
   content:
-    "¡Hola! Soy uno con tu agenda. Pregúntame (\"¿cuántas sesiones lleva Catalina?\") o pídeme: \"agenda sesión coach con Catalina el martes a las 3\", \"crea a la persona Juan Pérez\", \"mueve la sesión de mañana a las 4\" o \"duplica el evento al jueves\"."
+    "¡Hola! Soy uno con tu agenda. Pregúntame (\"¿cuántas sesiones lleva Catalina?\") o pídeme: \"agenda sesión coach con Catalina el martes a las 3\", \"mueve la sesión de mañana a las 4\", \"anota en la reunión del jueves lo que hay que llevar\" o \"hazme una invitación para el taller y guárdala en el evento\"."
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -156,10 +187,28 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
   const localCacheRef = useRef<CalendarEvent[]>([]);
   // Caché de personas creadas este turno (para agendar coach justo después de crearlas).
   const localClientsRef = useRef<Client[]>([]);
-  // La foto de ESTE pedido (para guardarla en un evento si la persona lo pide) y en qué
-  // eventos ya quedó, para no subirla dos veces si el modelo repite la acción.
-  const fotoTurnoRef = useRef<FotoChat | null>(null);
-  const fotoGuardadaEnRef = useRef<Set<string>>(new Set());
+  // La última foto que mandó la persona o la última imagen que creó el asistente: es la que
+  // guarda attach_photo, también en un mensaje posterior ("guárdala en el evento del taller").
+  const ultimaImagenRef = useRef<ImagenGuardable | null>(null);
+  // Adjuntos que este pedido ya agregó a cada evento: el listener de Firestore todavía no los
+  // trae, y sin esto una segunda imagen al mismo evento borraría la primera.
+  const adjuntosNuevosRef = useRef<Map<string, CalendarEvent["attachments"]>>(new Map());
+  const imagenesTurnoRef = useRef(0);
+  const imagenesSesionRef = useRef(0);
+
+  /** Sube una imagen a los adjuntos de un evento. Devuelve el resultado para el modelo. */
+  async function guardarEnEvento(imagen: ImagenGuardable, id: string, nombre?: string): Promise<string> {
+    if (!storageService.isConfigured()) return "Guardar archivos no está disponible todavía en esta agenda.";
+    const ev = findEvent(id);
+    if (!ev) return "No encontré ese evento.";
+    if (imagen.guardadaEn.has(id)) return `OK: esa imagen ya estaba guardada en "${ev.title}".`;
+    const adjunto = await storageService.uploadAttachment(archivoDeFoto(imagen, nombre || ev.title), ev.workspaceId || workspaceId || "", id);
+    const adjuntos = [...(adjuntosNuevosRef.current.get(id) ?? ev.attachments ?? []), adjunto];
+    await onUpdateEvent(id, { attachments: adjuntos });
+    adjuntosNuevosRef.current.set(id, adjuntos);
+    imagen.guardadaEn.add(id);
+    return `OK: imagen guardada en los adjuntos de "${ev.title}".`;
+  }
 
   const findEvent = (id: string | undefined): CalendarEvent | undefined =>
     id ? events.find((e) => e.id === id) || localCacheRef.current.find((e) => e.id === id) : undefined;
@@ -242,6 +291,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
           reminderMinutes: typeof args.reminderMinutes === "number" ? args.reminderMinutes : 30,
           totalAmount: typeof args.totalAmount === "number" ? args.totalAmount : null,
           paidAmount: typeof args.paidAmount === "number" ? args.paidAmount : null,
+          ...(args.description ? { description: args.description.slice(0, MAX_DESCRIPCION) } : {}),
           attachments: [],
           done: false,
           createdBy: auth.currentUser?.uid || "",
@@ -262,6 +312,12 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
         if (typeof args.reminderMinutes === "number") patch.reminderMinutes = args.reminderMinutes;
         if (typeof args.totalAmount === "number") patch.totalAmount = args.totalAmount;
         if (typeof args.paidAmount === "number") patch.paidAmount = args.paidAmount;
+        if (args.description != null) patch.description = args.description.slice(0, MAX_DESCRIPCION);
+        if (args.addToDescription) {
+          const previa = (patch.description ?? ev?.description ?? "").trim();
+          patch.description = (previa ? `${previa}\n\n${args.addToDescription}` : args.addToDescription).slice(0, MAX_DESCRIPCION);
+        }
+        if (typeof args.done === "boolean") patch.done = args.done;
         if (args.date != null || args.startTime != null || args.endTime != null || args.allDay != null) {
           const base = args.date || (ev ? evDate(ev.startAt) : null);
           if (!base) return "No pude determinar la fecha del evento.";
@@ -368,18 +424,36 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
       }
 
       if (name === "attach_photo") {
-        const fotoTurno = fotoTurnoRef.current;
-        if (!fotoTurno) return "No hay ninguna foto en este mensaje: pídele a la persona que la mande otra vez junto con el pedido, en modo Experto.";
-        if (!storageService.isConfigured()) return "Guardar archivos no está disponible todavía en esta agenda.";
-        const id = String(args.id || "");
-        const ev = findEvent(id);
-        if (!ev) return "No encontré ese evento.";
-        if (fotoGuardadaEnRef.current.has(id)) return `OK: la foto ya estaba guardada en "${ev.title}".`;
-        const adjunto = await storageService.uploadAttachment(archivoDeFoto(fotoTurno, args.name || ev.title), ev.workspaceId || workspaceId || "", id);
-        const adjuntos = [...(ev.attachments || []), adjunto];
-        await onUpdateEvent(id, { attachments: adjuntos });
-        fotoGuardadaEnRef.current.add(id);
-        return `OK: foto guardada en los adjuntos de "${ev.title}".`;
+        const imagen = ultimaImagenRef.current;
+        if (!imagen) return "No hay ninguna foto ni imagen para guardar: pídele a la persona que la mande (en modo Experto) o crea una con create_image.";
+        return await guardarEnEvento(imagen, String(args.id || ""), args.name);
+      }
+
+      if (name === "create_image") {
+        const prompt = (args.prompt || "").trim();
+        if (prompt.length < 8) return "Falta describir la imagen.";
+        if (imagenesTurnoRef.current >= MAX_IMAGENES_TURNO) return `Ya creé ${MAX_IMAGENES_TURNO} imágenes en este pedido; si quiere más, que las pida en otro mensaje.`;
+        if (imagenesSesionRef.current >= MAX_IMAGENES_SESION) return "Ya van muchas imágenes en esta conversación: que cierre y vuelva a abrir el asistente para seguir.";
+        const idToken = await auth.currentUser?.getIdToken();
+        const res = await fetch("/api/assistant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accion: "imagen", idToken, prompt, formato: args.formato })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || typeof data?.imagen?.data !== "string") return `No se pudo crear la imagen: ${data?.error || "error de conexión"}`;
+        imagenesTurnoRef.current++;
+        imagenesSesionRef.current++;
+        const imagen: ImagenGuardable = {
+          data: data.imagen.data,
+          tipo: "image/jpeg",
+          vista: `data:image/jpeg;base64,${data.imagen.data}`,
+          guardadaEn: new Set()
+        };
+        ultimaImagenRef.current = imagen;
+        setUiMessages((prev) => [...prev, { role: "assistant", content: "", foto: imagen.vista, descargable: true }]);
+        if (args.id) return `OK: imagen creada y mostrada a la persona. ${await guardarEnEvento(imagen, String(args.id), args.name)}`;
+        return "OK: imagen creada y mostrada a la persona (todavía no está guardada en ningún evento).";
       }
 
       if (name === "delete_event") {
@@ -426,8 +500,9 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
     setStatus(fotoTurno ? "Mirando la foto..." : pensando);
     localCacheRef.current = [];
     localClientsRef.current = [];
-    fotoTurnoRef.current = fotoTurno;
-    fotoGuardadaEnRef.current = new Set();
+    if (fotoTurno) ultimaImagenRef.current = { ...fotoTurno, guardadaEn: new Set() };
+    adjuntosNuevosRef.current = new Map();
+    imagenesTurnoRef.current = 0;
 
     try {
       const idToken = await auth.currentUser?.getIdToken();
@@ -478,8 +553,10 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
                         : name === "delete_event"
                           ? "Eliminando evento..."
                           : name === "attach_photo"
-                            ? "Guardando la foto en el evento..."
-                            : "Trabajando..."
+                            ? "Guardando la imagen en el evento..."
+                            : name === "create_image"
+                              ? "Creando la imagen (unos segundos)..."
+                              : "Trabajando..."
             );
             let parsed: ArgumentosHerramienta = {};
             try {
@@ -512,7 +589,6 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
     } catch {
       setUiMessages((prev) => [...prev, { role: "assistant", content: "No pude conectar con el asistente. Revisa tu conexión e intenta de nuevo." }]);
     } finally {
-      fotoTurnoRef.current = null;
       setLoading(false);
     }
   };
@@ -553,7 +629,18 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
           <div ref={scrollRef} className="app-scrollbar flex-1 space-y-3 overflow-y-auto p-3">
             {uiMessages.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
-                {m.foto && <img src={m.foto} alt="Foto enviada" className="mb-1 max-h-40 max-w-[70%] rounded-2xl border border-app-soft object-cover" />}
+                {m.foto && (
+                  <img
+                    src={m.foto}
+                    alt={m.descargable ? "Imagen creada por el asistente" : "Foto enviada"}
+                    className={`mb-1 max-w-[80%] rounded-2xl border border-app-soft object-cover ${m.descargable ? "max-h-72" : "max-h-40"}`}
+                  />
+                )}
+                {m.foto && m.descargable && (
+                  <a href={m.foto} download="imagen-agenda.jpg" className="mb-1 px-1 text-[11px] font-bold text-app-accent underline">
+                    Descargar imagen
+                  </a>
+                )}
                 {m.content && (
                   <div
                     className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-relaxed ${

@@ -240,4 +240,18 @@ describe("traducción de la conversación para Claude", () => {
     });
     expect(m.tool_calls).toEqual([{ id: "t1", type: "function", function: { name: "attach_photo", arguments: JSON.stringify({ id: "ev1", name: "Invitación" }) } }]);
   });
+
+  it("crear imágenes: pide sesión, descripción y la llave de Azure", async () => {
+    const pedirImagen = async (body) => {
+      const r = respuesta();
+      await handler(peticion({ body: { accion: "imagen", ...body } }), r);
+      return r;
+    };
+    expect((await pedirImagen({ prompt: "a warm invitation card" })).statusCode).toBe(401);
+    expect((await pedirImagen({ idToken: "t", prompt: "x" })).statusCode).toBe(400);
+    const sinLlave = await pedirImagen({ idToken: "t", prompt: "a warm invitation card" });
+    expect(sinLlave.statusCode).toBe(503);
+    expect(sinLlave.cuerpo.error).toMatch(/no está configurado/);
+    expect(deClaude({ content: [{ type: "tool_use", id: "i1", name: "create_image", input: { prompt: "p" } }] }).tool_calls[0].function.name).toBe("create_image");
+  });
 });

@@ -32,6 +32,19 @@ const ESFUERZOS = ["low", "medium", "high", "xhigh", "max"];
 const ESFUERZO_EXPERTO = ESFUERZOS.includes(process.env.EXPERTO_ESFUERZO) ? process.env.EXPERTO_ESFUERZO : "high";
 // Vercel corta la función a los 60 s: el Experto tiene 40 y quedan ~20 para que conteste el Básico.
 const TIEMPO_EXPERTO_MS = Number(process.env.EXPERTO_TIEMPO_MS) || 40_000;
+
+// Imágenes nuevas (herramienta create_image): el modelo de imagen de Azure OpenAI de la
+// fundación (recurso gemb-openai, se paga con los créditos de Azure). GPT Image 2.5 Flare en
+// calidad "medium": ~US$0,013 por imagen y ~15 s. La llave va en AZURE_IMAGEN_KEY (Vercel).
+const IMAGEN_ENDPOINT = process.env.AZURE_IMAGEN_ENDPOINT || "https://gemb-openai.openai.azure.com";
+const IMAGEN_MODELO = process.env.AZURE_IMAGEN_DEPLOYMENT || "gpt-image-2.5-flare";
+const IMAGEN_VERSION = "2025-04-01-preview";
+const IMAGEN_TAMANOS = { cuadrado: "1024x1024", vertical: "1024x1536", horizontal: "1536x1024" };
+const IMAGEN_TIEMPO_MS = 50_000;
+const MAX_PROMPT_IMAGEN = 3_000;
+// Freno por persona (memoria de la instancia): el modelo de imagen admite unas 2 por minuto.
+const IMAGENES_POR_MINUTO = 3;
+const usoImagenes = new Map();
 const MAX_MESSAGES = 16;
 // Cuántas acciones puede pedir el modelo en un solo turno. Debe ser holgado: si se
 // recortan, sobran respuestas sin pregunta y la API rechaza la conversación entera.
@@ -48,7 +61,8 @@ const ALLOWED_TOOL_NAMES = new Set([
   "create_coach_session",
   "add_client",
   "delete_event",
-  "attach_photo"
+  "attach_photo",
+  "create_image"
 ]);
 
 function trimText(value, max = 200) {
@@ -236,6 +250,15 @@ async function loadWorkspaceContext(idToken, workspaceId) {
     if (typeof data.totalAmount === "number") item.vt = data.totalAmount;
     if (typeof data.paidAmount === "number") item.va = data.paidAmount;
     if (data.meetingUrl) item.link = trimText(data.meetingUrl, 300);
+    if (data.done) item.hecho = true;
+    const adjuntos = Array.isArray(data.attachments) ? data.attachments.length : 0;
+    if (adjuntos) item.adj = adjuntos;
+    // La descripción va recortada y solo de lo reciente o futuro, para no inflar la conversación.
+    const descripcion = trimText(data.description || data.notes || "", 400).replace(/\s+/g, " ");
+    const inicioMs = new Date(data.startAt || "").getTime();
+    if (descripcion && (!Number.isFinite(inicioMs) || inicioMs >= nowMs - 30 * 86_400_000)) {
+      item.d = descripcion.slice(0, 160);
+    }
     return item;
   });
 
@@ -363,7 +386,7 @@ const TOOLS = [
     function: {
       name: "attach_photo",
       description:
-        "Guarda la foto que la persona mandó EN ESTE MENSAJE en los adjuntos de un evento (la invitación, el flyer, el comprobante, la lista). Solo sirve si en este mensaje llegó una foto.",
+        "Guarda en los adjuntos de un evento la última foto que mandó la persona o la última imagen que creaste con create_image en esta conversación (la invitación, el flyer, el comprobante, la lista).",
       parameters: {
         type: "object",
         properties: {
@@ -371,6 +394,28 @@ const TOOLS = [
           name: { type: "string", description: "Nombre corto para el archivo, ej. \"Invitación\" o \"Comprobante de pago\"." }
         },
         required: ["id"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_image",
+      description:
+        "Crea una imagen nueva (invitación, flyer, afiche, tarjeta, ilustración, fondo) con el modelo de imagen de la fundación y se la muestra a la persona. Si se debe guardar en un evento, pasa su id y queda en los adjuntos. Tarda unos segundos: haz una sola por pedido salvo que pidan varias.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: {
+            type: "string",
+            description:
+              "Descripción detallada EN INGLÉS: sujeto, estilo, composición, colores y ambiente. Si debe llevar texto (título, fecha, hora, lugar), escríbelo literal entre comillas, en español con tildes, y agrega 'and no other text'. Si no lleva texto, termina con 'no text, no letters, no watermark'."
+          },
+          formato: { type: "string", enum: ["cuadrado", "vertical", "horizontal"], description: "vertical para invitaciones, flyers e historias de celular; cuadrado por defecto." },
+          id: { type: "string", description: "Opcional: id del evento donde guardarla." },
+          name: { type: "string", description: "Nombre corto para el archivo, ej. \"Invitación del taller\"." }
+        },
+        required: ["prompt"]
       }
     }
   },
@@ -391,7 +436,8 @@ const TOOLS = [
           color: { type: "string", description: "Color hex, ej #3b82f6." },
           reminderMinutes: { type: "number", description: "Minutos de recordatorio antes (0,10,30,60,1440)." },
           totalAmount: { type: "number", description: "Valor total en pesos." },
-          paidAmount: { type: "number", description: "Valor abonado en pesos." }
+          paidAmount: { type: "number", description: "Valor abonado en pesos." },
+          description: { type: "string", description: "Texto del evento: notas, lista de cosas, orden del día, guion, mensaje o enlaces." }
         },
         required: ["title", "date"]
       }
@@ -415,7 +461,10 @@ const TOOLS = [
           color: { type: "string" },
           reminderMinutes: { type: "number" },
           totalAmount: { type: "number" },
-          paidAmount: { type: "number" }
+          paidAmount: { type: "number" },
+          description: { type: "string", description: "Reemplaza TODO el texto del evento." },
+          addToDescription: { type: "string", description: "Agrega este texto al final del texto del evento (no borra lo que había)." },
+          done: { type: "boolean", description: "true para marcarlo como hecho (tachado); false para desmarcarlo." }
         },
         required: ["id"]
       }
@@ -503,7 +552,7 @@ function buildSystem({ workspaceName, userName, today, events, clients, conFotos
   const reglas = [
     `Eres el asistente personal de la agenda "${workspaceName}" de ${userName || "el usuario"} (Gimnasio Emocional Mentes Brillantes).`,
     `Zona horaria de Colombia (UTC-5). Hablas español, eres cálido, claro y muy preciso.`,
-    `Eres "uno con la agenda": CONSULTAS y también ACTÚAS con tus herramientas: crear evento normal (create_event), crear SESIÓN COACH (create_coach_session), crear persona (add_client), mover (update_event), duplicar (duplicate_event), eliminar y guardar en un evento la foto que te manden (attach_photo).`,
+    `Eres "uno con la agenda": CONSULTAS y también ACTÚAS con tus herramientas: crear evento normal (create_event), crear SESIÓN COACH (create_coach_session), crear persona (add_client), mover (update_event), duplicar (duplicate_event), eliminar, escribir en el texto del evento, marcarlo como hecho, crear imágenes (create_image) y guardar en un evento la foto que te manden o la imagen que crees (attach_photo).`,
     ``,
     `Reglas (síguelas al pie de la letra):`,
     `- SÉ AUTOSUFICIENTE Y DECIDIDO: si la intención está clara, ACTÚA de una con la herramienta; NO pidas permiso ni propongas opciones. La única excepción es ELIMINAR (el navegador pedirá confirmación solo).`,
@@ -515,7 +564,10 @@ function buildSystem({ workspaceName, userName, today, events, clients, conFotos
     `- HORAS exactamente según lo que pida el usuario: si da inicio Y fin, usa ambas; si da SOLO la hora de inicio (ej. "a las 4"), NO inventes la hora de fin (déjala vacía: la app la pone 1 hora después, 4→5); si dice "todo el día", allDay=true; si no menciona hora, usa 09:00 (la app la deja de 1 hora). Al duplicar/mover sin hora nueva, conserva la del evento original.`,
     `- Usa el "id" exacto de la lista para mover/duplicar/borrar. Si hay varias coincidencias reales y no puedes elegir, SOLO ahí pregunta (corto).`,
     `- Si acabas de crear algo y en el mismo pedido debes moverlo/duplicarlo, usa el id que devuelve la herramienta (texto "id=...").`,
-    `- Una foto solo se puede guardar en el mismo mensaje en que llega. Si piden guardar una foto de antes, pide que la manden otra vez junto con el pedido, en modo Experto.`,
+    `- TEXTO DEL EVENTO: puedes escribir y guardar texto en el evento: listas de cosas que llevar, orden del día, guion de una sesión, el mensaje para mandar por WhatsApp, enlaces, notas. Para "anota / agrega / guarda en el evento" usa addToDescription (no borra lo que había); description solo si piden reemplazarlo todo. Al crear un evento con notas, pásalas en description.`,
+    `- HECHO: "márcalo como hecho / listo / ya se hizo" → update_event con done=true (false para desmarcar). Los eventos con hecho=true ya se hicieron.`,
+    `- IMÁGENES NUEVAS: si piden crear o diseñar una imagen (invitación, flyer, afiche, tarjeta de cumpleaños, ilustración, fondo), usa create_image con un prompt detallado en inglés. Si debe llevar texto, ponlo literal entre comillas y pide "and no other text"; estilo cálido, de imprenta y hecho a mano (flat inks, paper grain), nunca brillos plásticos ni 3D. Si dicen en qué evento guardarla, pasa su id (si el evento se crea en este pedido, créalo primero). Si después piden guardarla, usa attach_photo. Si la herramienta falla, dilo; nunca digas que la creaste si no fue así.`,
+    `- GUARDAR: attach_photo guarda la última foto que mandó la persona o la última imagen que creaste, en el evento que diga. Si no hay ninguna, pide que la manden.`,
     `- Para CONTAR sesiones de una persona ("cuántas lleva", "cuántas ha tomado", "cuántas próximas"): USA LOS NÚMEROS YA CALCULADOS en PERSONAS (campos tomadas, proximas, total). NO los recalcules contando eventos por título; los eventos normales con un nombre parecido NO cuentan. Responde con esos números tal cual (coinciden con el panel de Sesiones coach).`,
     ...(conFotos
       ? [
@@ -528,7 +580,7 @@ function buildSystem({ workspaceName, userName, today, events, clients, conFotos
     `ESTILO: MUY CONCISO. Responde en 1–2 frases. Tras actuar, confirma en una sola línea (ej. "Listo, agendé la sesión de Catalina el jueves 25 a las 3 pm."). Amplía o usa viñetas SOLO si te piden detalle o si listas varios resultados.`,
     `- Escribe en TEXTO PLANO: el chat no muestra formato, así que nada de asteriscos, #, tablas ni negritas (para listas usa guiones). Di las horas como se dicen en Colombia: "5:30 a. m.", "7:00 p. m." (nunca "17:00").`,
     ``,
-    `Cada evento tiene: id, t=título, f=fecha (YYYY-MM-DD), h=hora, m=modalidad, coach=true si es sesión coach, cn=nombre de la persona, cc=código de la persona, vt=valor total, va=valor abonado, link=enlace de reunión, creado=fecha/hora de registro.`,
+    `Cada evento tiene: id, t=título, f=fecha (YYYY-MM-DD), h=hora, m=modalidad, coach=true si es sesión coach, cn=nombre de la persona, cc=código de la persona, vt=valor total, va=valor abonado, link=enlace de reunión, creado=fecha/hora de registro, d=texto del evento (recortado; solo de los últimos 30 días en adelante), hecho=true si ya se marcó como hecho, adj=cuántos adjuntos tiene.`,
     `Cada persona (PERSONAS) tiene: code=código, name=nombre, y sus sesiones coach YA CONTADAS: tomadas (pasadas), proximas (futuras), total.`
   ].join("\n");
 
@@ -751,6 +803,82 @@ function avisarFotoNoLeida(convo) {
   return copia;
 }
 
+/**
+ * Crea una imagen con el modelo de imagen de Azure. Nunca lanza: devuelve el motivo para
+ * mostrárselo a la persona (sin el prompt, que puede traer nombres).
+ */
+async function crearImagen(prompt, formato) {
+  const llave = process.env.AZURE_IMAGEN_KEY;
+  if (!llave) return { ok: false, status: 503, error: "Crear imágenes no está configurado todavía." };
+  const size = IMAGEN_TAMANOS[formato] || IMAGEN_TAMANOS.cuadrado;
+  const controlador = new AbortController();
+  const reloj = setTimeout(() => controlador.abort(), IMAGEN_TIEMPO_MS);
+  const inicio = Date.now();
+  try {
+    const r = await fetch(`${IMAGEN_ENDPOINT}/openai/deployments/${IMAGEN_MODELO}/images/generations?api-version=${IMAGEN_VERSION}`, {
+      method: "POST",
+      headers: { "api-key": llave, "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, size, quality: "medium", n: 1, output_format: "jpeg" }),
+      signal: controlador.signal
+    });
+    const texto = await r.text();
+    if (!r.ok) {
+      console.error("La imagen falló", { status: r.status, ms: Date.now() - inicio });
+      if (r.status === 429) return { ok: false, status: 429, error: "El creador de imágenes está ocupado. Intenta en un minuto." };
+      if (/content_policy|ResponsibleAIPolicyViolation|moderation|safety/i.test(texto)) {
+        return { ok: false, status: 422, error: "El filtro de seguridad no dejó crear esa imagen. Descríbela de otra forma." };
+      }
+      return { ok: false, status: 502, error: "No pude crear la imagen en este momento." };
+    }
+    let data = "";
+    try {
+      data = JSON.parse(texto)?.data?.[0]?.b64_json || "";
+    } catch {
+      data = "";
+    }
+    if (!data) return { ok: false, status: 502, error: "No pude crear la imagen en este momento." };
+    console.log("Imagen creada", { ms: Date.now() - inicio, size });
+    return { ok: true, data };
+  } catch (error) {
+    const tarde = error?.name === "AbortError";
+    console.error("La imagen falló", { motivo: tarde ? "tiempo" : String(error?.name || "error"), ms: Date.now() - inicio });
+    return { ok: false, status: 504, error: tarde ? "La imagen tardó demasiado. Intenta otra vez." : "No pude crear la imagen en este momento." };
+  } finally {
+    clearTimeout(reloj);
+  }
+}
+
+/** POST /api/assistant con accion "imagen": la pide el navegador cuando el modelo usa create_image. */
+async function atenderImagen(body, res) {
+  const user = await verifyIdToken(body.idToken);
+  if (!user) {
+    res.status(401).json({ error: "Tu sesión no es válida. Cierra y vuelve a iniciar sesión." });
+    return;
+  }
+  if (!(await esDelEquipo(new UserFirestore(body.idToken), user.localId))) {
+    res.status(403).json({ error: "Crear imágenes es solo para el equipo de la fundación." });
+    return;
+  }
+  const prompt = trimText(body.prompt, MAX_PROMPT_IMAGEN);
+  if (prompt.length < 8) {
+    res.status(400).json({ error: "Falta describir la imagen." });
+    return;
+  }
+  const ahora = Date.now();
+  const recientes = (usoImagenes.get(user.localId) || []).filter((t) => ahora - t < 60_000);
+  if (recientes.length >= IMAGENES_POR_MINUTO) {
+    res.status(429).json({ error: "Van varias imágenes seguidas. Espera un minuto y pídela otra vez." });
+    return;
+  }
+  usoImagenes.set(user.localId, [...recientes, ahora]);
+  const r = await crearImagen(prompt, body.formato);
+  if (!r.ok) {
+    res.status(r.status).json({ error: r.error });
+    return;
+  }
+  res.status(200).json({ imagen: { data: r.data, tipo: "image/jpeg" } });
+}
+
 // El modo Experto piensa antes de responder y tarda más. Sin esto, Vercel corta la
 // función a los pocos segundos y el usuario ve un error de conexión que no es real.
 export const config = { maxDuration: 60 };
@@ -770,6 +898,10 @@ export default async function handler(req, res) {
   const body = parseBody(req.body);
   if (!body) {
     res.status(400).json({ error: "El cuerpo de la solicitud no es JSON valido." });
+    return;
+  }
+  if (body.accion === "imagen") {
+    await atenderImagen(body, res);
     return;
   }
   // "model" es opcional: "experto" (Claude) o, para DeepSeek, "flash" o "pro" (lo demás se trata como flash).
