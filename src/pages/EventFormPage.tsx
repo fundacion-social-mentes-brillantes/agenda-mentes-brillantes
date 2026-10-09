@@ -568,7 +568,7 @@ export default function EventFormPage({
               </label>
 
               <div className="grid grid-cols-2 gap-3 md:col-span-2">
-                <label>
+                <label className="min-w-0">
                   <span className="section-label mb-2 block">Inicio</span>
                   <input
                     className="input-field"
@@ -584,7 +584,7 @@ export default function EventFormPage({
                     required={!allDay}
                   />
                 </label>
-                <label>
+                <label className="min-w-0">
                   <span className="section-label mb-2 block">Final</span>
                   <input className="input-field" type="time" value={endTimeStr} onChange={(e) => setEndTimeStr(e.target.value)} disabled={allDay} required={!allDay} />
                 </label>
@@ -632,7 +632,7 @@ export default function EventFormPage({
               )}
 
               <label className="flex items-center gap-3 rounded-2xl border border-app-soft bg-app-soft p-4 md:col-span-2">
-                <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} className="h-5 w-5 accent-amber-500" />
+                <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} className="h-5 w-5 accent-[var(--app-accent)]" />
                 <span className="text-sm font-bold text-app-muted">Todo el día</span>
               </label>
             </div>
@@ -735,7 +735,12 @@ export default function EventFormPage({
           </div>
         </aside>
 
-        <div className="fixed bottom-[76px] left-0 right-0 z-40 border-t border-app-soft bg-app-panel p-3 shadow-2xl backdrop-blur-xl lg:hidden">
+        {/* Celular: «Guardar» siempre a la vista, abajo del todo y por encima de la franja de la
+            rayita del iPhone (la barra de navegación no se muestra en esta pantalla). */}
+        <div
+          className="panel-flotante fixed bottom-0 left-0 right-0 z-40 rounded-b-none rounded-t-3xl border-x-0 border-b-0 px-3 pt-3 lg:hidden"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
+        >
           {(error || warningMessage) && (
             <p className={`mb-2 line-clamp-2 text-xs font-bold ${error ? "text-red-500" : "text-amber-600"}`}>{error || warningMessage}</p>
           )}

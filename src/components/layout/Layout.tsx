@@ -189,7 +189,9 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
         </div>
       </aside>
 
-      <main className="app-scrollbar min-h-0 flex-1 overflow-y-auto pb-24 md:max-h-screen md:pb-0">
+      {/* Abajo se deja el alto de la barra flotante MÁS la franja de la rayita del iPhone
+          (safe-area); sin ella, en iPhone lo último de cada pantalla quedaba debajo de la barra. */}
+      <main className="app-scrollbar min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+6rem)] md:max-h-screen md:pb-0">
         <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
           {profileSyncWarning && (
             <div className="mb-5 rounded-3xl border border-app-strong bg-app-soft px-4 py-3 text-sm font-bold text-app-muted shadow-sm">
@@ -204,7 +206,9 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
         <EditorApariencia enVentana onListo={() => setPersonalizando(false)} />
       </Modal>
 
-      {/* Barra de abajo flotante, de cristal (como las de iOS). */}
+      {/* Barra de abajo flotante, de cristal (como las de iOS). En el formulario de cita no
+          va: el formulario tiene su propia barra con «Guardar» y la tapaba (iPhone). */}
+      {activePage !== "event-form" && (
       <nav
         className="glass fixed left-3 right-3 z-40 flex items-center justify-around rounded-[1.75rem] border border-app-soft bg-app-panel px-2 py-1.5 shadow-2xl md:hidden"
         style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.6rem)" }}
@@ -229,6 +233,7 @@ export function Layout({ children, activePage, setActivePage, onCreate, workspac
           <MobileNavItem key={item.id} item={item} active={activePage === item.id} onClick={() => setActivePage(item.id)} />
         ))}
       </nav>
+      )}
     </div>
   );
 }

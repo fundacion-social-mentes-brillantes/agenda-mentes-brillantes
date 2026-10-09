@@ -362,6 +362,22 @@ img {
     transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
   }
 
+  /* iPhone dibuja los campos de fecha y hora con un ancho mínimo propio y se salían
+     del cuadro (la hora "Final" quedaba montada por la derecha). */
+  .input-field[type="time"],
+  .input-field[type="date"],
+  .input-field[type="datetime-local"] {
+    display: block;
+    min-width: 0;
+    min-height: 3.1rem;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .input-field::-webkit-date-and-time-value {
+    text-align: left;
+  }
+
   .input-field::placeholder {
     color: var(--app-faint);
   }

@@ -153,6 +153,8 @@ interface AssistantWidgetProps {
   onDeleteEvent: (id: string) => Promise<void>;
   onCreateClient: (name: string) => Promise<Client>;
   onOpen?: () => void;
+  /** Esconde el botón flotante (en el formulario de cita taparía «Guardar»). */
+  ocultarBoton?: boolean;
 }
 
 const GREETING: UiMessage = {
@@ -174,7 +176,7 @@ function evDate(value: CalendarEvent["startAt"]): string {
   const d = toDate(value);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-export function AssistantWidget({ events, clients, workspaceName, workspaceId, userName, onCreateEvent, onUpdateEvent, onDeleteEvent, onCreateClient, onOpen }: AssistantWidgetProps) {
+export function AssistantWidget({ events, clients, workspaceName, workspaceId, userName, onCreateEvent, onUpdateEvent, onDeleteEvent, onCreateClient, onOpen, ocultarBoton = false }: AssistantWidgetProps) {
   const [open, setOpen] = useState(false);
   const [uiMessages, setUiMessages] = useState<UiMessage[]>([GREETING]);
   const [input, setInput] = useState("");
@@ -714,7 +716,7 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
 
   return (
     <>
-      {!open && (
+      {!open && !ocultarBoton && (
         <button
           type="button"
           onClick={() => {
@@ -722,14 +724,14 @@ export function AssistantWidget({ events, clients, workspaceName, workspaceId, u
             setOpen(true);
           }}
           aria-label="Abrir asistente"
-          className="btn-primary fixed bottom-24 right-4 z-30 h-14 w-14 rounded-full p-0 shadow-2xl md:bottom-6 md:right-6"
+          className="btn-primary fixed bottom-[calc(env(safe-area-inset-bottom)+6.25rem)] right-4 z-30 h-14 w-14 rounded-full p-0 shadow-2xl md:bottom-6 md:right-6"
         >
           <Bot size={24} />
         </button>
       )}
 
       {open && (
-        <div className="panel-flotante fixed bottom-24 left-3 right-3 z-50 flex h-[70vh] max-h-[560px] flex-col overflow-hidden rounded-3xl sm:left-auto sm:w-[400px] md:bottom-6 md:right-6">
+        <div className="panel-flotante fixed bottom-[calc(env(safe-area-inset-bottom)+6.25rem)] left-3 right-3 z-50 flex h-[70vh] max-h-[560px] flex-col overflow-hidden rounded-3xl sm:left-auto sm:w-[400px] md:bottom-6 md:right-6">
           <div className="flex items-center justify-between border-b border-app-soft px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-app-soft text-app-accent">

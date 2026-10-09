@@ -424,6 +424,7 @@ function AppContent() {
         onDeleteEvent={deleteEvent}
         onCreateClient={handleCreateClient}
         onOpen={() => setAssistantHasOpened(true)}
+        ocultarBoton={activePage === "event-form"}
       />
     </Layout>
   );

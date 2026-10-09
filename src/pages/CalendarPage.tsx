@@ -288,7 +288,7 @@ export default function CalendarPage({
   return (
     // Alto exacto de la pantalla menos el encabezado, los márgenes y la barra de abajo:
     // así el mes y el día se ven completos sin que la página se mueva.
-    <div className="-mx-4 flex h-[calc(100dvh-12.125rem-env(safe-area-inset-top))] flex-col gap-2 sm:mx-0 md:h-[calc(100dvh-6rem)] lg:flex-row lg:gap-5">
+    <div className="-mx-4 flex h-[calc(100dvh-12.125rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col gap-2 sm:mx-0 md:h-[calc(100dvh-6rem)] lg:flex-row lg:gap-5">
       {/* ---------- El mes ---------- */}
       <section className="flex shrink-0 flex-col gap-2 px-3 sm:px-0 lg:min-h-0 lg:min-w-0 lg:flex-1">
         <div className="flex items-center justify-between gap-2">
