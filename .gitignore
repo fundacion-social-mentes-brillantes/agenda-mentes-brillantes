@@ -42,3 +42,6 @@ firebase-adminsdk*.json
 # Registros del emulador de Firebase
 firestore-debug.log
 ui-debug.log
+
+# Espacios de trabajo de las sesiones de Claude (cada uno es su propio repositorio)
+.claude/worktrees/
