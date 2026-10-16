@@ -5,11 +5,15 @@
     { "source": "/.well-known/oauth-authorization-server", "destination": "/api/oauth/authorization-server" },
     { "source": "/.well-known/openid-configuration", "destination": "/api/oauth/authorization-server" },
     {
-      "source": "/((?!api/|assets/).*)",
+      "source": "/((?!api/|assets/|\\.well-known/).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+    },
     {
       "source": "/sw.js",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]

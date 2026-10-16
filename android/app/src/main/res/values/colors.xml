@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- El índigo de la Agenda (theme_color de vite.config.ts). -->
+    <color name="fondo">#0f0a2b</color>
+</resources>

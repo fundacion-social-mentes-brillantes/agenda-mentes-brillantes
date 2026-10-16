@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Agenda MB</string>
+    <string name="url_inicio" translatable="false">https://agenda-mentes-brillantes.vercel.app/</string>
+    <string name="proveedor" translatable="false">org.fundacionsocialmentesbrillantes.agenda.archivos</string>
+    <string name="asset_statements" translatable="false">
+        [{\"relation\": [\"delegate_permission/common.handle_all_urls\", \"delegate_permission/common.use_as_origin\"],
+          \"target\": {\"namespace\": \"web\", \"site\": \"https://agenda-mentes-brillantes.vercel.app\"}}]
+    </string>
+</resources>

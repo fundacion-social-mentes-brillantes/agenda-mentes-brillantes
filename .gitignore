@@ -45,3 +45,11 @@ ui-debug.log
 
 # Espacios de trabajo de las sesiones de Claude (cada uno es su propio repositorio)
 .claude/worktrees/
+
+# Android (la llave de firma vive fuera del repo, en C:\Android\firma)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.jks
+*.keystore

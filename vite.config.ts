@@ -46,7 +46,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/__/, /^\/api/],
+        navigateFallbackDenylist: [/^\/__/, /^\/api/, /^\/\.well-known\//],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [
           {
