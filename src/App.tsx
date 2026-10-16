@@ -30,6 +30,14 @@ import { AGENDA_AVISOS, sincronizarPush } from "./lib/push";
 import { paginaPerezosa } from "./lib/paginaPerezosa";
 import { arranque } from "./lib/arranque";
 
+const PAGINAS: readonly PageType[] = ["dashboard", "calendar", "coach", "day", "event-form", "settings", "workspaces"];
+
+// La pantalla que quedó anotada en un paso del historial (o null si no es de la app).
+function paginaGuardada(estado: unknown): PageType | null {
+  const pagina = (estado as { pagina?: unknown } | null)?.pagina;
+  return PAGINAS.find((p) => p === pagina) ?? null;
+}
+
 function AppContent() {
   const { user, profile, loading: authLoading } = useAuth();
   const {
@@ -145,6 +153,37 @@ function AppContent() {
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const inviteHandledRef = useRef(false);
 
+  // El botón «atrás» del celular (o del navegador) vuelve a la pantalla anterior
+  // en vez de cerrar la app: cada cambio de pantalla deja su paso en el historial.
+  useEffect(() => {
+    window.history.replaceState({ pagina: "calendar" }, "");
+    const alVolver = (evento: PopStateEvent) => {
+      const pagina = paginaGuardada(evento.state) ?? "calendar";
+      if (pagina !== "event-form") {
+        setEditingEvent(null);
+        setSelectedDate(null);
+      }
+      setActivePage(pagina);
+    };
+    window.addEventListener("popstate", alVolver);
+    return () => window.removeEventListener("popstate", alVolver);
+  }, []);
+
+  // Al salir del formulario de una cita no se apila otro paso: se vuelve al de
+  // antes (o se reemplaza el del formulario), así «atrás» no lo reabre ya cerrado.
+  const irA = (pagina: PageType) => {
+    if (pagina === activePage) return;
+    const estado = window.history.state as { pagina?: unknown; desde?: unknown } | null;
+    if (activePage === "event-form" && estado?.pagina === "event-form" && estado.desde === pagina) {
+      window.history.back();
+    } else if (activePage === "event-form") {
+      window.history.replaceState({ pagina }, "");
+    } else {
+      window.history.pushState({ pagina, desde: activePage }, "");
+    }
+    setActivePage(pagina);
+  };
+
   // Procesa el enlace de invitación (?invite=...&code=...) una sola vez tras iniciar sesión.
   useEffect(() => {
     if (!user || inviteHandledRef.current) return;
@@ -165,7 +204,7 @@ function AppContent() {
         setActivePage("dashboard");
         setInviteNotice(`Te uniste a la agenda "${ws.name}".`);
         // Limpiamos la URL solo si funcionó (así, si falla, recargar reintenta).
-        window.history.replaceState({}, "", window.location.pathname);
+        window.history.replaceState({ pagina: "dashboard" }, "", window.location.pathname);
         window.setTimeout(() => setInviteNotice(null), 6000);
       } catch (error) {
         console.error("No se pudo procesar la invitación", error);
@@ -186,7 +225,7 @@ function AppContent() {
       setFormKind("normal");
       setFormClient(null);
     }
-    setActivePage(page);
+    irA(page);
   };
 
   const handleCreate = () => {
@@ -195,12 +234,12 @@ function AppContent() {
     // Si estás en la página de Sesiones coach, el nuevo evento arranca en modo coach; si no, normal.
     setFormKind(activePage === "coach" ? "coach" : "normal");
     setFormClient(null);
-    setActivePage("event-form");
+    irA("event-form");
   };
 
   const handleEditEvent = (event: CalendarEvent) => {
     setEditingEvent(event);
-    setActivePage("event-form");
+    irA("event-form");
   };
 
   // Abre el formulario en modo "sesión coach", opcionalmente con la persona ya elegida.
@@ -209,7 +248,7 @@ function AppContent() {
     setSelectedDate(new Date());
     setFormKind("coach");
     setFormClient(client || null);
-    setActivePage("event-form");
+    irA("event-form");
   };
 
   const handleCreateClient = async (name: string) => createClient(name);
