@@ -100,6 +100,15 @@ describe("agendas y miembros", () => {
     await assertFails(setDoc(doc(como("pepe"), "workspaces/a-nombre-de-sebas"), { ownerId: "sebas", kind: "shared", name: "Falsa" }));
   });
 
+  it("la agenda personal de alguien solo la crea esa persona (nadie se la puede ganar)", async () => {
+    // pepe conoce el uid de ana e intenta crear antes que ella su agenda personal, a nombre de pepe.
+    await assertFails(setDoc(doc(como("pepe"), "workspaces/personal_ana"), { ownerId: "pepe", kind: "personal", name: "Mi agenda" }));
+    await assertFails(setDoc(doc(como("pepe"), "workspaces/personal_ana_x"), { ownerId: "pepe", kind: "personal", name: "Mi agenda" }));
+    // La suya si.
+    await assertSucceeds(setDoc(doc(como("pepe"), "workspaces/personal_pepe"), { ownerId: "pepe", kind: "personal", name: "Mi agenda" }));
+    await assertSucceeds(setDoc(doc(como("ana"), "workspaces/personal_ana"), { ownerId: "ana", kind: "personal", name: "Mi agenda" }));
+  });
+
   it("el dueno puede sacar a un miembro; un miembro no puede sacar a otro", async () => {
     await assertFails(deleteDoc(doc(como("ana"), "workspaces/GEMB/members/sebas")));
     await assertSucceeds(deleteDoc(doc(como("sebas"), "workspaces/GEMB/members/ana")));

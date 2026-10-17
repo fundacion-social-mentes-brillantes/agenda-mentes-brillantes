@@ -65,7 +65,12 @@ service cloud.firestore {
     // Agendas (workspaces).
     match /workspaces/{wsId} {
       allow read: if isMember(wsId) || isOwnPersonal(wsId);
-      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      // A nombre propio, y la agenda personal ("personal_{uid}") solo la crea su
+      // dueno: si no, alguien que conozca el uid de otra persona podria crearla
+      // antes que ella y dejarle su agenda personal inservible.
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && (!wsId.matches('personal_.*') || isOwnPersonal(wsId));
       allow update: if signedIn()
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.ownerId == resource.data.ownerId
