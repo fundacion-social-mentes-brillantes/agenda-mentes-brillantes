@@ -21,7 +21,7 @@ import {
   createCoachSession
 } from "./_lib/agenda.js";
 
-const SERVER_INFO = { name: "agenda-mentes-brillantes", version: "1.0.0" };
+const SERVER_INFO = { name: "agenda-mentes-brillantes", version: "1.1.0" };
 const PROTOCOL_VERSION = "2025-06-18";
 const MAX_BODY_BYTES = 200_000;
 
@@ -48,7 +48,7 @@ const TOOLS = [
   },
   {
     name: "list_events",
-    description: "Lista eventos de una agenda. Filtros opcionales: from/to (YYYY-MM-DD), query (texto en el título), includeDone, limit, workspace.",
+    description: "Lista eventos de una agenda. Filtros opcionales: from/to (YYYY-MM-DD), query (texto en el título), includeDone, limit, workspace. Cada evento trae su descripción recortada; para leerla completa usa get_event.",
     inputSchema: {
       type: "object",
       properties: {
@@ -63,31 +63,36 @@ const TOOLS = [
   },
   {
     name: "get_event",
-    description: "Devuelve el detalle de un evento por su id.",
+    description: "Devuelve el detalle de un evento por su id, con su descripción completa y su enlace (meetingUrl).",
     inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] }
   },
   {
     name: "create_event",
-    description: "Crea un evento. Requiere title y date (YYYY-MM-DD). Si das solo startTime, dura 1 hora. Opcional: startTime/endTime (HH:MM), allDay, modality (presencial/virtual), color (#hex), reminderMinutes, totalAmount/paidAmount (COP), workspace.",
+    description: "Crea un evento. Requiere title y date (YYYY-MM-DD). Si das solo startTime, dura 1 hora. Opcional: startTime/endTime (HH:MM), allDay, modality (presencial/virtual), color (#hex), reminderMinutes, totalAmount/paidAmount (COP), description (texto del evento: dirección, indicaciones, enlaces de mapa o de entrada; máximo 5000 caracteres), meetingUrl (enlace https del evento: la reunión virtual, la página o la entrada), workspace.",
     inputSchema: {
       type: "object",
       properties: {
         title: { type: "string" }, date: { type: "string" }, startTime: { type: "string" }, endTime: { type: "string" },
         allDay: { type: "boolean" }, modality: { type: "string", enum: ["presencial", "virtual"] }, color: { type: "string" },
-        reminderMinutes: { type: "number" }, totalAmount: { type: "number" }, paidAmount: { type: "number" }, workspace: { type: "string" }
+        reminderMinutes: { type: "number" }, totalAmount: { type: "number" }, paidAmount: { type: "number" }, workspace: { type: "string" },
+        description: { type: "string", description: "Texto del evento (máximo 5000 caracteres). Puede llevar varias líneas y enlaces." },
+        meetingUrl: { type: "string", description: "Enlace https del evento (reunión virtual, página o entrada)." }
       },
       required: ["title", "date"]
     }
   },
   {
     name: "update_event",
-    description: "Edita un evento existente por id. Envía solo los campos a cambiar. done=true lo marca como hecho.",
+    description: "Edita un evento existente por id. Envía solo los campos a cambiar. done=true lo marca como hecho. description reemplaza todo el texto del evento; addToDescription agrega al final sin borrar lo que había. meetingUrl pone o cambia el enlace https; meetingUrl vacío (\"\") lo quita.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: "string" }, title: { type: "string" }, date: { type: "string" }, startTime: { type: "string" }, endTime: { type: "string" },
         allDay: { type: "boolean" }, modality: { type: "string", enum: ["presencial", "virtual"] }, color: { type: "string" },
-        reminderMinutes: { type: "number" }, totalAmount: { type: "number" }, paidAmount: { type: "number" }, done: { type: "boolean" }
+        reminderMinutes: { type: "number" }, totalAmount: { type: "number" }, paidAmount: { type: "number" }, done: { type: "boolean" },
+        description: { type: "string", description: "Reemplaza todo el texto del evento (máximo 5000 caracteres). Vacío lo borra." },
+        addToDescription: { type: "string", description: "Agrega este texto al final de la descripción, sin borrar lo que había." },
+        meetingUrl: { type: "string", description: "Enlace https del evento. Vacío (\"\") quita el enlace." }
       },
       required: ["id"]
     }

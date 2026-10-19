@@ -22,6 +22,47 @@ function fixedMeetingForTitle(title, modality) {
   return null;
 }
 
+// Texto y enlace del evento: mismas reglas que la app (src/services/eventsService.ts
+// y src/lib/meetingLinks.ts), para que un evento quede igual lo guarde la app o el conector.
+export const MAX_DESCRIPCION = 5000;
+// En list_events la descripcion va recortada para no inflar la respuesta; get_event la trae completa.
+const DESCRIPCION_EN_LISTA = 280;
+
+export function normalizeDescription(value) {
+  return typeof value === "string" ? value.trim().slice(0, MAX_DESCRIPCION) : "";
+}
+
+// La app recorta en silencio; aqui se avisa, para que el asistente no pierda texto sin saberlo.
+function descripcionValida(texto) {
+  const limpio = typeof texto === "string" ? texto.trim() : "";
+  if (limpio.length > MAX_DESCRIPCION) {
+    throw new Error(`La descripción quedaría de ${limpio.length} caracteres y el máximo es ${MAX_DESCRIPCION}. Acórtala.`);
+  }
+  return limpio;
+}
+
+/** Enlace de reunion: solo https (si llega sin protocolo, se le pone). Vacio = sin enlace. */
+export function normalizeMeetingUrl(value) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return "";
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let parsed;
+  try {
+    parsed = new URL(withProtocol);
+  } catch {
+    parsed = null;
+  }
+  if (!parsed || parsed.protocol !== "https:") {
+    throw new Error(`El enlace debe ser una dirección https:// válida (llegó "${raw.slice(0, 80)}").`);
+  }
+  return parsed.href.replace(/\/$/, "");
+}
+
+function recortar(texto, max) {
+  if (!max || texto.length <= max) return texto;
+  return `${texto.slice(0, max).trimEnd()}… (completa con get_event)`;
+}
+
 export function personalWorkspaceId(uid) {
   return `personal_${uid}`;
 }
@@ -59,13 +100,14 @@ export function todayInBogota() {
   return isoDate(new Date());
 }
 
-function viewEvent(id, data) {
+function viewEvent(id, data, { descriptionMax } = {}) {
   const start = parseTs(data.startAt);
   const end = parseTs(data.endAt);
   const fixed = fixedMeetingForTitle(data.title || "", data.modality);
   return {
     id,
     title: data.title || "",
+    description: recortar(normalizeDescription(data.description), descriptionMax),
     date: start ? isoDate(start) : null,
     startAt: start ? start.toISOString() : null,
     endAt: end ? end.toISOString() : null,
@@ -217,7 +259,7 @@ export async function listEvents(fs, uid, opts = {}) {
 
   let events = docs
     .filter((d) => d.data.recordType !== "client")
-    .map((d) => viewEvent(d.id, d.data))
+    .map((d) => viewEvent(d.id, d.data, { descriptionMax: DESCRIPCION_EN_LISTA }))
     .filter((e) => {
       if (!opts.includeDone && e.done) return false;
       if (q && !e.title.toLowerCase().includes(q)) return false;
@@ -246,12 +288,15 @@ export async function getEvent(fs, uid, id) {
   return viewEvent(doc.id, doc.data);
 }
 
-function buildEventData({ workspaceId, uid, title, startAt, endAt, allDay, modality, color, reminderMinutes, totalAmount, paidAmount, kind, clientCode, clientName, createdByName }) {
+function buildEventData({ workspaceId, uid, title, description, meetingUrl, startAt, endAt, allDay, modality, color, reminderMinutes, totalAmount, paidAmount, kind, clientCode, clientName, createdByName }) {
   const hasMoney = typeof totalAmount === "number" || typeof paidAmount === "number";
+  // El enlace fijo de la sala (por titulo, si es virtual) manda sobre el que se escriba.
   const fixed = fixedMeetingForTitle(title, modality);
+  const custom = kind !== "coach" && meetingUrl ? { meetingLinkType: "custom", meetingUrl } : null;
   const data = {
     workspaceId,
     title: title.trim(),
+    description: normalizeDescription(description),
     startAt: new Ts(startAt),
     endAt: new Ts(endAt),
     allDay: Boolean(allDay),
@@ -260,8 +305,8 @@ function buildEventData({ workspaceId, uid, title, startAt, endAt, allDay, modal
     reminderMinutes: typeof reminderMinutes === "number" ? reminderMinutes : 30,
     totalAmount: typeof totalAmount === "number" ? totalAmount : null,
     paidAmount: typeof paidAmount === "number" ? paidAmount : null,
-    meetingLinkType: fixed?.meetingLinkType || "none",
-    meetingUrl: fixed?.meetingUrl || "",
+    meetingLinkType: (fixed || custom)?.meetingLinkType || "none",
+    meetingUrl: (fixed || custom)?.meetingUrl || "",
     currency: hasMoney ? "COP" : null,
     attachments: [],
     done: false,
@@ -295,6 +340,7 @@ export async function createEvent(fs, uid, input, createdByName) {
 
   const data = buildEventData({
     workspaceId, uid, title: input.title, startAt, endAt, allDay,
+    description: descripcionValida(input.description), meetingUrl: normalizeMeetingUrl(input.meetingUrl),
     modality: input.modality, color: input.color, reminderMinutes: input.reminderMinutes,
     totalAmount: input.totalAmount, paidAmount: input.paidAmount, createdByName
   });
@@ -310,12 +356,30 @@ export async function updateEvent(fs, uid, id, patch) {
   const update = { updatedAt: new Ts(new Date()) };
   if (patch.title !== undefined) update.title = String(patch.title).trim();
   if (patch.modality !== undefined) update.modality = patch.modality === "virtual" ? "virtual" : "presencial";
-  if (patch.title !== undefined || patch.modality !== undefined) {
+
+  // Texto del evento: description lo reemplaza; addToDescription agrega al final sin borrar.
+  if (patch.description !== undefined || patch.addToDescription !== undefined) {
+    let texto = patch.description !== undefined ? String(patch.description ?? "").trim() : normalizeDescription(data.description);
+    const agregar = typeof patch.addToDescription === "string" ? patch.addToDescription.trim() : "";
+    if (agregar) texto = texto ? `${texto}\n\n${agregar}` : agregar;
+    update.description = descripcionValida(texto);
+  }
+
+  // Enlace propio: si llega vacio, se quita. Las sesiones coach usan siempre el suyo.
+  if (patch.meetingUrl !== undefined) {
+    if (data.kind === "coach") throw new Error("Las sesiones coach usan su enlace fijo de coach; no se les puede poner otro.");
+    const url = normalizeMeetingUrl(patch.meetingUrl);
+    update.meetingLinkType = url ? "custom" : "none";
+    update.meetingUrl = url;
+  }
+
+  if (patch.title !== undefined || patch.modality !== undefined || patch.meetingUrl !== undefined) {
     const nextTitle = String(update.title ?? data.title ?? "");
     const nextModality = update.modality ?? data.modality;
+    // El enlace fijo de la sala (por titulo, si es virtual) manda sobre el que se escriba.
     const fixed = fixedMeetingForTitle(nextTitle, nextModality);
     if (fixed) Object.assign(update, fixed);
-    else if (data.meetingLinkType === "ego_room" || data.meetingLinkType === "steps") {
+    else if (patch.meetingUrl === undefined && (data.meetingLinkType === "ego_room" || data.meetingLinkType === "steps")) {
       update.meetingLinkType = "none";
       update.meetingUrl = "";
     }
