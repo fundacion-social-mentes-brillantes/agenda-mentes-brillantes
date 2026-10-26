@@ -228,9 +228,16 @@ function AppContent() {
     irA(page);
   };
 
+  // El día elegido en el calendario: el botón «Nuevo» crea la cita ese día y no hoy.
+  const diaDelCalendarioRef = useRef<Date | null>(null);
+  const recordarDiaDelCalendario = useCallback((dia: Date) => {
+    diaDelCalendarioRef.current = dia;
+  }, []);
+
   const handleCreate = () => {
     setEditingEvent(null);
-    setSelectedDate(new Date());
+    const diaDelCalendario = activePage === "calendar" ? diaDelCalendarioRef.current : null;
+    setSelectedDate(diaDelCalendario ? new Date(diaDelCalendario) : new Date());
     // Si estás en la página de Sesiones coach, el nuevo evento arranca en modo coach; si no, normal.
     setFormKind(activePage === "coach" ? "coach" : "normal");
     setFormClient(null);
@@ -362,6 +369,7 @@ function AppContent() {
             setActivePage={(page) => handlePageChange(page as PageType)}
             setEditingEvent={setEditingEvent}
             setSelectedDate={setSelectedDate}
+            onCambiarDia={recordarDiaDelCalendario}
             onDuplicate={handleDuplicate}
             onUpdateEvent={updateEvent}
             onDeleteEvent={deleteEvent}

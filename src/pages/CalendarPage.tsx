@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { CalendarPlus, ChevronLeft, ChevronRight, Download, HeartHandshake, Plus, Scan, Share2, Sparkles } from "lucide-react";
 import { EventDetailModal } from "../components/events/EventDetailModal";
@@ -15,6 +15,8 @@ interface CalendarPageProps {
   setActivePage: (page: string) => void;
   setEditingEvent: (event: CalendarEvent | null) => void;
   setSelectedDate: (date: Date) => void;
+  /** Avisa qué día está elegido, para que el botón «Nuevo» de abajo cree la cita ese día. */
+  onCambiarDia?: (dia: Date) => void;
   onDuplicate: (event: CalendarEvent, dates: string[]) => Promise<void>;
   onUpdateEvent: (id: string, eventData: Partial<CalendarEvent>) => Promise<void>;
   onDeleteEvent: (id: string) => Promise<void>;
@@ -37,12 +39,17 @@ export default function CalendarPage({
   setActivePage,
   setEditingEvent,
   setSelectedDate,
+  onCambiarDia,
   onDuplicate,
   onUpdateEvent,
   onDeleteEvent
 }: CalendarPageProps) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [diaElegido, setDiaElegido] = useState(() => startOfDay(new Date()));
+
+  useEffect(() => {
+    onCambiarDia?.(diaElegido);
+  }, [diaElegido, onCambiarDia]);
   // Filtro del calendario: "todo" (por defecto) o solo las sesiones coach.
   const [filter, setFilter] = useState<"all" | "coach">("all");
   const soloCoach = filter === "coach";
